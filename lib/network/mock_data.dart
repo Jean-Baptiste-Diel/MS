@@ -1,7 +1,6 @@
 /// Fichier contenant les données mockées pour le développement
 /// Ces données seront utilisées lorsque les endpoints backend sont en cours de développement
 /// 
-/// Usage: Définir USE_MOCK_DATA = true dans constant.dart pour activer les données mockées
 
 import 'package:booking_system_flutter/model/category_model.dart';
 import 'package:booking_system_flutter/model/dashboard_model.dart';
