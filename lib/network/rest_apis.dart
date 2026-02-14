@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/network/mock_data.dart';
 import 'package:booking_system_flutter/model/base_response_model.dart';
 import 'package:booking_system_flutter/model/booking_data_model.dart';
 import 'package:booking_system_flutter/model/booking_detail_model.dart';
@@ -50,13 +53,129 @@ import '../utils/app_configuration.dart';
 import '../utils/firebase_messaging_utils.dart';
 
 //region Auth Api
-Future<LoginResponse> createUser(Map request) async {
-  return LoginResponse.fromJson(await (handleResponse(await buildHttpResponse('register', request: request, method: HttpMethodType.POST))));
+/// Inscription d'un nouvel utilisateur (client) via l'API Mison
+/// POST /api/auth/register (multipart/form-data)
+/// Retourne un message, l'utilisateur doit vérifier son compte avec l'OTP
+Future<BaseResponseModel> createUser(Map request) async {
+  Completer<BaseResponseModel> completer = Completer();
+  
+  MultipartRequest multiPartRequest = await getMultiPartRequest('auth/register');
+  
+  // Champs requis
+  multiPartRequest.fields['email'] = request['email']?.toString() ?? '';
+  multiPartRequest.fields['password'] = request['password']?.toString() ?? '';
+  multiPartRequest.fields['phone'] = request['contact_number']?.toString() ?? '';
+  multiPartRequest.fields['first_name'] = request['first_name']?.toString() ?? '';
+  multiPartRequest.fields['last_name'] = request['last_name']?.toString() ?? '';
+  multiPartRequest.fields['type'] = request['user_account_type']?.toString() ?? 'PARTICULIER';
+  
+  // Ajouter company_name si type = ENTREPRISE
+  if (request['company_name'] != null && request['company_name'].toString().isNotEmpty) {
+    multiPartRequest.fields['company_name'] = request['company_name'].toString();
+  }
+  
+  log("Register Request: ${jsonEncode(multiPartRequest.fields)}");
+  
+  await sendMultiPartRequest(
+    multiPartRequest,
+    onSuccess: (response) {
+      if (response is String && response.isJson()) {
+        completer.complete(BaseResponseModel.fromJson(jsonDecode(response)));
+      } else {
+        completer.complete(BaseResponseModel(message: 'Inscription réussie'));
+      }
+    },
+    onError: (error) {
+      completer.completeError(error?.toString() ?? errorSomethingWentWrong);
+    },
+  );
+  
+  return completer.future;
+}
+
+/// Inscription d'un artisan via l'API Mison
+/// POST /api/auth/register/artisan (multipart/form-data)
+/// Champs requis: email, password, phone, first_name, last_name
+/// Champs optionnels: profile_picture (File ou bytes), profession, experience_years, hourly_rate, daily_rate, bio, address, city
+/// Retourne un message, l'artisan doit vérifier son compte avec l'OTP
+Future<BaseResponseModel> createArtisan(
+  Map request, {
+  File? profilePicture,
+  Uint8List? profilePictureBytes,
+  String? profilePictureFileName,
+}) async {
+  Completer<BaseResponseModel> completer = Completer();
+  
+  MultipartRequest multiPartRequest = await getMultiPartRequest('auth/register/artisan');
+  
+  // Champs requis
+  multiPartRequest.fields['email'] = request['email']?.toString() ?? '';
+  multiPartRequest.fields['password'] = request['password']?.toString() ?? '';
+  multiPartRequest.fields['phone'] = request['contact_number']?.toString() ?? '';
+  multiPartRequest.fields['first_name'] = request['first_name']?.toString() ?? '';
+  multiPartRequest.fields['last_name'] = request['last_name']?.toString() ?? '';
+  
+  // Photo de profil (optionnel) - Support mobile (File) et web (bytes)
+  if (profilePicture != null && profilePicture.existsSync()) {
+    // Mobile: utiliser le fichier
+    multiPartRequest.files.add(await MultipartFile.fromPath('profile_picture', profilePicture.path));
+  } else if (profilePictureBytes != null && profilePictureBytes.isNotEmpty) {
+    // Web: utiliser les bytes
+    String fileName = profilePictureFileName ?? 'profile_picture.jpg';
+    multiPartRequest.files.add(MultipartFile.fromBytes(
+      'profile_picture',
+      profilePictureBytes,
+      filename: fileName,
+    ));
+  }
+  
+  // Champs optionnels pour artisan
+  if (request['profession'] != null && request['profession'].toString().isNotEmpty) {
+    multiPartRequest.fields['profession'] = request['profession'].toString();
+  }
+  if (request['experience_years'] != null) {
+    multiPartRequest.fields['experience_years'] = request['experience_years'].toString();
+  } else {
+    multiPartRequest.fields['experience_years'] = '0';
+  }
+  if (request['hourly_rate'] != null && request['hourly_rate'].toString().isNotEmpty) {
+    multiPartRequest.fields['hourly_rate'] = request['hourly_rate'].toString();
+  }
+  if (request['daily_rate'] != null && request['daily_rate'].toString().isNotEmpty) {
+    multiPartRequest.fields['daily_rate'] = request['daily_rate'].toString();
+  }
+  if (request['bio'] != null && request['bio'].toString().isNotEmpty) {
+    multiPartRequest.fields['bio'] = request['bio'].toString();
+  }
+  if (request['address'] != null && request['address'].toString().isNotEmpty) {
+    multiPartRequest.fields['address'] = request['address'].toString();
+  }
+  if (request['city'] != null && request['city'].toString().isNotEmpty) {
+    multiPartRequest.fields['city'] = request['city'].toString();
+  }
+  
+  log("Artisan Register Request: ${jsonEncode(multiPartRequest.fields)}");
+  
+  await sendMultiPartRequest(
+    multiPartRequest,
+    onSuccess: (response) {
+      if (response is String && response.isJson()) {
+        completer.complete(BaseResponseModel.fromJson(jsonDecode(response)));
+      } else {
+        completer.complete(BaseResponseModel(message: 'Inscription artisan réussie'));
+      }
+    },
+    onError: (error) {
+      completer.completeError(error?.toString() ?? errorSomethingWentWrong);
+    },
+  );
+  
+  return completer.future;
 }
 
 Future<LoginResponse> loginUser(Map request, {bool isSocialLogin = false}) async {
   try {
-    LoginResponse res = LoginResponse.fromJson(await handleResponse(await buildHttpResponse(isSocialLogin ? 'social-login' : 'login', request: request, method: HttpMethodType.POST)));
+    LoginResponse res = LoginResponse.fromJson(await handleResponse(await buildHttpResponse(isSocialLogin ? 'auth/social-login' : 'auth/login', request: request, method: HttpMethodType.POST)));
 
     if (res.userData != null) {
       if (res.userData!.userType != USER_TYPE_USER) {
@@ -101,8 +220,10 @@ Future<UserData> getUserDetail(int id, {bool forceUpdate = true}) async {
   }
 }
 
-Future<void> saveUserData(UserData data, {bool forceSyncAppConfigurations = true}) async {
+/// Save user data from API response
+Future<void> saveUserData(UserData data, {bool forceSyncAppConfigurations = true, String? refreshToken}) async {
   if (data.apiToken.validate().isNotEmpty) await appStore.setToken(data.apiToken!);
+  if (refreshToken != null && refreshToken.isNotEmpty) await appStore.setRefreshToken(refreshToken);
   appStore.setLoggedIn(true);
 
   await appStore.setUserId(data.id.validate());
@@ -162,6 +283,7 @@ Future<void> clearPreferences() async {
   await appStore.setLatitude(0.0);
   await appStore.setLongitude(0.0);
   await appStore.setToken('');
+  await appStore.setRefreshToken('');
   await appStore.setLoginType('');
   await setValue(USER_PASSWORD, '');
   await removeKey(IS_SUBSCRIBED_FOR_PUSH_NOTIFICATION);
@@ -240,15 +362,50 @@ Future<void> logout(BuildContext context) async {
 }
 
 Future<void> logoutApi() async {
-  return await handleResponse(await buildHttpResponse('logout', method: HttpMethodType.GET));
+  try {
+    Map request = {'refresh': appStore.refreshToken};
+    await handleResponse(await buildHttpResponse('auth/logout', request: request, method: HttpMethodType.POST));
+  } catch (e) {
+    // Continue logout even if API fails
+    log('Logout API error: $e');
+  }
 }
 
+/// Change password - Requiert une session authentifiée
+/// POST /api/auth/change-password avec { old_password, new_password }
 Future<BaseResponseModel> changeUserPassword(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('change-password', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/change-password', request: request, method: HttpMethodType.POST)));
 }
 
+/// Forgot password - Envoie un OTP par email
+/// POST /api/auth/forgot-password avec { email }
 Future<BaseResponseModel> forgotPassword(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('forgot-password', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/forgot-password', request: request, method: HttpMethodType.POST)));
+}
+
+/// Reset password - Valide l'OTP et met à jour le mot de passe
+/// POST /api/auth/reset-password avec { email, otp_code, new_password }
+Future<BaseResponseModel> resetPassword(Map request) async {
+  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/reset-password', request: request, method: HttpMethodType.POST)));
+}
+
+/// Verify account with OTP
+/// POST /api/auth/register/verify avec { email, otp_code }
+Future<BaseResponseModel> verifyAccountOtp(Map request) async {
+  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/register/verify', request: request, method: HttpMethodType.POST)));
+}
+
+/// Resend OTP
+/// POST /api/auth/resend-otp?purpose=verification|password_reset avec { email }
+Future<BaseResponseModel> resendOtp(Map request, {String purpose = 'verification'}) async {
+  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/resend-otp?purpose=$purpose', request: request, method: HttpMethodType.POST)));
+}
+
+/// Get current user profile
+/// GET /api/auth/me
+Future<UserData> getCurrentUserProfile() async {
+  var response = await handleResponse(await buildHttpResponse('auth/me', method: HttpMethodType.GET));
+  return UserData.fromMisonJson(response);
 }
 
 Future<BaseResponseModel> deleteAccountCompletely() async {
@@ -289,20 +446,10 @@ Future<void> getAppConfigurations({bool isCurrentLocation = false, double? lat, 
   if (lastSyncedTimeStamp.isAfter(currentTimeStamp)) {
     log('App Configurations was synced recently');
   } else {
-    try {
-      AppConfigurationModel? res = AppConfigurationModel.fromJsonMap(
-        await handleResponse(
-          await buildHttpResponse(
-            'configurations?is_authenticated=${appStore.isLoggedIn.getIntBool()}',
-            method: HttpMethodType.POST,
-            request: appStore.isLoggedIn ? {"user_id": appStore.userId} : null,
-          ),
-        ),
-      );
-      await setAppConfigurations(res);
-    } catch (e) {
-      throw e;
-    }
+    // Utilisation de valeurs par défaut au lieu de l'appel API
+    // TODO: Implémenter l'endpoint /api/configurations sur votre backend si vous avez besoin de configs dynamiques
+    await setDefaultAppConfigurations();
+    await setValue(LAST_APP_CONFIGURATION_SYNCED_TIME, DateTime.timestamp().millisecondsSinceEpoch);
   }
 }
 
@@ -311,6 +458,19 @@ Future<void> getAppConfigurations({bool isCurrentLocation = false, double? lat, 
 //region User Api
 Future<DashboardResponse> userDashboard({bool isCurrentLocation = false, double? lat, double? long}) async {
   Completer<DashboardResponse> completer = Completer();
+
+  // Utiliser les données mockées si activé
+  if (USE_MOCK_DATA) {
+    await simulateNetworkDelay(null, milliseconds: 300);
+    final dashboardResponse = getMockDashboardResponse();
+    appStore.setLoading(false);
+    cachedDashboardResponse = dashboardResponse;
+    setValue(IS_EMAIL_VERIFIED, dashboardResponse.isEmailVerified.getBoolInt());
+    appStore.setUnreadCount(dashboardResponse.notificationUnreadCount.validate());
+    getAppConfigurations();
+    completer.complete(dashboardResponse);
+    return completer.future;
+  }
 
   String endPoint = 'dashboard-detail';
 
@@ -507,10 +667,26 @@ Future<List<ServiceData>> searchServiceAPI({
 //region Category Api
 
 Future<CategoryResponse> getCategoryList(String page) async {
+  // Utiliser les données mockées si activé
+  if (USE_MOCK_DATA) {
+    await simulateNetworkDelay(null, milliseconds: 200);
+    return getMockCategoryResponse();
+  }
   return CategoryResponse.fromJson(await handleResponse(await buildHttpResponse('category-list?page=$page&per_page=50', method: HttpMethodType.GET)));
 }
 
 Future<List<CategoryData>> getCategoryListWithPagination(int page, {var perPage = PER_PAGE_CATEGORY_ITEM, required List<CategoryData> categoryList, Function(bool)? lastPageCallBack}) async {
+  // Utiliser les données mockées si activé
+  if (USE_MOCK_DATA) {
+    await simulateNetworkDelay(null, milliseconds: 200);
+    if (page == 1) categoryList.clear();
+    categoryList.addAll(getMockCategories());
+    cachedCategoryList = categoryList;
+    lastPageCallBack?.call(true); // Dernière page
+    appStore.setLoading(false);
+    return categoryList;
+  }
+
   try {
     CategoryResponse res = CategoryResponse.fromJson(await handleResponse(await buildHttpResponse('category-list?per_page=$perPage&page=$page', method: HttpMethodType.GET)));
 
@@ -671,6 +847,20 @@ Future<List<BookingData>> getBookingList(
   required List<BookingData> bookings,
   Function(bool)? lastPageCallback,
 }) async {
+  // Utiliser les données mockées si activé
+  if (USE_MOCK_DATA) {
+    await simulateNetworkDelay(null, milliseconds: 300);
+    if (page == 1) bookings.clear();
+    
+    // Filtrer par statut si spécifié
+    List<BookingData> mockBookings = getMockBookingsByStatus(bookingStatus);
+    bookings.addAll(mockBookings);
+    cachedBookingList = bookings;
+    lastPageCallback?.call(true); // Dernière page
+    appStore.setLoading(false);
+    return bookings;
+  }
+
   try {
     BookingListResponse res;
     String shopIds = shopId.isNotEmpty ? 'shop_id=$shopId&' : '';
@@ -709,6 +899,24 @@ Future<List<BookingData>> getBookingList(
 }
 
 Future<BookingDetailResponse> getBookingDetail(Map<String, dynamic> request, {Function(String)? callbackForStatus}) async {
+  // Utiliser les données mockées si activé
+  if (USE_MOCK_DATA) {
+    await simulateNetworkDelay(null, milliseconds: 300);
+    int bookingId = request[CommonKeys.bookingId].toString().toInt();
+    BookingDetailResponse mockResponse = getMockBookingDetailResponse(bookingId);
+    callbackForStatus?.call(mockResponse.bookingDetail!.status.validate());
+    
+    if (!cachedBookingDetailList.any((element) => element?.$1 == bookingId)) {
+      cachedBookingDetailList.add((bookingId, mockResponse));
+    } else {
+      int index = cachedBookingDetailList.indexWhere((element) => element?.$1 == bookingId);
+      cachedBookingDetailList[index] = (bookingId, mockResponse);
+    }
+    
+    appStore.setLoading(false);
+    return mockResponse;
+  }
+
   try {
     BookingDetailResponse bookingDetailResponse = BookingDetailResponse.fromJson(await handleResponse(await buildHttpResponse('booking-detail', request: request, method: HttpMethodType.POST)));
     callbackForStatus?.call(bookingDetailResponse.bookingDetail!.status.validate());

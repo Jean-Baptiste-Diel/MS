@@ -6,11 +6,13 @@ import '../utils/constant.dart';
 
 part 'app_configuration_store.g.dart';
 
-class AppConfigurationStore = _AppConfigurationStore with _$AppConfigurationStore;
+class AppConfigurationStore = _AppConfigurationStore
+    with _$AppConfigurationStore;
 
 abstract class _AppConfigurationStore with Store {
   @observable
-  int priceDecimalPoint = getIntAsync(PRICE_DECIMAL_POINTS, defaultValue: DECIMAL_POINT);
+  int priceDecimalPoint =
+      getIntAsync(PRICE_DECIMAL_POINTS, defaultValue: DECIMAL_POINT);
 
   @observable
   bool jobRequestStatus = getBoolAsync(JOB_REQUEST_SERVICE_STATUS);
@@ -52,7 +54,8 @@ abstract class _AppConfigurationStore with Store {
   String helplineNumber = getStringAsync(HELPLINE_NUMBER);
 
   @observable
-  String currencyPosition = getStringAsync(CURRENCY_POSITION, defaultValue: CURRENCY_POSITION_LEFT);
+  String currencyPosition =
+      getStringAsync(CURRENCY_POSITION, defaultValue: CURRENCY_POSITION_LEFT);
 
   @observable
   String currencySymbol = getStringAsync(CURRENCY_COUNTRY_SYMBOL);
@@ -103,7 +106,7 @@ abstract class _AppConfigurationStore with Store {
   bool cancellationCharge = getBoolAsync(CANCELLATION_CHARGE);
 
   @observable
-  num cancellationChargeAmount = getDoubleAsync(CANCELLATION_CHARGE_AMOUNT);
+  num cancellationChargeAmount = 0.0;
 
   @observable
   int cancellationChargeHours = getIntAsync(CANCELLATION_CHARGE_HOURS);
@@ -113,6 +116,37 @@ abstract class _AppConfigurationStore with Store {
 
   @observable
   bool isEnableChat = getBoolAsync(ENABLE_CHAT);
+
+  _AppConfigurationStore() {
+    _initCancellationChargeAmount();
+  }
+
+  Future<void> _initCancellationChargeAmount() async {
+    cancellationChargeAmount = await _getCancellationChargeAmount();
+  }
+
+  Future<num> _getCancellationChargeAmount() async {
+    try {
+  
+      double? value = await getDoubleAsync(CANCELLATION_CHARGE_AMOUNT);
+      if (value != null) return value;
+
+  
+      int? intValue = await getIntAsync(CANCELLATION_CHARGE_AMOUNT);
+      if (intValue != null) return intValue;
+
+
+      return 0.0;
+    } catch (e) {
+ 
+      try {
+        int? intValue = await getIntAsync(CANCELLATION_CHARGE_AMOUNT);
+        return intValue ?? 0.0;
+      } catch (e) {
+        return 0.0;
+      }
+    }
+  }
 
   @action
   Future<void> setPromotionalBannerStatus(bool val) async {

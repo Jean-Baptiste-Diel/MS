@@ -319,7 +319,7 @@ class LanguageAr extends BaseLanguage {
   String get lblChangePwdTitle => "يجب أن تكون كلمة المرور الجديدة مختلفة عن كلمة المرور السابقة المستخدمة";
 
   @override
-  String get lblForgotPwdSubtitle => "سيتم إرسال رابط إعادة تعيين كلمة المرور إلى عنوان البريد الإلكتروني الذي تم إدخاله أعلاه";
+  String get lblForgotPwdSubtitle => "سيتم إرسال رمز OTP إلى عنوان البريد الإلكتروني المدخل أعلاه";
 
   @override
   String get lblLoginTitle => "مرحبا مجددا ";
@@ -2239,4 +2239,69 @@ class LanguageAr extends BaseLanguage {
 
   @override
   String unlockBenefits(String points) => 'You can unlock benefits at checkout once you collect $points points.';
+
+  // OTP Verification
+  @override
+  String get verifyOTP => 'تحقق من OTP';
+
+  @override
+  String get enterTheCodeSentTo => 'أدخل الرمز المرسل إلى';
+
+  @override
+  String get accountVerifiedSuccessfully => 'تم التحقق من الحساب بنجاح';
+
+  @override
+  String get otpSentSuccessfully => 'تم إرسال OTP بنجاح';
+
+  @override
+  String get verify => 'تحقق';
+
+  @override
+  String get didNotReceiveCode => 'لم تستلم الرمز؟';
+
+  @override
+  String get resendOTP => 'إعادة إرسال OTP';
+
+  @override
+  String get resendIn => 'إعادة الإرسال في';
+
+  // Artisan Registration
+  @override
+  String get registerAsArtisan => 'التسجيل كحرفي';
+
+  @override
+  String get worker => 'عامل';
+
+  @override
+  String get individual => 'فرد';
+
+  @override
+  String get enterprise => 'شركة';
+
+  @override
+  String get selectProfileTitle => 'حدد ملف التعريف الخاص بك';
+
+  @override
+  String get selectProfileSubtitle => 'اختر ملف تعريف لتمكين Mison من تقديم تجربة مخصصة لك.';
+
+  @override
+  String get continueLabel => 'استمر';
+
+  @override
+  String get profession => 'المهنة';
+
+  @override
+  String get experienceYears => 'سنوات الخبرة';
+
+  @override
+  String get hourlyRate => 'السعر بالساعة';
+
+  @override
+  String get dailyRate => 'السعر اليومي';
+
+  @override
+  String get bio => 'نبذة عني';
+
+  @override
+  String get city => 'المدينة';
 }

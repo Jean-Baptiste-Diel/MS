@@ -34,6 +34,7 @@ const ic_customer_rating_stars = 'assets/icons/ic_stars.png';
 const selectImage = 'assets/icons/ic_selectImage.png';
 const ic_filter = 'assets/icons/ic_filter.png';
 const ic_verified = 'assets/icons/ic_verified.png';
+const ic_artisan = 'assets/icons/ic_artisan.png';
 const ic_location = 'assets/icons/ic_location.png';
 const ic_calling = 'assets/icons/ic_calling.png';
 const ic_message = 'assets/icons/ic_message.png';

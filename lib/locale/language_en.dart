@@ -319,7 +319,7 @@ class LanguageEn extends BaseLanguage {
   String get lblChangePwdTitle => "Your new password must be different from previous used password";
 
   @override
-  String get lblForgotPwdSubtitle => "A reset password link will be sent to the above entered email address";
+  String get lblForgotPwdSubtitle => "An OTP code will be sent to the above entered email address";
 
   @override
   String get lblLoginTitle => "Hello Again";
@@ -2240,4 +2240,69 @@ Use my referral code $referralCode to get loyalty points on your signup.
 
   @override
   String unlockBenefits(String points) => 'You can unlock benefits at checkout once you collect $points points.';
+
+  // OTP Verification
+  @override
+  String get verifyOTP => 'Verify OTP';
+  
+  @override
+  String get enterTheCodeSentTo => 'Enter the code sent to';
+  
+  @override
+  String get accountVerifiedSuccessfully => 'Account verified successfully!';
+  
+  @override
+  String get otpSentSuccessfully => 'OTP sent successfully!';
+  
+  @override
+  String get verify => 'Verify';
+  
+  @override
+  String get didNotReceiveCode => "Didn't receive the code?";
+  
+  @override
+  String get resendOTP => 'Resend OTP';
+  
+  @override
+  String get resendIn => 'Resend in';
+  
+  // Artisan Registration
+  @override
+  String get registerAsArtisan => 'Register as Artisan';
+
+  @override
+  String get worker => 'Worker';
+
+  @override
+  String get individual => 'Individual';
+
+  @override
+  String get enterprise => 'Company';
+
+  @override
+  String get selectProfileTitle => 'Select your profile';
+
+  @override
+  String get selectProfileSubtitle => 'Choose a profile so Mison can offer you a personalized experience.';
+
+  @override
+  String get continueLabel => 'Continue';
+  
+  @override
+  String get profession => 'Profession';
+  
+  @override
+  String get experienceYears => 'Years of Experience';
+  
+  @override
+  String get hourlyRate => 'Hourly Rate';
+  
+  @override
+  String get dailyRate => 'Daily Rate';
+  
+  @override
+  String get bio => 'Bio';
+  
+  @override
+  String get city => 'City';
 }

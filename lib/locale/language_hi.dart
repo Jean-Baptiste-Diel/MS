@@ -320,7 +320,7 @@ class LanguageHi extends BaseLanguage {
   String get lblChangePwdTitle => "आपका नया पासवर्ड पिछले उपयोग किए गए पासवर्ड से अलग होना चाहिए";
 
   @override
-  String get lblForgotPwdSubtitle => "एक रीसेट पासवर्ड लिंक ऊपर दर्ज किए गए ईमेल पते पर भेजा जाएगा";
+  String get lblForgotPwdSubtitle => "ऊपर दर्ज किए गए ईमेल पते पर एक OTP कोड भेजा जाएगा";
 
   @override
   String get lblLoginTitle => "फिर से हैलो";
@@ -2241,4 +2241,69 @@ class LanguageHi extends BaseLanguage {
 
   @override
   String unlockBenefits(String points) => 'You can unlock benefits at checkout once you collect $points points.';
+
+  // OTP Verification
+  @override
+  String get verifyOTP => 'OTP सत्यापित करें';
+
+  @override
+  String get enterTheCodeSentTo => 'भेजा गया कोड दर्ज करें';
+
+  @override
+  String get accountVerifiedSuccessfully => 'खाता सफलतापूर्वक सत्यापित हुआ';
+
+  @override
+  String get otpSentSuccessfully => 'OTP सफलतापूर्वक भेजा गया';
+
+  @override
+  String get verify => 'सत्यापित करें';
+
+  @override
+  String get didNotReceiveCode => 'कोड नहीं मिला?';
+
+  @override
+  String get resendOTP => 'OTP पुनः भेजें';
+
+  @override
+  String get resendIn => 'पुनः भेजें में';
+
+  // Artisan Registration
+  @override
+  String get registerAsArtisan => 'कारीगर के रूप में पंजीकरण करें';
+
+  @override
+  String get worker => 'मजदूर';
+
+  @override
+  String get individual => 'व्यक्ति';
+
+  @override
+  String get enterprise => 'कंपनी';
+
+  @override
+  String get selectProfileTitle => 'अपनी प्रोफ़ाइल चुनें';
+
+  @override
+  String get selectProfileSubtitle => 'एक प्रोफ़ाइल चुनें ताकि Mison आपको एक व्यक्तिगत अनुभव दे सके।';
+
+  @override
+  String get continueLabel => 'जारी रखें';
+
+  @override
+  String get profession => 'पेशा';
+
+  @override
+  String get experienceYears => 'अनुभव के वर्ष';
+
+  @override
+  String get hourlyRate => 'प्रति घंटा दर';
+
+  @override
+  String get dailyRate => 'दैनिक दर';
+
+  @override
+  String get bio => 'परिचय';
+
+  @override
+  String get city => 'शहर';
 }

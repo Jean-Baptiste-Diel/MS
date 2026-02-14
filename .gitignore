@@ -1,3 +1,122 @@
 .idea/
 *.iml
 .DS_Store
+
+# Flutter/Dart
+.dart_tool/
+.dart_tool/
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_*.png
+coverage/
+lib/generated_plugin_registrant.dart
+*.mocks.dart
+*.g.dart
+*.freezed.dart
+*.config.dart
+
+# Android Studio / IntelliJ
+*.iws
+/out/
+.idea/workspace.xml
+.idea/libraries/
+.idea/modules.xml
+.idea_modules/
+.cxx/
+
+# VS Code
+.vscode/
+.history/
+
+# macOS
+*.swp
+*.swo
+*~
+
+# Windows
+*.log
+*.pyc
+*.pyo
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Android
+/android/app/debug
+/android/app/profile
+/android/app/release
+/android/.gradle/
+/android/local.properties
+/android/gradle/
+/android/gradlew.bat
+/android/gradlew
+/android/gradle-wrapper.jar
+/android/**/build/
+/android/captures/
+
+# iOS
+/ios/Flutter/flutter_export_environment.sh
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/app.flx
+/ios/Flutter/app.zip
+/ios/Flutter/flutter_assets/
+/ios/Flutter/Flutter.podspec
+/ios/Pods/
+/ios/ServiceDefinitions.json
+/ios/Runner/GeneratedPluginRegistrant.*
+/ios/**/xcshareddata/WorkspaceSettings.xcsettings
+/ios/**/xcuserdata/
+/ios/.generated/
+
+# Web
+/web/index.html
+/web/icons/
+/web/manifest.json
+
+# Environment files
+.env
+.env.local
+.env.production
+*.env
+
+# Firebase
+google-services.json
+GoogleService-Info.plist
+firebase_options.dart
+
+# Keys and secrets
+*.key
+*.p12
+*.p8
+*.keystore
+key.properties
+service_account.json
+
+# Node (si vous avez des outils npm)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Testing
+/test/reports/
+/test/coverage/
+*.test.dart
+*.spec.dart
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# IDE specific
+.project
+.classpath
+.settings/
+.factorypath
+.apt_generated
+.apt_generated_tests

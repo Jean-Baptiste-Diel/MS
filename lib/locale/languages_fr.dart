@@ -321,10 +321,10 @@ class LanguageFr extends BaseLanguage {
   String get lblChangePwdTitle => "Votre nouveau mot de passe doit être différent du mot de passe précédent utilisé";
 
   @override
-  String get lblForgotPwdSubtitle => "Un maillon de mot de passe de réinitialisation sera envoyé à l'adresse e-mail saisie ci-dessus.";
+  String get lblForgotPwdSubtitle => "Un code OTP sera envoyé à l'adresse e-mail saisie ci-dessus.";
 
   @override
-  String get lblLoginTitle => "Rebonjour";
+  String get lblLoginTitle => "Bonjour";
 
   @override
   String get lblLoginSubTitle => "Bienvenue, vous êtes manqué depuis longtemps";
@@ -2243,5 +2243,70 @@ Utilisez mon code de parrainage $referralCode pour obtenir des points de fidéli
   String get lblRedeemRewards => 'Redeem Rewards';
 
   @override
-  String unlockBenefits(String points) => 'You can unlock benefits at checkout once you collect $points points.';
+  String unlockBenefits(String points) => 'Vous pouvez débloquer des avantages à la caisse une fois que vous avez collecté $points points.';
+
+  // OTP Verification
+  @override
+  String get verifyOTP => 'Vérifier le code OTP';
+  
+  @override
+  String get enterTheCodeSentTo => 'Entrez le code envoyé à';
+  
+  @override
+  String get accountVerifiedSuccessfully => 'Compte vérifié avec succès !';
+  
+  @override
+  String get otpSentSuccessfully => 'Code OTP envoyé avec succès !';
+  
+  @override
+  String get verify => 'Vérifier';
+  
+  @override
+  String get didNotReceiveCode => "Vous n'avez pas reçu le code ?";
+  
+  @override
+  String get resendOTP => 'Renvoyer le code';
+  
+  @override
+  String get resendIn => 'Renvoyer dans';
+  
+  // Artisan Registration
+  @override
+  String get registerAsArtisan => "S'inscrire comme artisan";
+
+    @override
+    String get worker => 'Ouvrier';
+
+    @override
+    String get individual => 'Particulier';
+
+    @override
+    String get enterprise => 'Entreprise';
+
+    @override
+    String get selectProfileTitle => 'Sélectionnez votre profil';
+
+    @override
+    String get selectProfileSubtitle => 'Choisissez un profil pour permettre à Mison de vous offrir une expérience personnalisée.';
+
+    @override
+    String get continueLabel => 'Continuer';
+  
+  @override
+  String get profession => 'Métier';
+  
+  @override
+  String get experienceYears => "Années d'expérience";
+  
+  @override
+  String get hourlyRate => 'Tarif horaire';
+  
+  @override
+  String get dailyRate => 'Tarif journalier';
+  
+  @override
+  String get bio => 'Bio';
+  
+  @override
+  String get city => 'Ville';
 }

@@ -274,6 +274,65 @@ Future<void> setAppConfigurations(AppConfigurationModel data) async {
   await setValue(IS_APP_CONFIGURATION_SYNCED_AT_LEAST_ONCE, true);
   //
 }
+
+/// Configuration par défaut sans appel API
+/// Modifier ces valeurs selon vos besoins
+Future<void> setDefaultAppConfigurations() async {
+  await setValue(SITE_NAME, APP_NAME);
+  await setValue(SITE_DESCRIPTION, APP_NAME_TAG_LINE);
+  
+  appConfigurationStore.setInquiryEmail(INQUIRY_SUPPORT_EMAIL);
+  appConfigurationStore.setHelplineNumber(HELP_LINE_NUMBER);
+  
+  await setValue(DATE_FORMAT, 'dd MMM yyyy');
+  await setValue(TIME_FORMAT, 'HH:mm');
+  await setValue(DISTANCE_TYPE, 'km');
+
+  // Devise - Modifier selon votre devise (ex: XOF pour Franc CFA)
+  await appConfigurationStore.setCurrencyCode('XOF');
+  await appConfigurationStore.setCurrencyPosition(CURRENCY_POSITION_LEFT);
+  await appConfigurationStore.setCurrencySymbol('FCFA ');
+  await appConfigurationStore.setPriceDecimalPoint(0);
+
+  // Fonctionnalités activées/désactivées
+  await appConfigurationStore.setAdvancePaymentAllowed(false);
+  await appConfigurationStore.setSlotServiceStatus(false);
+  await appConfigurationStore.setDigitalServiceStatus(false);
+  await appConfigurationStore.setServicePackageStatus(false);
+  await appConfigurationStore.setServiceAddonStatus(false);
+  await appConfigurationStore.setJobRequestStatus(true);
+
+  // Login social - Désactivé par défaut car vous utilisez votre propre auth
+  await appConfigurationStore.setSocialLoginStatus(false);
+  await appConfigurationStore.setGoogleLoginStatus(false);
+  await appConfigurationStore.setAppleLoginStatus(false);
+  await appConfigurationStore.setOTPLoginStatus(true);
+
+  // Autres fonctionnalités
+  await appConfigurationStore.setOnlinePaymentStatus(true);
+  await appConfigurationStore.setBlogStatus(false);
+  await appConfigurationStore.setMaintenanceModeStatus(false);
+  await appConfigurationStore.setEnableUserWallet(false);
+  await appConfigurationStore.setChatGptStatus(false);
+  await appConfigurationStore.setTestWithoutKey(false);
+  await appConfigurationStore.setEnableChat(true);
+
+  // URLs - À personnaliser avec vos propres URLs
+  await appConfigurationStore.setPrivacyPolicy(PRIVACY_POLICY_URL);
+  await appConfigurationStore.setTermConditions(TERMS_CONDITION_URL);
+  await appConfigurationStore.setHelpAndSupport(HELP_AND_SUPPORT_URL);
+  await appConfigurationStore.setRefundPolicy(REFUND_POLICY_URL);
+
+  // Annulation
+  appConfigurationStore.setCancellationCharge(false);
+  appConfigurationStore.setCancellationChargeAmount(0);
+  appConfigurationStore.setCancellationChargeHours(0);
+
+  await appConfigurationStore.setUserDashboardType(DEFAULT_USER_DASHBOARD);
+  appConfigurationStore.setISUserAuthorized(true);
+  
+  await setValue(IS_APP_CONFIGURATION_SYNCED_AT_LEAST_ONCE, true);
+}
 //endregion
 
 // region Shared Preference Keys

@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "YOUR_GOOGLE_APP_ID",
         "android_client_info": {
-          "package_name": "YOUR_PACKAGE_NAME"
+          "package_name": "com.iqonic.servicebooking"
         }
       },
       "oauth_client": [

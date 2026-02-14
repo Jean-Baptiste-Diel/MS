@@ -121,6 +121,15 @@ class _WithdrawRequestState extends State<WithdrawRequest> {
   }
 
   @override
+  void dispose() {
+    amount.dispose();
+    chooseBank.dispose();
+    amountFocus.dispose();
+    chooseBankFocus.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => hideKeyboard(context),

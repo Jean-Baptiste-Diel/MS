@@ -1,16 +1,16 @@
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 
-const APP_NAME = 'Handyman Service';
+const APP_NAME = 'Mison Service';
 const APP_NAME_TAG_LINE = 'On-Demand Home Services App';
-var defaultPrimaryColor = Color(0xFF5F60B9);
+var defaultPrimaryColor = Color(0xFFF4BB16);
 
-// Don't add slash at the end of the url
 
-const DOMAIN_URL = 'YOUR_DOMAIN_URL'; // Don't add slash at the end of the url
+
+const DOMAIN_URL = 'https://api.mison.app'; 
 const BASE_URL = '$DOMAIN_URL/api/';
 
-const DEFAULT_LANGUAGE = 'en';
+const DEFAULT_LANGUAGE = 'fr';
 
 //Note: For FIREBASE_SERVER_CLIENT_ID ---> Go to android/app/google-services.json
 // - Find press ctrl+F and look for "client_type": 3
@@ -67,17 +67,17 @@ DateTime todayDate = DateTime(2022, 8, 24);
 
 Country defaultCountry() {
   return Country(
-    phoneCode: '91',
-    countryCode: 'IN',
-    e164Sc: 91,
+    phoneCode: '221',
+    countryCode: 'SN',
+    e164Sc: 221,
     geographic: true,
     level: 1,
-    name: 'India',
+    name: 'Senegal',
     example: '9123456789',
-    displayName: 'India (IN) [+91]',
-    displayNameNoCountryCode: 'India (IN)',
-    e164Key: '91-IN-0',
-    fullExampleWithPlusSign: '+919123456789',
+    displayName: 'Senegal (SN) [+221]',
+    displayNameNoCountryCode: 'Senegal (SN)',
+    e164Key: '221-SN-0',
+    fullExampleWithPlusSign: '+2219123456789',
   );
 }
 

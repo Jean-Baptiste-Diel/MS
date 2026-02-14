@@ -16,8 +16,8 @@ Map<String, String> buildHeaderTokens() {
   Map<String, String> header = {};
 
   if (appStore.isLoggedIn) header.putIfAbsent(HttpHeaders.authorizationHeader, () => 'Bearer ${appStore.token}');
-  header.putIfAbsent(HttpHeaders.contentTypeHeader, () => 'application/json; charset=utf-8');
-  header.putIfAbsent(HttpHeaders.acceptHeader, () => 'application/json; charset=utf-8');
+  header.putIfAbsent(HttpHeaders.contentTypeHeader, () => 'application/json');
+  header.putIfAbsent(HttpHeaders.acceptHeader, () => 'application/json');
   header.putIfAbsent(CustomHeader.LanguageCode, () => appStore.selectedLanguageCode);
   header.addAll(defaultHeaders());
 
@@ -152,20 +152,82 @@ Future<Map<String, dynamic>> handleSadadResponse(Response res) async {
   }
 }
 
+/// Refresh access token using refresh token
+/// POST /api/auth/refresh avec { refresh: refreshToken }
 Future<void> reGenerateToken() async {
-  log('Regenerating Token');
-  Map req = {
-    UserKeys.email: appStore.userEmail,
-    UserKeys.password: getStringAsync(USER_PASSWORD),
-  };
-
-  return await loginUser(req, isSocialLogin: !isLoginTypeUser).then((value) async {
-    await appStore.setToken(value.userData!.apiToken.validate());
-    appStore.setLoading(false);
-  }).catchError((e) {
-    log(e);
-    throw e;
-  });
+  log('Regenerating Token using refresh token');
+  
+  String refreshToken = appStore.refreshToken;
+  
+  if (refreshToken.isEmpty) {
+    // Fallback to login if no refresh token
+    log('No refresh token, falling back to re-login');
+    Map req = {
+      UserKeys.email: appStore.userEmail,
+      UserKeys.password: getStringAsync(USER_PASSWORD),
+    };
+    
+    return await loginUser(req, isSocialLogin: !isLoginTypeUser).then((value) async {
+      await appStore.setToken(value.userData!.apiToken.validate());
+      if (value.refreshToken != null) {
+        await appStore.setRefreshToken(value.refreshToken!);
+      }
+      appStore.setLoading(false);
+    }).catchError((e) {
+      log(e);
+      throw e;
+    });
+  }
+  
+  // Use refresh token to get new access token
+  Map req = {'refresh': refreshToken};
+  
+  try {
+    var response = await http.post(
+      Uri.parse('${BASE_URL}auth/refresh'),
+      body: jsonEncode(req),
+      headers: {
+        HttpHeaders.contentTypeHeader: 'application/json',
+        HttpHeaders.acceptHeader: 'application/json',
+      },
+    );
+    
+    if (response.statusCode == 200 && response.body.isJson()) {
+      var body = jsonDecode(response.body);
+      String newAccessToken = body['access'] ?? '';
+      String? newRefreshToken = body['refresh'];
+      
+      if (newAccessToken.isNotEmpty) {
+        await appStore.setToken(newAccessToken);
+        if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
+          await appStore.setRefreshToken(newRefreshToken);
+        }
+        log('Token refreshed successfully');
+        return;
+      }
+    }
+    
+    // If refresh fails, try re-login
+    throw 'Refresh token invalid';
+  } catch (e) {
+    log('Token refresh failed: $e');
+    // Fallback to re-login
+    Map loginReq = {
+      UserKeys.email: appStore.userEmail,
+      UserKeys.password: getStringAsync(USER_PASSWORD),
+    };
+    
+    return await loginUser(loginReq, isSocialLogin: !isLoginTypeUser).then((value) async {
+      await appStore.setToken(value.userData!.apiToken.validate());
+      if (value.refreshToken != null) {
+        await appStore.setRefreshToken(value.refreshToken!);
+      }
+      appStore.setLoading(false);
+    }).catchError((err) {
+      log(err);
+      throw err;
+    });
+  }
 }
 
 Future<MultipartRequest> getMultiPartRequest(String endPoint, {String? baseUrl}) async {
@@ -257,7 +319,7 @@ Map<String, String> buildHeaderForFlutterWave(String flutterWaveSecretKey) {
 Map<String, String> buildHeaderForAirtelMoney(String accessToken, String XCountry, String XCurrency) {
   Map<String, String> header = defaultHeaders();
 
-  header.putIfAbsent(HttpHeaders.contentTypeHeader, () => 'application/json; charset=utf-8');
+  header.putIfAbsent(HttpHeaders.contentTypeHeader, () => 'application/json');
   header.putIfAbsent(HttpHeaders.authorizationHeader, () => 'Bearer $accessToken');
   header.putIfAbsent('X-Country', () => '$XCountry');
   header.putIfAbsent('X-Currency', () => '$XCurrency');

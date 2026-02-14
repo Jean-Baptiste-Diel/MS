@@ -3,7 +3,7 @@ import 'package:booking_system_flutter/component/base_scaffold_body.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/auth/forgot_password_screen.dart';
 import 'package:booking_system_flutter/screens/auth/otp_login_screen.dart';
-import 'package:booking_system_flutter/screens/auth/sign_up_screen.dart';
+import 'package:booking_system_flutter/screens/auth/profile_selection_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
@@ -83,7 +83,7 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       final loginResponse = await loginUser(request, isSocialLogin: false);
 
-      await saveUserData(loginResponse.userData!);
+      await saveUserData(loginResponse.userData!, refreshToken: loginResponse.refreshToken);
 
       await setValue(USER_PASSWORD, passwordCont.text);
       await setValue(IS_REMEMBERED, isRemember);
@@ -121,7 +121,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
         loginResponse.userData!.profileImage = googleUser.photoURL.validate();
 
-        await saveUserData(loginResponse.userData!);
+        await saveUserData(loginResponse.userData!, refreshToken: loginResponse.refreshToken);
         appStore.setLoginType(LOGIN_TYPE_GOOGLE);
 
         authService.verifyFirebaseUser();
@@ -157,7 +157,7 @@ class _SignInScreenState extends State<SignInScreen> {
         req['last_name'] = lastName;
 
         await loginUser(req, isSocialLogin: true).then((value) async {
-          await saveUserData(value.userData!);
+          await saveUserData(value.userData!, refreshToken: value.refreshToken);
           appStore.setLoginType(LOGIN_TYPE_APPLE);
 
           appStore.setLoading(false);
@@ -270,7 +270,8 @@ class _SignInScreenState extends State<SignInScreen> {
             TextButton(
               onPressed: () {
                 hideKeyboard(context);
-                SignUpScreen().launch(context);
+           
+                ProfileSelectionScreen().launch(context);
               },
               child: Text(
                 language.signUp,

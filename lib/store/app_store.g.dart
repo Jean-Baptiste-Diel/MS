@@ -209,6 +209,22 @@ mixin _$AppStore on _AppStore, Store {
     });
   }
 
+  late final _$referralCodeAtom =
+      Atom(name: '_AppStore.referralCode', context: context);
+
+  @override
+  String get referralCode {
+    _$referralCodeAtom.reportRead();
+    return super.referralCode;
+  }
+
+  @override
+  set referralCode(String value) {
+    _$referralCodeAtom.reportWrite(value, super.referralCode, () {
+      super.referralCode = value;
+    });
+  }
+
   late final _$userNameAtom =
       Atom(name: '_AppStore.userName', context: context);
 
@@ -269,6 +285,22 @@ mixin _$AppStore on _AppStore, Store {
   set token(String value) {
     _$tokenAtom.reportWrite(value, super.token, () {
       super.token = value;
+    });
+  }
+
+  late final _$refreshTokenAtom =
+      Atom(name: '_AppStore.refreshToken', context: context);
+
+  @override
+  String get refreshToken {
+    _$refreshTokenAtom.reportRead();
+    return super.refreshToken;
+  }
+
+  @override
+  set refreshToken(String value) {
+    _$refreshTokenAtom.reportWrite(value, super.refreshToken, () {
+      super.refreshToken = value;
     });
   }
 
@@ -595,6 +627,14 @@ mixin _$AppStore on _AppStore, Store {
     return _$setTokenAsyncAction.run(() => super.setToken(val));
   }
 
+  late final _$setRefreshTokenAsyncAction =
+      AsyncAction('_AppStore.setRefreshToken', context: context);
+
+  @override
+  Future<void> setRefreshToken(String val) {
+    return _$setRefreshTokenAsyncAction.run(() => super.setRefreshToken(val));
+  }
+
   late final _$setCountryIdAsyncAction =
       AsyncAction('_AppStore.setCountryId', context: context);
 
@@ -657,6 +697,14 @@ mixin _$AppStore on _AppStore, Store {
   @override
   Future<void> setLastName(String val) {
     return _$setLastNameAsyncAction.run(() => super.setLastName(val));
+  }
+
+  late final _$setReferralCodeAsyncAction =
+      AsyncAction('_AppStore.setReferralCode', context: context);
+
+  @override
+  Future<void> setReferralCode(String val) {
+    return _$setReferralCodeAsyncAction.run(() => super.setReferralCode(val));
   }
 
   late final _$setContactNumberAsyncAction =
@@ -797,10 +845,12 @@ userLastName: ${userLastName},
 uid: ${uid},
 userContactNumber: ${userContactNumber},
 userEmail: ${userEmail},
+referralCode: ${referralCode},
 userName: ${userName},
 latitude: ${latitude},
 longitude: ${longitude},
 token: ${token},
+refreshToken: ${refreshToken},
 countryId: ${countryId},
 stateId: ${stateId},
 cityId: ${cityId},

@@ -103,13 +103,28 @@ UserData? cachedUserDetail;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp().then((value) {
+  if (kIsWeb) {
+    // je vais les configurer apres : ch sall
+    await Firebase.initializeApp(
+      options: FirebaseOptions(
+        apiKey: "XXX",
+        authDomain: "XXX.firebaseapp.com",
+        projectId: "XXX",
+        storageBucket: "XXX.appspot.com",
+        messagingSenderId: "XXX",
+        appId: "XXX",
+      ),
+    );
+  } else {
+    await Firebase.initializeApp();
+  }
+/*   await Firebase.initializeApp().then((value) {
     /// Firebase Notification
     initFirebaseMessaging();
     if (kReleaseMode) {
       FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
     }
-  });
+  }); */
 
   passwordLengthGlobal = 6;
   appButtonBackgroundColorGlobal = primaryColor;
@@ -128,14 +143,16 @@ void main() async {
   await initialize();
   localeLanguageList = languageList();
 
-  int themeModeIndex = getIntAsync(THEME_MODE_INDEX, defaultValue: THEME_MODE_SYSTEM);
+  int themeModeIndex =
+      getIntAsync(THEME_MODE_INDEX, defaultValue: THEME_MODE_SYSTEM);
   if (themeModeIndex == THEME_MODE_LIGHT) {
     appStore.setDarkMode(false);
   } else if (themeModeIndex == THEME_MODE_DARK) {
     appStore.setDarkMode(true);
   }
 
-  defaultToastBackgroundColor = appStore.isDarkMode ? Colors.white : Colors.black;
+  defaultToastBackgroundColor =
+      appStore.isDarkMode ? Colors.white : Colors.black;
   defaultToastTextColor = appStore.isDarkMode ? Colors.black : Colors.white;
 
   // Initialize deep link service
@@ -163,7 +180,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return RestartAppWidget(
-      child: SafeArea(
+        child: SafeArea(
       top: false,
       child: Observer(
         builder: (_) => FutureBuilder<Color>(
@@ -176,7 +193,8 @@ class _MyAppState extends State<MyApp> {
                 home: SplashScreen(),
                 theme: AppTheme.lightTheme(color: snap.data),
                 darkTheme: AppTheme.darkTheme(color: snap.data),
-                themeMode: appStore.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+                themeMode:
+                    appStore.isDarkMode ? ThemeMode.dark : ThemeMode.light,
                 title: APP_NAME,
                 supportedLocales: LanguageDataModel.languageLocales(),
                 localizationsDelegates: [
@@ -188,7 +206,8 @@ class _MyAppState extends State<MyApp> {
                 builder: (context, child) {
                   return MediaQuery(
                     child: child!,
-                    data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.0)),
+                    data: MediaQuery.of(context)
+                        .copyWith(textScaler: TextScaler.linear(1.0)),
                   );
                 },
                 localeResolutionCallback: (locale, supportedLocales) => locale,

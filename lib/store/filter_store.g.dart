@@ -298,6 +298,22 @@ mixin _$FilterStore on FilterStoreBase, Store {
     });
   }
 
+  late final _$zoneIdAtom =
+      Atom(name: 'FilterStoreBase.zoneId', context: context);
+
+  @override
+  int? get zoneId {
+    _$zoneIdAtom.reportRead();
+    return super.zoneId;
+  }
+
+  @override
+  set zoneId(int? value) {
+    _$zoneIdAtom.reportWrite(value, super.zoneId, () {
+      super.zoneId = value;
+    });
+  }
+
   late final _$isAnyFilterAppliedAtom =
       Atom(name: 'FilterStoreBase.isAnyFilterApplied', context: context);
 
@@ -520,6 +536,17 @@ mixin _$FilterStore on FilterStoreBase, Store {
       ActionController(name: 'FilterStoreBase', context: context);
 
   @override
+  void setZoneId(int? id) {
+    final _$actionInfo = _$FilterStoreBaseActionController.startAction(
+        name: 'FilterStoreBase.setZoneId');
+    try {
+      return super.setZoneId(id);
+    } finally {
+      _$FilterStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
   void setStartDate(String val) {
     final _$actionInfo = _$FilterStoreBaseActionController.startAction(
         name: 'FilterStoreBase.setStartDate');
@@ -628,6 +655,7 @@ isPriceMin: ${isPriceMin},
 search: ${search},
 latitude: ${latitude},
 longitude: ${longitude},
+zoneId: ${zoneId},
 isAnyFilterApplied: ${isAnyFilterApplied}
     ''';
   }

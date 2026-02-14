@@ -321,7 +321,7 @@ class LanguageDe extends BaseLanguage {
   String get lblChangePwdTitle => "Ihr neues Passwort muss sich von dem vorherigen verwendeten Kennwort unterscheiden";
 
   @override
-  String get lblForgotPwdSubtitle => "Eine RESET-Kennwortverbindung wird an die oben eingegebene E-Mail-Adresse gesendet";
+  String get lblForgotPwdSubtitle => "Ein OTP-Code wird an die oben eingegebene E-Mail-Adresse gesendet";
 
   @override
   String get lblLoginTitle => "Hallo wieder ";
@@ -2239,4 +2239,69 @@ Verwenden Sie meinen Empfehlungscode $referralCode, um Treuepunkte bei Ihrer Anm
 
   @override
   String unlockBenefits(String points) => 'You can unlock benefits at checkout once you collect $points points.';
+
+  // OTP Verification
+  @override
+  String get verifyOTP => 'OTP verifizieren';
+
+  @override
+  String get enterTheCodeSentTo => 'Geben Sie den Code ein, der an gesendet wurde';
+
+  @override
+  String get accountVerifiedSuccessfully => 'Konto erfolgreich verifiziert';
+
+  @override
+  String get otpSentSuccessfully => 'OTP erfolgreich gesendet';
+
+  @override
+  String get verify => 'Verifizieren';
+
+  @override
+  String get didNotReceiveCode => 'Code nicht erhalten?';
+
+  @override
+  String get resendOTP => 'OTP erneut senden';
+
+  @override
+  String get resendIn => 'Erneut senden in';
+
+  // Artisan Registration
+  @override
+  String get registerAsArtisan => 'Als Handwerker registrieren';
+
+    @override
+    String get worker => 'Arbeiter';
+
+    @override
+    String get individual => 'Privatperson';
+
+    @override
+    String get enterprise => 'Unternehmen';
+
+    @override
+    String get selectProfileTitle => 'Wählen Sie Ihr Profil';
+
+    @override
+    String get selectProfileSubtitle => 'Wählen Sie ein Profil, damit Mison Ihnen ein personalisiertes Erlebnis bieten kann.';
+
+    @override
+    String get continueLabel => 'Fortsetzen';
+
+  @override
+  String get profession => 'Beruf';
+
+  @override
+  String get experienceYears => 'Jahre Erfahrung';
+
+  @override
+  String get hourlyRate => 'Stundensatz';
+
+  @override
+  String get dailyRate => 'Tagessatz';
+
+  @override
+  String get bio => 'Über mich';
+
+  @override
+  String get city => 'Stadt';
 }

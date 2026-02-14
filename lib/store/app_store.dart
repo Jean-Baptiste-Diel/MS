@@ -68,6 +68,9 @@ abstract class _AppStore with Store {
   String token = getStringAsync(TOKEN);
 
   @observable
+  String refreshToken = getStringAsync(REFRESH_TOKEN);
+
+  @observable
   int countryId = getIntAsync(COUNTRY_ID);
 
   @observable
@@ -191,6 +194,12 @@ abstract class _AppStore with Store {
   Future<void> setToken(String val) async {
     token = val;
     await setValue(TOKEN, val);
+  }
+
+  @action
+  Future<void> setRefreshToken(String val) async {
+    refreshToken = val;
+    await setValue(REFRESH_TOKEN, val);
   }
 
   @action

@@ -69,6 +69,10 @@ class UserData {
   int? loyalty_points;
   int? referrer_points;
   int? referred_user_points;
+  
+  // Nouveau champs pour l'API Mison
+  String? userAccountType; // 'PARTICULIER' ou 'ENTREPRISE'
+  String? companyName; // Requis si userAccountType == 'ENTREPRISE'
 
   ///Local
   bool get isHandyman => userType == USER_TYPE_HANDYMAN;
@@ -230,6 +234,54 @@ class UserData {
         referred_user_points: json['referred_user_points']);
   }
 
+  /// Factory constructor for API response format
+  /// API returns: { id (UUID), email, role, first_name, last_name }
+  factory UserData.fromMisonJson(Map<String, dynamic> json, {String? accessToken}) {
+    // Mison API returns id as UUID string, we need to handle it
+    int? parsedId;
+    if (json['id'] != null) {
+      // If id is UUID string, generate a hash code for int id
+      if (json['id'] is String && (json['id'] as String).contains('-')) {
+        parsedId = json['id'].hashCode.abs();
+      } else {
+        parsedId = json['id'].toString().toInt();
+      }
+    }
+
+    // Map Mison role to userType
+    String? userType;
+    String? role = json['role'];
+    if (role != null) {
+      switch (role.toUpperCase()) {
+        case 'CLIENT':
+        case 'PARTICULIER':
+        case 'ENTREPRISE':
+          userType = 'user';
+          break;
+        case 'ARTISAN':
+          userType = 'provider';
+          break;
+        default:
+          userType = 'user';
+      }
+    }
+
+    return UserData(
+      id: parsedId,
+      uid: json['id']?.toString(), // Store original UUID in uid
+      email: json['email'],
+      firstName: json['first_name'],
+      lastName: json['last_name'],
+      displayName: '${json['first_name'] ?? ''} ${json['last_name'] ?? ''}'.trim(),
+      userType: userType,
+      apiToken: accessToken,
+      profileImage: json['profile_picture_url'],
+      // If user can login, they are verified. Default to 1 (active) if not specified
+      status: json['is_verified'] == false ? 0 : 1,
+      emailVerified: json['is_verified'] == false ? 0 : 1,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = new Map<String, dynamic>();
     if (address != null) data['address'] = address;
@@ -287,6 +339,9 @@ class UserData {
     if (loyalty_points != null) data['loyalty_points'] = loyalty_points;
     if (referrer_points != null) data['referrer_points'] = referrer_points;
     if (referred_user_points != null) data['referred_user_points'] = referred_user_points;
+    // Champs API Mison
+    if (userAccountType != null) data['user_account_type'] = userAccountType;
+    if (companyName != null) data['company_name'] = companyName;
     if (handymanReview != null) {
       data['handyman_review'] = handymanReview!.toJson();
     }

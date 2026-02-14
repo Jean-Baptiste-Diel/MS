@@ -4,6 +4,7 @@ import 'package:booking_system_flutter/component/selected_item_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/user_data_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
+import 'package:booking_system_flutter/screens/auth/otp_verification_screen.dart';
 import 'package:booking_system_flutter/services/deep_link_service.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
@@ -25,8 +26,9 @@ class SignUpScreen extends StatefulWidget {
   final bool isOTPLogin;
   final String? uid;
   final int? tokenForOTPCredentials;
+  final String? initialAccountType; // 'PARTICULIER' or 'ENTREPRISE'
 
-  SignUpScreen({Key? key, this.phoneNumber, this.isOTPLogin = false, this.countryCode, this.uid, this.tokenForOTPCredentials}) : super(key: key);
+  SignUpScreen({Key? key, this.phoneNumber, this.isOTPLogin = false, this.countryCode, this.uid, this.tokenForOTPCredentials, this.initialAccountType}) : super(key: key);
 
   @override
   _SignUpScreenState createState() => _SignUpScreenState();
@@ -43,6 +45,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
   TextEditingController mobileCont = TextEditingController();
   TextEditingController passwordCont = TextEditingController();
   TextEditingController referralCodeCont = TextEditingController();
+  TextEditingController companyNameCont = TextEditingController();
+  
+    @override
+    void dispose() {
+      fNameCont.dispose();
+      lNameCont.dispose();
+      emailCont.dispose();
+      userNameCont.dispose();
+      mobileCont.dispose();
+      passwordCont.dispose();
+      referralCodeCont.dispose();
+      companyNameCont.dispose();
+      fNameFocus.dispose();
+      lNameFocus.dispose();
+      emailFocus.dispose();
+      userNameFocus.dispose();
+      mobileFocus.dispose();
+      passwordFocus.dispose();
+      referralCodeFocus.dispose();
+      companyNameFocus.dispose();
+      super.dispose();
+    }
 
   FocusNode fNameFocus = FocusNode();
   FocusNode lNameFocus = FocusNode();
@@ -51,6 +75,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
   FocusNode mobileFocus = FocusNode();
   FocusNode passwordFocus = FocusNode();
   FocusNode referralCodeFocus = FocusNode();
+  FocusNode companyNameFocus = FocusNode();
+
+  // Type de compte: PARTICULIER ou ENTREPRISE
+  String selectedAccountType = 'PARTICULIER';
 
   bool isAcceptedTc = false;
 
@@ -72,6 +100,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
     });
     init();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (widget.initialAccountType != null) {
+      setState(() {
+        selectedAccountType = widget.initialAccountType!;
+      });
+    }
   }
 
   void init() async {
@@ -114,6 +152,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (!await _validateReferralCodeIfNeeded()) {
         return;
       }
+      
+      // Validation: company_name requis si type = ENTREPRISE
+      if (selectedAccountType == 'ENTREPRISE' && companyNameCont.text.trim().isEmpty) {
+        toast(language.requiredText);
+        companyNameFocus.requestFocus();
+        return;
+      }
+      
       if (isAcceptedTc) {
         formKey.currentState!.save();
         appStore.setLoading(true);
@@ -127,7 +173,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ..lastName = lNameCont.text.trim()
           ..userType = USER_TYPE_USER
           ..uid = widget.uid.validate()
-          ..password = widget.phoneNumber.validate().trim();
+          ..password = widget.phoneNumber.validate().trim()
+          ..userAccountType = selectedAccountType
+          ..companyName = selectedAccountType == 'ENTREPRISE' ? companyNameCont.text.trim() : null;
 
         /// Link OTP login with Email Auth
         if (widget.tokenForOTPCredentials != null) {
@@ -182,6 +230,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (!await _validateReferralCodeIfNeeded()) {
         return;
       }
+      
+      // Validation: company_name requis si type = ENTREPRISE
+      if (selectedAccountType == 'ENTREPRISE' && companyNameCont.text.trim().isEmpty) {
+        toast(language.requiredText);
+        companyNameFocus.requestFocus();
+        return;
+      }
 
       /// If Terms and condition is Accepted then only the user will be registered
       if (isAcceptedTc) {
@@ -196,7 +251,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ..username = userNameCont.text.trim()
           ..email = emailCont.text.trim()
           ..password = passwordCont.text.trim()
-          ..referral_code = referralCodeCont.text.trim();
+          ..referral_code = referralCodeCont.text.trim()
+          ..userAccountType = selectedAccountType
+          ..companyName = selectedAccountType == 'ENTREPRISE' ? companyNameCont.text.trim() : null;
 
         createUsers(tempRegisterData: tempRegisterData);
       } else {
@@ -247,14 +304,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<void> createUsers({required UserData tempRegisterData}) async {
     await createUser(tempRegisterData.toJson()).then((registerResponse) async {
-      registerResponse.userData!.password = passwordCont.text.trim();
-
       appStore.setLoading(false);
       toast(registerResponse.message.validate());
-      await appStore.setLoginType(tempRegisterData.loginType.validate());
-
-      /// Back to sign in screen
-      finish(context);
+      
+      // Rediriger vers l'écran de vérification OTP
+      OTPVerificationScreen(
+        email: emailCont.text.trim(),
+        isFromSignUp: true,
+      ).launch(context);
     }).catchError((e) {
       appStore.setLoading(false);
       toast(e.toString());
@@ -403,6 +460,64 @@ class _SignUpScreenState extends State<SignUpScreen> {
             ).expand(),
           ],
         ),
+        16.height,
+        // Type de compte: PARTICULIER ou ENTREPRISE
+        Container(
+          decoration: BoxDecoration(
+            color: context.cardColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Type de compte', style: secondaryTextStyle()).paddingOnly(left: 16, top: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: RadioListTile<String>(
+                      title: Text('Particulier', style: primaryTextStyle(size: 14)),
+                      value: 'PARTICULIER',
+                      groupValue: selectedAccountType,
+                      onChanged: (value) {
+                        setState(() {
+                          selectedAccountType = value!;
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                  ),
+                  Expanded(
+                    child: RadioListTile<String>(
+                      title: Text('Entreprise', style: primaryTextStyle(size: 14)),
+                      value: 'ENTREPRISE',
+                      groupValue: selectedAccountType,
+                      onChanged: (value) {
+                        setState(() {
+                          selectedAccountType = value!;
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        // Nom de l'entreprise (visible uniquement si ENTREPRISE)
+        if (selectedAccountType == 'ENTREPRISE') ...[
+          16.height,
+          AppTextField(
+            textFieldType: TextFieldType.NAME,
+            controller: companyNameCont,
+            focus: companyNameFocus,
+            errorThisFieldRequired: language.requiredText,
+            decoration: inputDecoration(context, labelText: "Nom de l'entreprise *"),
+            suffix: Icon(Icons.business, size: 18, color: appStore.isDarkMode ? Colors.white : Colors.grey).paddingAll(14),
+          ),
+        ],
         8.height,
         Text(
           "Do you have a referral code ? (Optional)",

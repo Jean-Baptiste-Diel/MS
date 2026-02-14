@@ -152,7 +152,7 @@ class _OTPLoginScreenState extends State<OTPLoginScreen> {
           try {
             await loginUser(request, isSocialLogin: true).then((loginResponse) async {
               if (loginResponse.isUserExist.validate(value: true)) {
-                await saveUserData(loginResponse.userData!);
+                await saveUserData(loginResponse.userData!, refreshToken: loginResponse.refreshToken);
                 await appStore.setLoginType(LOGIN_TYPE_OTP);
                 DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
               } else {

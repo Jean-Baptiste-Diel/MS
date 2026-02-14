@@ -2,9 +2,9 @@ import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:flutter/material.dart';
 
 var primaryColor = defaultPrimaryColor;
-const secondaryPrimaryColor = Color(0xfff3f4fa);
-const lightPrimaryColor = Color(0xffebebf7);
-const primaryLightColor = Color(0xFFEFEFF8);
+const secondaryPrimaryColor = Color(0xFFFFF8E1); // Jaune très clair
+const lightPrimaryColor = Color(0xFFFFF3CD); // Jaune clair
+const primaryLightColor = Color(0xFFFFF9E6); // Variante claire
 
 //Text Color
 const appTextPrimaryColor = Color(0xff1C1F34);

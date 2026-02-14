@@ -1496,4 +1496,30 @@ abstract class BaseLanguage {
   String get lblRedeemRewards;
 
   String unlockBenefits(String points);
+
+  // OTP Verification
+  String get verifyOTP;
+  String get enterTheCodeSentTo;
+  String get accountVerifiedSuccessfully;
+  String get otpSentSuccessfully;
+  String get verify;
+  String get didNotReceiveCode;
+  String get resendOTP;
+  String get resendIn;
+  
+  // Artisan Registration
+  String get registerAsArtisan;
+  // Profile selection labels
+  String get worker;
+  String get individual;
+  String get enterprise;
+  String get selectProfileTitle;
+  String get selectProfileSubtitle;
+  String get continueLabel;
+  String get profession;
+  String get experienceYears;
+  String get hourlyRate;
+  String get dailyRate;
+  String get bio;
+  String get city;
 }
