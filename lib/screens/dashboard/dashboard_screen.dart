@@ -3,7 +3,6 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/category/mison_category_fragment.dart';
 import 'package:booking_system_flutter/screens/chat/chat_list_screen.dart';
-import 'package:booking_system_flutter/screens/dashboard/fragment/booking_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/mison_booking_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/dashboard_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/profile_fragment.dart';
@@ -22,7 +21,6 @@ import '../newDashboard/dashboard_1/dashboard_fragment_1.dart';
 import '../newDashboard/dashboard_2/dashboard_fragment_2.dart';
 import '../newDashboard/dashboard_3/dashboard_fragment_3.dart';
 import '../newDashboard/dashboard_4/dashboard_fragment_4.dart';
-
 
 class DashboardScreen extends StatefulWidget {
   final bool? redirectToBooking;
@@ -50,9 +48,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         appStore.setDarkMode(context.platformBrightness() == Brightness.dark);
       }
 
-      View.of(context).platformDispatcher.onPlatformBrightnessChanged = () async {
+      View.of(context).platformDispatcher.onPlatformBrightnessChanged =
+          () async {
         if (getIntAsync(THEME_MODE_INDEX) == THEME_MODE_SYSTEM) {
-          appStore.setDarkMode(MediaQuery.of(context).platformBrightness == Brightness.light);
+          appStore.setDarkMode(
+              MediaQuery.of(context).platformBrightness == Brightness.light);
         }
       };
     });
@@ -108,7 +108,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await 3.seconds.delay;
     if (getIntAsync(FORCE_UPDATE_USER_APP).getBoolInt()) {
       showForceUpdateDialog(context);
-    }/* else if (getBoolAsync(AUTO_UPDATE, defaultValue:false)) {
+    } /* else if (getBoolAsync(AUTO_UPDATE, defaultValue:false)) {
       checkAndShowCustomForceUpdateDialog(context);
     }*/
   }
@@ -137,20 +137,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
               builder: (context) {
                 if (appConfigurationStore.userDashboardType == DASHBOARD_1) {
                   return DashboardFragment1();
-                } else if (appConfigurationStore.userDashboardType == DASHBOARD_2) {
+                } else if (appConfigurationStore.userDashboardType ==
+                    DASHBOARD_2) {
                   return DashboardFragment2();
-                } else if (appConfigurationStore.userDashboardType == DASHBOARD_3) {
+                } else if (appConfigurationStore.userDashboardType ==
+                    DASHBOARD_3) {
                   return DashboardFragment3();
-                } else if (appConfigurationStore.userDashboardType == DASHBOARD_4) {
+                } else if (appConfigurationStore.userDashboardType ==
+                    DASHBOARD_4) {
                   return DashboardFragment4();
                 } else {
                   return DashboardFragment();
                 }
               },
             ),
-            Observer(builder: (context) => appStore.isLoggedIn ? const MisonBookingFragment() : const SignInScreen(isFromDashboard: true)),
+            Observer(
+                builder: (context) => appStore.isLoggedIn
+                    ? const MisonBookingFragment()
+                    : const SignInScreen(isFromDashboard: true)),
             const MisonCategoryFragment(),
-            if (appConfigurationStore.isEnableChat) Observer(builder: (context) => appStore.isLoggedIn ? ChatListScreen() : const SignInScreen(isFromDashboard: true)),
+            if (appConfigurationStore.isEnableChat)
+              Observer(
+                  builder: (context) => appStore.isLoggedIn
+                      ? ChatListScreen()
+                      : const SignInScreen(isFromDashboard: true)),
             ProfileFragment(),
           ][currentIndex],
         ),
@@ -161,7 +171,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             data: NavigationBarThemeData(
               backgroundColor: context.primaryColor.withValues(alpha: 0.02),
               indicatorColor: context.primaryColor.withValues(alpha: 0.1),
-              labelTextStyle: WidgetStateProperty.all(primaryTextStyle(size: 12)),
+              labelTextStyle:
+                  WidgetStateProperty.all(primaryTextStyle(size: 12)),
               surfaceTintColor: Colors.transparent,
               shadowColor: Colors.transparent,
             ),
@@ -175,25 +186,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 NavigationDestination(
                   icon: ic_ticket.iconImage(color: appTextSecondaryColor),
-                  selectedIcon: ic_ticket.iconImage(color: context.primaryColor),
+                  selectedIcon:
+                      ic_ticket.iconImage(color: context.primaryColor),
                   label: language.booking,
                 ),
                 NavigationDestination(
                   icon: ic_category.iconImage(color: appTextSecondaryColor),
-                  selectedIcon: ic_category.iconImage(color: context.primaryColor),
+                  selectedIcon:
+                      ic_category.iconImage(color: context.primaryColor),
                   label: 'Service',
                 ),
                 if (appConfigurationStore.isEnableChat)
                   NavigationDestination(
                     icon: ic_chat.iconImage(color: appTextSecondaryColor),
-                    selectedIcon: ic_chat.iconImage(color: context.primaryColor),
+                    selectedIcon:
+                        ic_chat.iconImage(color: context.primaryColor),
                     label: language.lblChat,
                   ),
                 Observer(
                   builder: (context) {
                     return NavigationDestination(
-                      icon: (appStore.isLoggedIn && appStore.userProfileImage.isNotEmpty) ? IgnorePointer(ignoring: true, child: ImageBorder(src: appStore.userProfileImage, height: 26)) : ic_profile2.iconImage(color: appTextSecondaryColor),
-                      selectedIcon: (appStore.isLoggedIn && appStore.userProfileImage.isNotEmpty) ? IgnorePointer(ignoring: true, child: ImageBorder(src: appStore.userProfileImage, height: 26)) : ic_profile2.iconImage(color: context.primaryColor),
+                      icon: (appStore.isLoggedIn &&
+                              appStore.userProfileImage.isNotEmpty)
+                          ? IgnorePointer(
+                              ignoring: true,
+                              child: ImageBorder(
+                                  src: appStore.userProfileImage, height: 26))
+                          : ic_profile2.iconImage(color: appTextSecondaryColor),
+                      selectedIcon: (appStore.isLoggedIn &&
+                              appStore.userProfileImage.isNotEmpty)
+                          ? IgnorePointer(
+                              ignoring: true,
+                              child: ImageBorder(
+                                  src: appStore.userProfileImage, height: 26))
+                          : ic_profile2.iconImage(color: context.primaryColor),
                       label: language.profile,
                     );
                   },

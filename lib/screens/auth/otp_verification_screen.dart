@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart' as api;
+import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
-import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,7 +28,7 @@ class OTPVerificationScreen extends StatefulWidget {
 
 class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   TextEditingController otpController = TextEditingController();
-  
+
   Timer? _timer;
   int _remainingSeconds = 60;
   bool _canResend = false;
@@ -50,7 +50,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     _remainingSeconds = 60;
     _canResend = false;
     setState(() {});
-    
+
     _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (_remainingSeconds > 0) {
         setState(() {
@@ -81,10 +81,12 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     await api.verifyAccountOtp(request).then((response) {
       appStore.setLoading(false);
       toast(response.message ?? language.accountVerifiedSuccessfully);
-      
-      // Retour à l'écran de connexion
-      finish(context);
-      finish(context); // Fermer aussi l'écran d'inscription
+
+      const SignInScreen(allowHomeNavigation: true).launch(
+        context,
+        isNewTask: true,
+        pageRouteAnimation: PageRouteAnimation.Fade,
+      );
     }).catchError((e) {
       appStore.setLoading(false);
       toast(e.toString());
@@ -119,7 +121,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         leading: BackWidget(),
         scrolledUnderElevation: 0,
         systemOverlayStyle: SystemUiOverlayStyle(
-          statusBarIconBrightness: appStore.isDarkMode ? Brightness.light : Brightness.dark,
+          statusBarIconBrightness:
+              appStore.isDarkMode ? Brightness.light : Brightness.dark,
           statusBarColor: context.scaffoldBackgroundColor,
         ),
       ),
@@ -137,7 +140,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     height: 80,
                     width: 80,
                     decoration: BoxDecoration(
-                      color: primaryColor.withOpacity(0.1),
+                      color: primaryColor.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(

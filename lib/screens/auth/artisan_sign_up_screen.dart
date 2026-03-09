@@ -38,7 +38,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     with TickerProviderStateMixin {
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
   Country selectedCountry = defaultCountry();
-  
+
   // Animation controllers
   late PageController _pageController;
   late AnimationController _progressAnimationController;
@@ -96,7 +96,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   // Coordonnées de l'adresse sélectionnée
   double? addressLat;
   double? addressLon;
-  
+
   // État de chargement de la localisation
   bool isLoadingLocation = false;
 
@@ -107,50 +107,50 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   void initState() {
     super.initState();
     experienceYearsCont.text = '0';
-    
+
     // Initialiser le PageController
     _pageController = PageController(initialPage: 0);
-    
+
     // Initialiser l'animation de progression
     _progressAnimationController = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
-    
+
     fetchServices();
-    
+
     // Récupérer automatiquement la localisation actuelle
     _fetchCurrentLocation();
   }
-  
+
   /// Récupère la localisation actuelle et pré-remplit l'adresse
   Future<void> _fetchCurrentLocation() async {
     if (kIsWeb) return; // Skip on web
-    
+
     setState(() => isLoadingLocation = true);
-    
+
     try {
       // Vérifier les permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      
-      if (permission == LocationPermission.denied || 
+
+      if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         setState(() => isLoadingLocation = false);
         return;
       }
-      
+
       // Obtenir la position actuelle
       final Position position = await getUserLocationPosition();
-      
+
       // Obtenir l'adresse à partir des coordonnées
       final String address = await buildFullAddressFromLatLong(
         position.latitude,
         position.longitude,
       );
-      
+
       if (mounted) {
         setState(() {
           addressCont.text = address;
@@ -158,7 +158,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           addressLon = position.longitude;
           isLoadingLocation = false;
         });
-        
+
         // Afficher un message de confirmation
         toast('Localisation détectée automatiquement');
       }
@@ -449,11 +449,11 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   bool validateStep(int step) {
     // Réinitialiser les erreurs
     fieldErrors.clear();
-    
+
     switch (step) {
       case 0: // Étape 1 - Informations personnelles
         bool isValid = true;
-        
+
         if (fNameCont.text.trim().isEmpty) {
           fieldErrors['firstName'] = 'Veuillez saisir votre prénom';
           isValid = false;
@@ -472,7 +472,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         if (passwordCont.text.trim().isEmpty) {
           fieldErrors['password'] = 'Veuillez saisir votre mot de passe';
           isValid = false;
-        } else if (passwordCont.text.length < 8 || passwordCont.text.length > 12) {
+        } else if (passwordCont.text.length < 8 ||
+            passwordCont.text.length > 12) {
           fieldErrors['password'] = language.passwordLengthShouldBe;
           isValid = false;
         }
@@ -483,13 +484,13 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['mobile'] = 'Numéro de téléphone trop court';
           isValid = false;
         }
-        
+
         setState(() {});
         return isValid;
 
       case 1: // Étape 2 - Informations professionnelles
         bool isValid = true;
-        
+
         if ((selectedServiceId == null || selectedServiceId!.isEmpty) &&
             professionCont.text.trim().isEmpty) {
           fieldErrors['service'] = 'Veuillez sélectionner un service';
@@ -515,16 +516,17 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           isValid = false;
         }
         if (addressCont.text.trim().isEmpty) {
-          fieldErrors['address'] = 'Veuillez sélectionner votre adresse sur la carte';
+          fieldErrors['address'] =
+              'Veuillez sélectionner votre adresse sur la carte';
           isValid = false;
         }
-        
+
         setState(() {});
         return isValid;
 
       case 2: // Étape 3 - Justificatifs
         bool isValid = true;
-        
+
         if (profileImageFile == null &&
             (profileImageBytes == null || profileImageBytes!.isEmpty)) {
           fieldErrors['profileImage'] = 'La photo de profil est requise';
@@ -539,7 +541,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['terms'] = language.termsConditionsAccept;
           isValid = false;
         }
-        
+
         setState(() {});
         return isValid;
 
@@ -568,7 +570,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   void nextStep() {
     // Feedback haptique
     HapticFeedback.lightImpact();
-    
+
     if (validateStep(currentStep)) {
       if (currentStep < totalSteps - 1) {
         setState(() => currentStep++);
@@ -601,7 +603,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       _scrollToTop();
     }
   }
-  
+
   void _scrollToTop() {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
@@ -613,7 +615,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       }
     });
   }
-  
+
   void _goToStep(int step) {
     if (step < currentStep || validateStep(currentStep)) {
       HapticFeedback.selectionClick();
@@ -742,7 +744,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             children: List.generate(totalSteps, (index) {
               final isCompleted = index < currentStep;
               final isCurrent = index == currentStep;
-              
+
               return Expanded(
                 child: GestureDetector(
                   onTap: () => _goToStep(index),
@@ -865,9 +867,11 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     decoration: inputDecoration(
                       context,
                       labelText: 'Prénom *',
-                      prefixIcon: ic_profile2.iconImage(size: 16).paddingAll(14),
+                      prefixIcon:
+                          ic_profile2.iconImage(size: 16).paddingAll(14),
                     ),
-                    onChanged: (_) => setState(() => fieldErrors.remove('firstName')),
+                    onChanged: (_) =>
+                        setState(() => fieldErrors.remove('firstName')),
                   ),
                   _buildFieldError('firstName'),
                 ],
@@ -887,9 +891,11 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     decoration: inputDecoration(
                       context,
                       labelText: 'Nom *',
-                      prefixIcon: ic_profile2.iconImage(size: 16).paddingAll(14),
+                      prefixIcon:
+                          ic_profile2.iconImage(size: 16).paddingAll(14),
                     ),
-                    onChanged: (_) => setState(() => fieldErrors.remove('lastName')),
+                    onChanged: (_) =>
+                        setState(() => fieldErrors.remove('lastName')),
                   ),
                   _buildFieldError('lastName'),
                 ],
@@ -938,8 +944,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           decoration: boxDecorationWithRoundedCorners(
             backgroundColor: context.cardColor,
             borderRadius: BorderRadius.circular(12),
-            border: fieldErrors['mobile'] != null 
-                ? Border.all(color: Colors.red, width: 1) 
+            border: fieldErrors['mobile'] != null
+                ? Border.all(color: Colors.red, width: 1)
                 : null,
           ),
           child: Row(
@@ -967,7 +973,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     hintText: '${selectedCountry.example}',
                     border: InputBorder.none,
                   ),
-                  onChanged: (_) => setState(() => fieldErrors.remove('mobile')),
+                  onChanged: (_) =>
+                      setState(() => fieldErrors.remove('mobile')),
                 ),
               ),
             ],
@@ -996,8 +1003,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                 decoration: boxDecorationWithRoundedCorners(
                   backgroundColor: context.cardColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: fieldErrors['service'] != null 
-                      ? Border.all(color: Colors.red, width: 1) 
+                  border: fieldErrors['service'] != null
+                      ? Border.all(color: Colors.red, width: 1)
                       : null,
                 ),
                 child: DropdownButtonHideUnderline(
@@ -1065,7 +1072,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                       labelText: 'Expérience (années) *',
                       prefixIcon: Icon(Icons.timeline, size: 18).paddingAll(14),
                     ),
-                    onChanged: (_) => setState(() => fieldErrors.remove('experience')),
+                    onChanged: (_) =>
+                        setState(() => fieldErrors.remove('experience')),
                   ),
                   _buildFieldError('experience'),
                 ],
@@ -1084,9 +1092,11 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     decoration: inputDecoration(
                       context,
                       labelText: 'Taux horaire (FCFA) *',
-                      prefixIcon: Icon(Icons.attach_money, size: 18).paddingAll(14),
+                      prefixIcon:
+                          Icon(Icons.attach_money, size: 18).paddingAll(14),
                     ),
-                    onChanged: (_) => setState(() => fieldErrors.remove('hourlyRate')),
+                    onChanged: (_) =>
+                        setState(() => fieldErrors.remove('hourlyRate')),
                   ),
                   _buildFieldError('hourlyRate'),
                 ],
@@ -1137,7 +1147,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                   SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: primaryColor),
                   ),
                   8.width,
                   Text('Détection...', style: secondaryTextStyle(size: 12)),
@@ -1169,9 +1180,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             color: context.cardColor,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: fieldErrors['address'] != null 
-                  ? Colors.red 
-                  : addressCont.text.isNotEmpty 
+              color: fieldErrors['address'] != null
+                  ? Colors.red
+                  : addressCont.text.isNotEmpty
                       ? Colors.green.withOpacity(0.5)
                       : Colors.grey.withOpacity(0.3),
               width: fieldErrors['address'] != null ? 1.5 : 1,
@@ -1181,8 +1192,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             textEditingController: addressCont,
             googleAPIKey: GOOGLE_PLACES_API_KEY,
             inputDecoration: InputDecoration(
-              hintText: isLoadingLocation 
-                  ? 'Récupération de votre position...' 
+              hintText: isLoadingLocation
+                  ? 'Récupération de votre position...'
                   : 'Rechercher une adresse...',
               hintStyle: secondaryTextStyle(),
               prefixIcon: Container(
@@ -1196,7 +1207,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     ? SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: primaryColor),
                       )
                     : Icon(Icons.location_on, color: primaryColor, size: 20),
               ),
@@ -1207,10 +1219,22 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     )
                   : null,
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
             debounceTime: 400,
-            countries: const ["sn", "ml", "ci", "bf", "gn", "ne", "tg", "bj", "mr", "gm"],
+            countries: const [
+              "sn",
+              "ml",
+              "ci",
+              "bf",
+              "gn",
+              "ne",
+              "tg",
+              "bj",
+              "mr",
+              "gm"
+            ],
             isLatLngRequired: true,
             getPlaceDetailWithLatLng: (Prediction prediction) {
               setState(() {
@@ -1227,11 +1251,13 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                 TextPosition(offset: prediction.description?.length ?? 0),
               );
             },
-            seperatedBuilder: Divider(height: 1, color: Colors.grey.withOpacity(0.2)),
+            seperatedBuilder:
+                Divider(height: 1, color: Colors.grey.withOpacity(0.2)),
             containerHorizontalPadding: 0,
             itemBuilder: (context, index, Prediction prediction) {
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
                     Container(
@@ -1255,7 +1281,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                           ),
                           4.height,
                           Text(
-                            prediction.structuredFormatting?.secondaryText ?? '',
+                            prediction.structuredFormatting?.secondaryText ??
+                                '',
                             style: secondaryTextStyle(size: 12),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1306,8 +1333,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           decoration: boxDecorationWithRoundedCorners(
             backgroundColor: context.cardColor,
             borderRadius: BorderRadius.circular(16),
-            border: fieldErrors['profileImage'] != null 
-                ? Border.all(color: Colors.red, width: 1) 
+            border: fieldErrors['profileImage'] != null
+                ? Border.all(color: Colors.red, width: 1)
                 : null,
           ),
           child: Row(
@@ -1369,8 +1396,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           decoration: boxDecorationWithRoundedCorners(
             backgroundColor: context.cardColor,
             borderRadius: BorderRadius.circular(16),
-            border: fieldErrors['identity'] != null 
-                ? Border.all(color: Colors.red, width: 1) 
+            border: fieldErrors['identity'] != null
+                ? Border.all(color: Colors.red, width: 1)
                 : null,
           ),
           child: Row(
@@ -1546,15 +1573,14 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isAcceptedTc 
-              ? Colors.green.withOpacity(0.05) 
-              : context.cardColor,
+          color:
+              isAcceptedTc ? Colors.green.withOpacity(0.05) : context.cardColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: fieldErrors['terms'] != null 
-                ? Colors.red 
-                : isAcceptedTc 
-                    ? Colors.green.withOpacity(0.5) 
+            color: fieldErrors['terms'] != null
+                ? Colors.red
+                : isAcceptedTc
+                    ? Colors.green.withOpacity(0.5)
                     : Colors.grey.withOpacity(0.2),
             width: fieldErrors['terms'] != null ? 1.5 : 1,
           ),
@@ -1569,7 +1595,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                 color: isAcceptedTc ? Colors.green : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: isAcceptedTc ? Colors.green : Colors.grey.withOpacity(0.4),
+                  color: isAcceptedTc
+                      ? Colors.green
+                      : Colors.grey.withOpacity(0.4),
                   width: 2,
                 ),
               ),
@@ -1655,7 +1683,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.arrow_back_ios, size: 16, color: textPrimaryColorGlobal),
+                            Icon(Icons.arrow_back_ios,
+                                size: 16, color: textPrimaryColorGlobal),
                             6.width,
                             Text('Précédent', style: boldTextStyle(size: 15)),
                           ],
@@ -1700,15 +1729,19 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            currentStep == totalSteps - 1 ? "S'inscrire" : 'Suivant',
+                            currentStep == totalSteps - 1
+                                ? "S'inscrire"
+                                : 'Suivant',
                             style: boldTextStyle(size: 15, color: white),
                           ),
                           if (currentStep < totalSteps - 1) ...[
                             6.width,
-                            Icon(Icons.arrow_forward_ios, size: 16, color: white),
+                            Icon(Icons.arrow_forward_ios,
+                                size: 16, color: white),
                           ] else ...[
                             8.width,
-                            Icon(Icons.check_circle_outline, size: 20, color: white),
+                            Icon(Icons.check_circle_outline,
+                                size: 20, color: white),
                           ],
                         ],
                       ),
@@ -1861,7 +1894,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                               children: [
                                 LoaderWidget(),
                                 16.height,
-                                Text('Inscription en cours...', style: secondaryTextStyle()),
+                                Text('Inscription en cours...',
+                                    style: secondaryTextStyle()),
                               ],
                             ),
                           ),

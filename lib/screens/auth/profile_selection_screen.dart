@@ -16,9 +16,24 @@ class ProfileSelectionScreen extends StatefulWidget {
 class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
   String? selectedType;
 
+  Color _typeColor(String type) {
+    switch (type) {
+      case 'WORKER':
+        return Color(0xFFE67E22);
+      case 'INDIVIDUAL':
+        return Color(0xFF2E86DE);
+      case 'ENTERPRISE':
+        return Color(0xFF16A085);
+      default:
+        return primaryColor;
+    }
+  }
+
   Widget _option(
       BuildContext context, String title, String assetIcon, String type) {
     final bool isSelected = selectedType == type;
+    final Color accent = _typeColor(type);
+
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -28,7 +43,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         decoration: BoxDecoration(
-          color: isSelected ? Color(0xFFFDEEC4) : context.cardColor,
+          color: isSelected ? Color(0xFFFFF8E8) : context.cardColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
               color: isSelected ? primaryColor : context.dividerColor,
@@ -40,23 +55,87 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
         ),
         child: Row(
           children: [
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                  color: isSelected
-                      ? primaryColor.withOpacity(0.1)
-                      : Colors.black12,
-                  shape: BoxShape.circle),
-              child: Image.asset(assetIcon,
-                  width: 20,
-                  height: 20,
-                  color: isSelected ? primaryColor : null),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedScale(
+                  scale: isSelected ? 1.06 : 1.0,
+                  duration: Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  child: AnimatedContainer(
+                    duration: Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    padding: EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isSelected
+                            ? [
+                                accent.withValues(alpha: 0.25),
+                                accent.withValues(alpha: 0.08),
+                              ]
+                            : [
+                                Colors.black12,
+                                Colors.black12,
+                              ],
+                      ),
+                      border: Border.all(
+                        color: isSelected
+                            ? accent.withValues(alpha: 0.8)
+                            : context.dividerColor,
+                        width: isSelected ? 1.3 : 1,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: accent.withValues(alpha: 0.25),
+                                blurRadius: 10,
+                                offset: Offset(0, 3),
+                              ),
+                            ]
+                          : [],
+                    ),
+                    child: Image.asset(
+                      assetIcon,
+                      width: 20,
+                      height: 20,
+                      color: isSelected ? accent : context.iconColor,
+                    ),
+                  ),
+                ),
+                AnimatedPositioned(
+                  duration: Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  right: isSelected ? -1 : -4,
+                  top: isSelected ? -1 : -4,
+                  child: AnimatedContainer(
+                    duration: Duration(milliseconds: 220),
+                    width: isSelected ? 10 : 6,
+                    height: isSelected ? 10 : 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isSelected
+                          ? accent
+                          : context.iconColor.withValues(alpha: 0.25),
+                    ),
+                  ),
+                ),
+              ],
             ),
             16.width,
-            Text(title, style: primaryTextStyle()),
+            Text(
+              title,
+              style: primaryTextStyle(
+                color: isSelected ? Colors.black87 : null,
+              ),
+            ),
             Spacer(),
             Image.asset(ic_arrow_right,
-                width: 16, height: 16, color: context.iconColor),
+                width: 16,
+                height: 16,
+                color: isSelected ? accent : context.iconColor),
           ],
         ),
       ),
@@ -81,9 +160,6 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
         elevation: 0,
         backgroundColor: transparentColor,
         leading: BackButton(color: context.iconColor),
-        title: Text(language.selectProfileTitle,
-            style: boldTextStyle()),
-        centerTitle: true,
       ),
       body: SafeArea(
         child: Column(
@@ -93,21 +169,30 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                 padding: EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    16.height,
-                    _option(context, language.worker, ic_artisan,
-                        'WORKER'),
+                    12.height,
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        language.selectProfileTitle,
+                        style: boldTextStyle(size: 28),
+                      ),
+                    ),
+                    8.height,
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        language.selectProfileSubtitle,
+                        style: secondaryTextStyle(size: 12),
+                      ),
+                    ),
+                    20.height,
+                    _option(context, language.worker, ic_artisan, 'WORKER'),
                     12.height,
                     _option(context, language.individual, ic_profile2,
                         'INDIVIDUAL'),
                     12.height,
                     _option(context, language.enterprise, ic_category,
                         'ENTERPRISE'),
-                    20.height,
-                    Text(
-                      language.selectProfileSubtitle, 
-                      style: secondaryTextStyle(size: 12),
-                      textAlign: TextAlign.center,
-                    ).paddingOnly(top: 12),
                   ],
                 ),
               ),
