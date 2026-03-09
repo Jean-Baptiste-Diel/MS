@@ -35,7 +35,7 @@ const REFUND_POLICY_URL = 'https://iqonic.design/licensing-terms-more/#refund-po
 const INQUIRY_SUPPORT_EMAIL = 'hello@iqonic.design';
 
 /// You can add help line number here for contact. It's demo number
-const HELP_LINE_NUMBER = '+15265897485';
+const HELP_LINE_NUMBER = '+221777839359';
 
 //Airtel Money Payments
 ///It Supports ["UGX", "NGN", "TZS", "KES", "RWF", "ZMW", "CFA", "XOF", "XAF", "CDF", "USD", "XAF", "SCR", "MGA", "MWK"]
@@ -73,11 +73,11 @@ Country defaultCountry() {
     geographic: true,
     level: 1,
     name: 'Senegal',
-    example: '9123456789',
+    example: '777839359',
     displayName: 'Senegal (SN) [+221]',
     displayNameNoCountryCode: 'Senegal (SN)',
     e164Key: '221-SN-0',
-    fullExampleWithPlusSign: '+2219123456789',
+    fullExampleWithPlusSign: '+221777839359',
   );
 }
 

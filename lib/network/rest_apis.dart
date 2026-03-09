@@ -48,6 +48,8 @@ import '../model/payment_list_reasponse.dart';
 import '../model/update_location_response.dart';
 import '../model/wallet_response.dart';
 import '../model/zone_model.dart';
+import '../model/mison_order_model.dart';
+import '../model/mison_service_model.dart';
 import '../screens/referral_loyalty_points/model/loyalty_history_model.dart';
 import '../utils/app_configuration.dart';
 import '../utils/firebase_messaging_utils.dart';
@@ -56,26 +58,63 @@ import '../utils/firebase_messaging_utils.dart';
 /// Inscription d'un nouvel utilisateur (client) via l'API Mison
 /// POST /api/auth/register (multipart/form-data)
 /// Retourne un message, l'utilisateur doit vérifier son compte avec l'OTP
-Future<BaseResponseModel> createUser(Map request) async {
+Future<BaseResponseModel> createUser(
+  Map request, {
+  File? profilePicture,
+  Uint8List? profilePictureBytes,
+  String? profilePictureFileName,
+  File? identityDocument,
+  Uint8List? identityDocumentBytes,
+  String? identityDocumentFileName,
+}) async {
   Completer<BaseResponseModel> completer = Completer();
-  
-  MultipartRequest multiPartRequest = await getMultiPartRequest('auth/register');
-  
+
+  MultipartRequest multiPartRequest =
+      await getMultiPartRequest('auth/register');
+
   // Champs requis
   multiPartRequest.fields['email'] = request['email']?.toString() ?? '';
   multiPartRequest.fields['password'] = request['password']?.toString() ?? '';
-  multiPartRequest.fields['phone'] = request['contact_number']?.toString() ?? '';
-  multiPartRequest.fields['first_name'] = request['first_name']?.toString() ?? '';
+  multiPartRequest.fields['phone'] =
+      request['contact_number']?.toString() ?? '';
+  multiPartRequest.fields['first_name'] =
+      request['first_name']?.toString() ?? '';
   multiPartRequest.fields['last_name'] = request['last_name']?.toString() ?? '';
-  multiPartRequest.fields['type'] = request['user_account_type']?.toString() ?? 'PARTICULIER';
-  
+  multiPartRequest.fields['type'] =
+      request['user_account_type']?.toString() ?? 'PARTICULIER';
+
   // Ajouter company_name si type = ENTREPRISE
-  if (request['company_name'] != null && request['company_name'].toString().isNotEmpty) {
-    multiPartRequest.fields['company_name'] = request['company_name'].toString();
+  if (request['company_name'] != null &&
+      request['company_name'].toString().isNotEmpty) {
+    multiPartRequest.fields['company_name'] =
+        request['company_name'].toString();
   }
-  
+
+  // Ajouter photo de profil si fourni (mobile file ou web bytes)
+  if (profilePicture != null && profilePicture.existsSync()) {
+    multiPartRequest.files.add(
+        await MultipartFile.fromPath('profile_picture', profilePicture.path));
+  } else if (profilePictureBytes != null && profilePictureBytes.isNotEmpty) {
+    String fileName = profilePictureFileName ?? 'profile_picture.jpg';
+    multiPartRequest.files.add(MultipartFile.fromBytes(
+        'profile_picture', profilePictureBytes,
+        filename: fileName));
+  }
+
+  // Ajouter pièce d'identité unique si fournie
+  if (identityDocument != null && identityDocument.existsSync()) {
+    multiPartRequest.files.add(await MultipartFile.fromPath(
+        'identity_document', identityDocument.path));
+  } else if (identityDocumentBytes != null &&
+      identityDocumentBytes.isNotEmpty) {
+    String fileName = identityDocumentFileName ?? 'identity_document.jpg';
+    multiPartRequest.files.add(MultipartFile.fromBytes(
+        'identity_document', identityDocumentBytes,
+        filename: fileName));
+  }
+
   log("Register Request: ${jsonEncode(multiPartRequest.fields)}");
-  
+
   await sendMultiPartRequest(
     multiPartRequest,
     onSuccess: (response) {
@@ -89,7 +128,7 @@ Future<BaseResponseModel> createUser(Map request) async {
       completer.completeError(error?.toString() ?? errorSomethingWentWrong);
     },
   );
-  
+
   return completer.future;
 }
 
@@ -103,79 +142,150 @@ Future<BaseResponseModel> createArtisan(
   File? profilePicture,
   Uint8List? profilePictureBytes,
   String? profilePictureFileName,
+  File? identityDocument,
+  Uint8List? identityDocumentBytes,
+  String? identityDocumentFileName,
+  File? professionProof,
+  Uint8List? professionProofBytes,
+  String? professionProofFileName,
 }) async {
   Completer<BaseResponseModel> completer = Completer();
-  
-  MultipartRequest multiPartRequest = await getMultiPartRequest('auth/register/artisan');
-  
-  // Champs requis
-  multiPartRequest.fields['email'] = request['email']?.toString() ?? '';
-  multiPartRequest.fields['password'] = request['password']?.toString() ?? '';
-  multiPartRequest.fields['phone'] = request['contact_number']?.toString() ?? '';
-  multiPartRequest.fields['first_name'] = request['first_name']?.toString() ?? '';
-  multiPartRequest.fields['last_name'] = request['last_name']?.toString() ?? '';
-  
-  // Photo de profil (optionnel) - Support mobile (File) et web (bytes)
+
+  MultipartRequest multiPartRequest =
+      await getMultiPartRequest('auth/register/artisan');
+
+  // Récupération des champs avec les bons noms
+  String email = request['email']?.toString() ?? '';
+  String password = request['password']?.toString() ?? '';
+  String phone =
+      request['phone']?.toString() ?? ''; // ✅ Changé: contact_number → phone
+  String firstName = request['first_name']?.toString() ?? '';
+  String lastName = request['last_name']?.toString() ?? '';
+  String service =
+      request['service']?.toString() ?? ''; // ✅ Changé: profession → service
+  String experienceYears = request['experience_years']?.toString() ?? '';
+  String bio = request['bio']?.toString() ?? '';
+  String address = request['address']?.toString() ?? '';
+
+  // Champs optionnels
+  String hourlyRate = request['hourly_rate']?.toString() ?? '';
+  String dailyRate = request['daily_rate']?.toString() ?? '';
+
+  // Validation des champs requis
+  if (email.isEmpty ||
+      password.isEmpty ||
+      phone.isEmpty ||
+      firstName.isEmpty ||
+      lastName.isEmpty ||
+      service.isEmpty ||
+      experienceYears.isEmpty ||
+      bio.isEmpty ||
+      address.isEmpty) {
+    completer.completeError(language.requiredText);
+    return completer.future;
+  }
+
+  // Profile picture (selfie) obligatoire pour artisan
+  bool hasProfilePicture =
+      (profilePicture != null && profilePicture.existsSync()) ||
+          (profilePictureBytes != null && profilePictureBytes.isNotEmpty);
+  if (!hasProfilePicture) {
+    completer.completeError('La photo de profil est requise');
+    return completer.future;
+  }
+
+  // Identity document (single file) obligatoire
+  bool hasIdentityDocument =
+      (identityDocument != null && identityDocument.existsSync()) ||
+          (identityDocumentBytes != null && identityDocumentBytes.isNotEmpty);
+  if (!hasIdentityDocument) {
+    completer.completeError('La pièce d\'identité est requise');
+    return completer.future;
+  }
+
+  // Remplir les champs requis avec les bons noms
+  multiPartRequest.fields['email'] = email;
+  multiPartRequest.fields['password'] = password;
+  multiPartRequest.fields['phone'] = phone; // ✅ phone au lieu de contact_number
+  multiPartRequest.fields['first_name'] = firstName;
+  multiPartRequest.fields['last_name'] = lastName;
+  multiPartRequest.fields['service'] =
+      service; // ✅ service au lieu de profession
+  multiPartRequest.fields['experience_years'] = experienceYears;
+  multiPartRequest.fields['bio'] = bio;
+  multiPartRequest.fields['address'] = address;
+
+  // Ajouter les champs optionnels
+  if (hourlyRate.isNotEmpty) {
+    multiPartRequest.fields['hourly_rate'] = hourlyRate;
+  }
+  if (dailyRate.isNotEmpty) {
+    multiPartRequest.fields['daily_rate'] = dailyRate;
+  }
+
+  // Ajouter photo de profil (profile_picture)
   if (profilePicture != null && profilePicture.existsSync()) {
-    // Mobile: utiliser le fichier
-    multiPartRequest.files.add(await MultipartFile.fromPath('profile_picture', profilePicture.path));
+    multiPartRequest.files.add(
+        await MultipartFile.fromPath('profile_picture', profilePicture.path));
   } else if (profilePictureBytes != null && profilePictureBytes.isNotEmpty) {
-    // Web: utiliser les bytes
     String fileName = profilePictureFileName ?? 'profile_picture.jpg';
     multiPartRequest.files.add(MultipartFile.fromBytes(
-      'profile_picture',
-      profilePictureBytes,
-      filename: fileName,
-    ));
+        'profile_picture', profilePictureBytes,
+        filename: fileName));
   }
-  
-  // Champs optionnels pour artisan
-  if (request['profession'] != null && request['profession'].toString().isNotEmpty) {
-    multiPartRequest.fields['profession'] = request['profession'].toString();
+
+  // Ajouter pièce d'identité (identity_document)
+  if (identityDocument != null && identityDocument.existsSync()) {
+    multiPartRequest.files.add(await MultipartFile.fromPath(
+        'identity_document', identityDocument.path));
+  } else if (identityDocumentBytes != null &&
+      identityDocumentBytes.isNotEmpty) {
+    String fileName = identityDocumentFileName ?? 'identity_document.jpg';
+    multiPartRequest.files.add(MultipartFile.fromBytes(
+        'identity_document', identityDocumentBytes,
+        filename: fileName));
   }
-  if (request['experience_years'] != null) {
-    multiPartRequest.fields['experience_years'] = request['experience_years'].toString();
-  } else {
-    multiPartRequest.fields['experience_years'] = '0';
+
+  // Ajouter preuve de profession (profession_proof) - optionnel
+  if (professionProof != null && professionProof.existsSync()) {
+    multiPartRequest.files.add(
+        await MultipartFile.fromPath('profession_proof', professionProof.path));
+  } else if (professionProofBytes != null && professionProofBytes.isNotEmpty) {
+    String fileName = professionProofFileName ?? 'profession_proof.jpg';
+    multiPartRequest.files.add(MultipartFile.fromBytes(
+        'profession_proof', professionProofBytes,
+        filename: fileName));
   }
-  if (request['hourly_rate'] != null && request['hourly_rate'].toString().isNotEmpty) {
-    multiPartRequest.fields['hourly_rate'] = request['hourly_rate'].toString();
-  }
-  if (request['daily_rate'] != null && request['daily_rate'].toString().isNotEmpty) {
-    multiPartRequest.fields['daily_rate'] = request['daily_rate'].toString();
-  }
-  if (request['bio'] != null && request['bio'].toString().isNotEmpty) {
-    multiPartRequest.fields['bio'] = request['bio'].toString();
-  }
-  if (request['address'] != null && request['address'].toString().isNotEmpty) {
-    multiPartRequest.fields['address'] = request['address'].toString();
-  }
-  if (request['city'] != null && request['city'].toString().isNotEmpty) {
-    multiPartRequest.fields['city'] = request['city'].toString();
-  }
-  
-  log("Artisan Register Request: ${jsonEncode(multiPartRequest.fields)}");
-  
+
+  log("Artisan Register Request Fields: ${jsonEncode(multiPartRequest.fields)}");
+  log("Artisan Register Request Files: ${multiPartRequest.files.length}");
+
   await sendMultiPartRequest(
     multiPartRequest,
     onSuccess: (response) {
       if (response is String && response.isJson()) {
         completer.complete(BaseResponseModel.fromJson(jsonDecode(response)));
       } else {
-        completer.complete(BaseResponseModel(message: 'Inscription artisan réussie'));
+        completer.complete(
+            BaseResponseModel(message: 'Inscription artisan réussie'));
       }
     },
     onError: (error) {
       completer.completeError(error?.toString() ?? errorSomethingWentWrong);
     },
   );
-  
+
   return completer.future;
 }
 
-Future<LoginResponse> loginUser(Map request, {bool isSocialLogin = false}) async {
+Future<LoginResponse> loginUser(Map request,
+    {bool isSocialLogin = false}) async {
   try {
-    LoginResponse res = LoginResponse.fromJson(await handleResponse(await buildHttpResponse(isSocialLogin ? 'auth/social-login' : 'auth/login', request: request, method: HttpMethodType.POST)));
+    LoginResponse res = LoginResponse.fromJson(await handleResponse(
+        await buildHttpResponse(
+            isSocialLogin ? 'auth/social-login' : 'auth/login',
+            request: request,
+            method: HttpMethodType.POST)));
 
     if (res.userData != null) {
       if (res.userData!.userType != USER_TYPE_USER) {
@@ -193,14 +303,17 @@ Future<LoginResponse> loginUser(Map request, {bool isSocialLogin = false}) async
   }
 }
 
-
 Future<LoginResponse> updateProfile(Map request) async {
-  return LoginResponse.fromJson(await handleResponse(await buildHttpResponse('update-profile', request: request, method: HttpMethodType.POST)));
+  return LoginResponse.fromJson(await handleResponse(await buildHttpResponse(
+      'update-profile',
+      request: request,
+      method: HttpMethodType.POST)));
 }
 
 Future<UserData> getUserDetail(int id, {bool forceUpdate = true}) async {
   DateTime currentTimeStamp = DateTime.timestamp();
-  DateTime lastSyncedTimeStamp = DateTime.fromMillisecondsSinceEpoch(getIntAsync(LAST_USER_DETAILS_SYNCED_TIME));
+  DateTime lastSyncedTimeStamp = DateTime.fromMillisecondsSinceEpoch(
+      getIntAsync(LAST_USER_DETAILS_SYNCED_TIME));
   lastSyncedTimeStamp = lastSyncedTimeStamp.add(Duration(minutes: 5));
 
   if (!forceUpdate && lastSyncedTimeStamp.isAfter(currentTimeStamp)) {
@@ -209,10 +322,13 @@ Future<UserData> getUserDetail(int id, {bool forceUpdate = true}) async {
     /// Throw empty string so that in this case no toast message will be shown
     throw '';
   } else {
-    var res = LoginResponse.fromJson(await handleResponse(await buildHttpResponse('user-detail?id=$id', method: HttpMethodType.GET)));
+    var res = LoginResponse.fromJson(await handleResponse(
+        await buildHttpResponse('user-detail?id=$id',
+            method: HttpMethodType.GET)));
 
     if (res.userData != null) {
-      await setValue(LAST_USER_DETAILS_SYNCED_TIME, DateTime.timestamp().millisecondsSinceEpoch);
+      await setValue(LAST_USER_DETAILS_SYNCED_TIME,
+          DateTime.timestamp().millisecondsSinceEpoch);
       return res.userData!;
     } else {
       throw errorSomethingWentWrong;
@@ -221,9 +337,12 @@ Future<UserData> getUserDetail(int id, {bool forceUpdate = true}) async {
 }
 
 /// Save user data from API response
-Future<void> saveUserData(UserData data, {bool forceSyncAppConfigurations = true, String? refreshToken}) async {
-  if (data.apiToken.validate().isNotEmpty) await appStore.setToken(data.apiToken!);
-  if (refreshToken != null && refreshToken.isNotEmpty) await appStore.setRefreshToken(refreshToken);
+Future<void> saveUserData(UserData data,
+    {bool forceSyncAppConfigurations = true, String? refreshToken}) async {
+  if (data.apiToken.validate().isNotEmpty)
+    await appStore.setToken(data.apiToken!);
+  if (refreshToken != null && refreshToken.isNotEmpty)
+    await appStore.setRefreshToken(refreshToken);
   appStore.setLoggedIn(true);
 
   await appStore.setUserId(data.id.validate());
@@ -246,7 +365,8 @@ Future<void> saveUserData(UserData data, {bool forceSyncAppConfigurations = true
   subscribeToFirebaseTopic();
 
   // Sync new configurations for secret keys
-  if (forceSyncAppConfigurations) await setValue(LAST_APP_CONFIGURATION_SYNCED_TIME, 0);
+  if (forceSyncAppConfigurations)
+    await setValue(LAST_APP_CONFIGURATION_SYNCED_TIME, 0);
   getAppConfigurations();
 }
 
@@ -326,7 +446,8 @@ Future<void> logout(BuildContext context) async {
               ).expand(),
               16.width,
               AppButton(
-                child: Text(language.lblYes, style: boldTextStyle(color: white)),
+                child:
+                    Text(language.lblYes, style: boldTextStyle(color: white)),
                 color: primaryColor,
                 elevation: 0,
                 onTap: () async {
@@ -342,12 +463,16 @@ Future<void> logout(BuildContext context) async {
                     });
 
                     await clearPreferences();
-                    if (cachedWalletHistoryList != null && cachedWalletHistoryList!.isNotEmpty) cachedWalletHistoryList!.clear();
+                    if (cachedWalletHistoryList != null &&
+                        cachedWalletHistoryList!.isNotEmpty)
+                      cachedWalletHistoryList!.clear();
 
                     appStore.setLoading(false);
                     //todo:
                     toast("Your Account has logged out successfully");
-                    DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
+                    DashboardScreen().launch(context,
+                        isNewTask: true,
+                        pageRouteAnimation: PageRouteAnimation.Fade);
                   } else {
                     toast(errorInternetNotAvailable);
                   }
@@ -364,7 +489,8 @@ Future<void> logout(BuildContext context) async {
 Future<void> logoutApi() async {
   try {
     Map request = {'refresh': appStore.refreshToken};
-    await handleResponse(await buildHttpResponse('auth/logout', request: request, method: HttpMethodType.POST));
+    await handleResponse(await buildHttpResponse('auth/logout',
+        request: request, method: HttpMethodType.POST));
   } catch (e) {
     // Continue logout even if API fails
     log('Logout API error: $e');
@@ -374,73 +500,93 @@ Future<void> logoutApi() async {
 /// Change password - Requiert une session authentifiée
 /// POST /api/auth/change-password avec { old_password, new_password }
 Future<BaseResponseModel> changeUserPassword(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/change-password', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('auth/change-password',
+          request: request, method: HttpMethodType.POST)));
 }
 
 /// Forgot password - Envoie un OTP par email
 /// POST /api/auth/forgot-password avec { email }
 Future<BaseResponseModel> forgotPassword(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/forgot-password', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('auth/forgot-password',
+          request: request, method: HttpMethodType.POST)));
 }
 
 /// Reset password - Valide l'OTP et met à jour le mot de passe
 /// POST /api/auth/reset-password avec { email, otp_code, new_password }
 Future<BaseResponseModel> resetPassword(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/reset-password', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('auth/reset-password',
+          request: request, method: HttpMethodType.POST)));
 }
 
 /// Verify account with OTP
 /// POST /api/auth/register/verify avec { email, otp_code }
 Future<BaseResponseModel> verifyAccountOtp(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/register/verify', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('auth/register/verify',
+          request: request, method: HttpMethodType.POST)));
 }
 
 /// Resend OTP
 /// POST /api/auth/resend-otp?purpose=verification|password_reset avec { email }
-Future<BaseResponseModel> resendOtp(Map request, {String purpose = 'verification'}) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('auth/resend-otp?purpose=$purpose', request: request, method: HttpMethodType.POST)));
+Future<BaseResponseModel> resendOtp(Map request,
+    {String purpose = 'verification'}) async {
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('auth/resend-otp?purpose=$purpose',
+          request: request, method: HttpMethodType.POST)));
 }
 
 /// Get current user profile
 /// GET /api/auth/me
 Future<UserData> getCurrentUserProfile() async {
-  var response = await handleResponse(await buildHttpResponse('auth/me', method: HttpMethodType.GET));
+  var response = await handleResponse(
+      await buildHttpResponse('auth/me', method: HttpMethodType.GET));
   return UserData.fromMisonJson(response);
 }
 
 Future<BaseResponseModel> deleteAccountCompletely() async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('delete-user-account', request: {}, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('delete-user-account',
+          request: {}, method: HttpMethodType.POST)));
 }
-
 
 Future<VerificationModel> verifyUserEmail(String userEmail) async {
   Map<String, dynamic> request = {'email': userEmail};
-  return VerificationModel.fromJson(await handleResponse(await buildHttpResponse('user-email-verify', request: request, method: HttpMethodType.POST)));
+  return VerificationModel.fromJson(await handleResponse(
+      await buildHttpResponse('user-email-verify',
+          request: request, method: HttpMethodType.POST)));
 }
 
 //endregion
 
 //region Country Api
 Future<List<CountryListResponse>> getCountryList() async {
-  Iterable res = await (handleResponse(await buildHttpResponse('country-list', method: HttpMethodType.POST)));
+  Iterable res = await (handleResponse(
+      await buildHttpResponse('country-list', method: HttpMethodType.POST)));
   return res.map((e) => CountryListResponse.fromJson(e)).toList();
 }
 
 Future<List<StateListResponse>> getStateList(Map request) async {
-  Iterable res = await (handleResponse(await buildHttpResponse('state-list', request: request, method: HttpMethodType.POST)));
+  Iterable res = await (handleResponse(await buildHttpResponse('state-list',
+      request: request, method: HttpMethodType.POST)));
   return res.map((e) => StateListResponse.fromJson(e)).toList();
 }
 
 Future<List<CityListResponse>> getCityList(Map request) async {
-  Iterable res = await (handleResponse(await buildHttpResponse('city-list', request: request, method: HttpMethodType.POST)));
+  Iterable res = await (handleResponse(await buildHttpResponse('city-list',
+      request: request, method: HttpMethodType.POST)));
   return res.map((e) => CityListResponse.fromJson(e)).toList();
 }
 //endregion
 
 //region Configurations Api
-Future<void> getAppConfigurations({bool isCurrentLocation = false, double? lat, double? long}) async {
+Future<void> getAppConfigurations(
+    {bool isCurrentLocation = false, double? lat, double? long}) async {
   DateTime currentTimeStamp = DateTime.timestamp();
-  DateTime lastSyncedTimeStamp = DateTime.fromMillisecondsSinceEpoch(getIntAsync(LAST_APP_CONFIGURATION_SYNCED_TIME));
+  DateTime lastSyncedTimeStamp = DateTime.fromMillisecondsSinceEpoch(
+      getIntAsync(LAST_APP_CONFIGURATION_SYNCED_TIME));
   lastSyncedTimeStamp = lastSyncedTimeStamp.add(Duration(minutes: 5));
 
   if (lastSyncedTimeStamp.isAfter(currentTimeStamp)) {
@@ -449,63 +595,49 @@ Future<void> getAppConfigurations({bool isCurrentLocation = false, double? lat, 
     // Utilisation de valeurs par défaut au lieu de l'appel API
     // TODO: Implémenter l'endpoint /api/configurations sur votre backend si vous avez besoin de configs dynamiques
     await setDefaultAppConfigurations();
-    await setValue(LAST_APP_CONFIGURATION_SYNCED_TIME, DateTime.timestamp().millisecondsSinceEpoch);
+    await setValue(LAST_APP_CONFIGURATION_SYNCED_TIME,
+        DateTime.timestamp().millisecondsSinceEpoch);
   }
 }
 
 //endregion
 
 //region User Api
-Future<DashboardResponse> userDashboard({bool isCurrentLocation = false, double? lat, double? long}) async {
+Future<DashboardResponse> userDashboard(
+    {bool isCurrentLocation = false, double? lat, double? long}) async {
   Completer<DashboardResponse> completer = Completer();
 
-  // Utiliser les données mockées si activé
-  if (USE_MOCK_DATA) {
-    await simulateNetworkDelay(null, milliseconds: 300);
-    final dashboardResponse = getMockDashboardResponse();
-    appStore.setLoading(false);
-    cachedDashboardResponse = dashboardResponse;
-    setValue(IS_EMAIL_VERIFIED, dashboardResponse.isEmailVerified.getBoolInt());
-    appStore.setUnreadCount(dashboardResponse.notificationUnreadCount.validate());
-    getAppConfigurations();
-    completer.complete(dashboardResponse);
-    return completer.future;
-  }
-
-  String endPoint = 'dashboard-detail';
-
-  if (isCurrentLocation && appStore.isLoggedIn && appStore.userId.validate() != 0) {
-    endPoint = "$endPoint?latitude=$lat&longitude=$long&customer_id=${appStore.userId.validate()}";
-  } else if (isCurrentLocation) {
-    endPoint = "$endPoint?latitude=$lat&longitude=$long";
-  } else if (appStore.isLoggedIn && appStore.userId.validate() != 0) {
-    endPoint = "$endPoint?customer_id=${appStore.userId.validate()}";
-  }
-
-  try {
-    final dashboardResponse = DashboardResponse.fromJson(await handleResponse(await buildHttpResponse(endPoint, method: HttpMethodType.GET)));
-    appStore.setLoading(false);
-
-    cachedDashboardResponse = dashboardResponse;
-
-    setValue(IS_EMAIL_VERIFIED, dashboardResponse.isEmailVerified.getBoolInt());
-    appStore.setUnreadCount(dashboardResponse.notificationUnreadCount.validate());
-
-    ///Set app configurations
-    getAppConfigurations();
-
-    completer.complete(dashboardResponse);
-  } catch (e) {
-    appStore.setLoading(false);
-    completer.completeError(e);
-  }
-
+  // L'API Mison n'a pas d'endpoint dashboard-detail
+  // On retourne une réponse minimale - les services sont chargés séparément via MisonServicesDashboardComponent
+  await Future.delayed(const Duration(milliseconds: 100));
+  
+  final dashboardResponse = DashboardResponse(
+    category: [],
+    service: [],
+    featuredServices: [],
+    slider: [],
+    promotionalBanner: [],
+    provider: [],
+    shops: [],
+    notificationUnreadCount: 0,
+    isEmailVerified: 1,
+    referralRule: false,
+  );
+  
+  appStore.setLoading(false);
+  cachedDashboardResponse = dashboardResponse;
+  setValue(IS_EMAIL_VERIFIED, dashboardResponse.isEmailVerified.getBoolInt());
+  appStore.setUnreadCount(dashboardResponse.notificationUnreadCount.validate());
+  getAppConfigurations();
+  completer.complete(dashboardResponse);
   return completer.future;
 }
 
 Future<num> getUserWalletBalance() async {
   try {
-    var res = WalletResponse.fromJson(await handleResponse(await buildHttpResponse('user-wallet-balance', method: HttpMethodType.GET)));
+    var res = WalletResponse.fromJson(await handleResponse(
+        await buildHttpResponse('user-wallet-balance',
+            method: HttpMethodType.GET)));
 
     return res.balance.validate();
   } catch (e) {
@@ -524,7 +656,10 @@ Future<List<WalletDataElement>> getUserWalletHistory(
 }) async {
   appStore.setLoading(true);
   try {
-    var res = UserWalletHistoryResponse.fromJson(await handleResponse(await buildHttpResponse('wallet-history?per_page=$perPage&page=$page&orderby=desc', method: HttpMethodType.GET)));
+    var res = UserWalletHistoryResponse.fromJson(await handleResponse(
+        await buildHttpResponse(
+            'wallet-history?per_page=$perPage&page=$page&orderby=desc',
+            method: HttpMethodType.GET)));
 
     if (page == 1) walletDataList.clear();
     walletDataList.addAll(res.data.validate());
@@ -547,7 +682,9 @@ Future<BaseResponseModel> walletTopUp(Map req) async {
   await 100.milliseconds.delay;
   appStore.setLoading(true);
   try {
-    var res = BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('wallet-top-up', method: HttpMethodType.POST, request: req)));
+    var res = BaseResponseModel.fromJson(await handleResponse(
+        await buildHttpResponse('wallet-top-up',
+            method: HttpMethodType.POST, request: req)));
 
     await appStore.setUserWalletAmount();
 
@@ -574,12 +711,22 @@ Future<ServiceDetailResponse> getServiceDetails({
     toast(language.pleaseWait);
   }
   String params = '';
-  if (appStore.isCurrentLocation && getDoubleAsync(LATITUDE) > 0 && getDoubleAsync(LONGITUDE) > 0) {
-    params = "?latitude=${getDoubleAsync(LATITUDE)}&longitude=${getDoubleAsync(LONGITUDE)}";
+  if (appStore.isCurrentLocation &&
+      getDoubleAsync(LATITUDE) > 0 &&
+      getDoubleAsync(LONGITUDE) > 0) {
+    params =
+        "?latitude=${getDoubleAsync(LATITUDE)}&longitude=${getDoubleAsync(LONGITUDE)}";
   }
-  Map request = {CommonKeys.serviceId: serviceId, if (appStore.isLoggedIn) CommonKeys.customerId: customerId};
+  Map request = {
+    CommonKeys.serviceId: serviceId,
+    if (appStore.isLoggedIn) CommonKeys.customerId: customerId
+  };
   try {
-    var res = ServiceDetailResponse.fromJson(await handleResponse(await buildHttpResponse('service-detail${params.isNotEmpty ? params : ''}', request: request, method: HttpMethodType.POST)));
+    var res = ServiceDetailResponse.fromJson(await handleResponse(
+        await buildHttpResponse(
+            'service-detail${params.isNotEmpty ? params : ''}',
+            request: request,
+            method: HttpMethodType.POST)));
 
     appStore.setLoading(false);
     return res;
@@ -611,7 +758,9 @@ Future<List<ServiceData>> searchServiceAPI({
   String finalLatitude = latitude;
   String finalLongitude = longitude;
 
-  if (appStore.isCurrentLocation && getDoubleAsync(LATITUDE) > 0 && getDoubleAsync(LONGITUDE) > 0) {
+  if (appStore.isCurrentLocation &&
+      getDoubleAsync(LATITUDE) > 0 &&
+      getDoubleAsync(LONGITUDE) > 0) {
     finalLatitude = getDoubleAsync(LATITUDE).toString();
     finalLongitude = getDoubleAsync(LONGITUDE).toString();
   }
@@ -620,8 +769,10 @@ Future<List<ServiceData>> searchServiceAPI({
   String categoryIds = categoryId.isNotEmpty ? 'category_id=$categoryId&' : '';
   String searchPara = search.isNotEmpty ? 'search=$search&' : '';
   String providerIds = providerId.isNotEmpty ? 'provider_id=$providerId&' : '';
-  String isPriceMinPara = isPriceMin.isNotEmpty ? 'is_price_min=$isPriceMin&' : '';
-  String isPriceMaxPara = isPriceMax.isNotEmpty ? 'is_price_max=$isPriceMax&' : '';
+  String isPriceMinPara =
+      isPriceMin.isNotEmpty ? 'is_price_min=$isPriceMin&' : '';
+  String isPriceMaxPara =
+      isPriceMax.isNotEmpty ? 'is_price_max=$isPriceMax&' : '';
   String ratingPara = ratingId.isNotEmpty ? 'is_rating=$ratingId&' : '';
   String latitudes = 'latitude=$finalLatitude&'; // Always included
   String longitudes = 'longitude=$finalLongitude&'; // Always included
@@ -633,12 +784,14 @@ Future<List<ServiceData>> searchServiceAPI({
       : '';
   String pages = 'page=$page&';
   String perPages = 'per_page=$PER_PAGE_ITEM';
-  String customerId = appStore.isLoggedIn ? 'customer_id=${appStore.userId}&' : '';
+  String customerId =
+      appStore.isLoggedIn ? 'customer_id=${appStore.userId}&' : '';
   String shopIds = shopId.isNotEmpty ? 'shop_id=$shopId&' : '';
   String zoneId = (isZoneId > 0) ? "zone_id=$isZoneId&" : '';
 
   // Final API URL
-  String apiUrl = 'search-list?$categoryIds$customerId$providerIds$isPriceMinPara$isPriceMaxPara$ratingPara$subCategorys$searchPara$latitudes$longitudes$isFeatures$shopIds$zoneId$pages$perPages';
+  String apiUrl =
+      'search-list?$categoryIds$customerId$providerIds$isPriceMinPara$isPriceMaxPara$ratingPara$subCategorys$searchPara$latitudes$longitudes$isFeatures$shopIds$zoneId$pages$perPages';
 
   // Only log in debug mode to avoid printing in production
   assert(() {
@@ -646,7 +799,8 @@ Future<List<ServiceData>> searchServiceAPI({
     return true;
   }());
   try {
-    var res = ServiceResponse.fromJson(await handleResponse(await buildHttpResponse(apiUrl)));
+    var res = ServiceResponse.fromJson(
+        await handleResponse(await buildHttpResponse(apiUrl)));
 
     if (page == 1) list.clear();
     list.addAll(res.serviceList.validate());
@@ -672,10 +826,15 @@ Future<CategoryResponse> getCategoryList(String page) async {
     await simulateNetworkDelay(null, milliseconds: 200);
     return getMockCategoryResponse();
   }
-  return CategoryResponse.fromJson(await handleResponse(await buildHttpResponse('category-list?page=$page&per_page=50', method: HttpMethodType.GET)));
+  return CategoryResponse.fromJson(await handleResponse(await buildHttpResponse(
+      'category-list?page=$page&per_page=50',
+      method: HttpMethodType.GET)));
 }
 
-Future<List<CategoryData>> getCategoryListWithPagination(int page, {var perPage = PER_PAGE_CATEGORY_ITEM, required List<CategoryData> categoryList, Function(bool)? lastPageCallBack}) async {
+Future<List<CategoryData>> getCategoryListWithPagination(int page,
+    {var perPage = PER_PAGE_CATEGORY_ITEM,
+    required List<CategoryData> categoryList,
+    Function(bool)? lastPageCallBack}) async {
   // Utiliser les données mockées si activé
   if (USE_MOCK_DATA) {
     await simulateNetworkDelay(null, milliseconds: 200);
@@ -688,14 +847,17 @@ Future<List<CategoryData>> getCategoryListWithPagination(int page, {var perPage 
   }
 
   try {
-    CategoryResponse res = CategoryResponse.fromJson(await handleResponse(await buildHttpResponse('category-list?per_page=$perPage&page=$page', method: HttpMethodType.GET)));
+    CategoryResponse res = CategoryResponse.fromJson(await handleResponse(
+        await buildHttpResponse('category-list?per_page=$perPage&page=$page',
+            method: HttpMethodType.GET)));
 
     if (page == 1) categoryList.clear();
     categoryList.addAll(res.categoryList.validate());
 
     cachedCategoryList = categoryList;
 
-    lastPageCallBack?.call(res.categoryList.validate().length != PER_PAGE_CATEGORY_ITEM);
+    lastPageCallBack
+        ?.call(res.categoryList.validate().length != PER_PAGE_CATEGORY_ITEM);
 
     appStore.setLoading(false);
   } catch (e) {
@@ -710,7 +872,10 @@ Future<List<CategoryData>> getCategoryListWithPagination(int page, {var perPage 
 //region SubCategory Api
 Future<CategoryResponse> getSubCategoryList({required int catId}) async {
   try {
-    CategoryResponse res = CategoryResponse.fromJson(await handleResponse(await buildHttpResponse('subcategory-list?category_id=$catId&per_page=all', method: HttpMethodType.GET)));
+    CategoryResponse res = CategoryResponse.fromJson(await handleResponse(
+        await buildHttpResponse(
+            'subcategory-list?category_id=$catId&per_page=all',
+            method: HttpMethodType.GET)));
     appStore.setLoading(false);
 
     return res;
@@ -723,7 +888,10 @@ Future<CategoryResponse> getSubCategoryList({required int catId}) async {
 
 Future<List<CategoryData>> getSubCategoryListAPI({required int catId}) async {
   try {
-    CategoryResponse res = CategoryResponse.fromJson(await handleResponse(await buildHttpResponse('subcategory-list?category_id=$catId&per_page=all', method: HttpMethodType.GET)));
+    CategoryResponse res = CategoryResponse.fromJson(await handleResponse(
+        await buildHttpResponse(
+            'subcategory-list?category_id=$catId&per_page=all',
+            method: HttpMethodType.GET)));
 
     appStore.setLoading(false);
 
@@ -735,7 +903,8 @@ Future<List<CategoryData>> getSubCategoryListAPI({required int catId}) async {
     if (!cachedSubcategoryList.any((element) => element?.$1 == catId)) {
       cachedSubcategoryList.add((catId, res.categoryList.validate()));
     } else {
-      int index = cachedSubcategoryList.indexWhere((element) => element?.$1 == catId);
+      int index =
+          cachedSubcategoryList.indexWhere((element) => element?.$1 == catId);
       cachedSubcategoryList[index] = (catId, res.categoryList.validate());
     }
 
@@ -758,8 +927,10 @@ Future<ProviderInfoResponse> getProviderDetail(
   String params = '';
 
   // Check if passed or stored lat/lng should be used
-  double lat = latitude ?? (appStore.isCurrentLocation ? getDoubleAsync(LATITUDE) : 0);
-  double lng = longitude ?? (appStore.isCurrentLocation ? getDoubleAsync(LONGITUDE) : 0);
+  double lat =
+      latitude ?? (appStore.isCurrentLocation ? getDoubleAsync(LATITUDE) : 0);
+  double lng =
+      longitude ?? (appStore.isCurrentLocation ? getDoubleAsync(LONGITUDE) : 0);
 
   if (lat > 0 && lng > 0) {
     params = "&latitude=$lat&longitude=$lng";
@@ -771,7 +942,8 @@ Future<ProviderInfoResponse> getProviderDetail(
       method: HttpMethodType.GET,
     );
 
-    ProviderInfoResponse res = ProviderInfoResponse.fromJson(await handleResponse(response));
+    ProviderInfoResponse res =
+        ProviderInfoResponse.fromJson(await handleResponse(response));
     appStore.setLoading(false);
 
     // Cache response
@@ -789,10 +961,16 @@ Future<ProviderInfoResponse> getProviderDetail(
   }
 }
 
-Future<List<UserData>> getHandyman({int? page, String? userTypeHandyman = "handyman", required List<UserData> list, Function(bool)? lastPageCallback}) async {
+Future<List<UserData>> getHandyman(
+    {int? page,
+    String? userTypeHandyman = "handyman",
+    required List<UserData> list,
+    Function(bool)? lastPageCallback}) async {
   try {
     var res = ProviderListResponse.fromJson(
-      await handleResponse(await buildHttpResponse('user-list?user_type=$userTypeHandyman&per_page=$PER_PAGE_ITEM&page=$page', method: HttpMethodType.GET)),
+      await handleResponse(await buildHttpResponse(
+          'user-list?user_type=$userTypeHandyman&per_page=$PER_PAGE_ITEM&page=$page',
+          method: HttpMethodType.GET)),
     );
 
     if (page == 1) list.clear();
@@ -815,18 +993,26 @@ Future<List<UserData>> getHandyman({int? page, String? userTypeHandyman = "handy
   return list;
 }
 
-Future<ProviderListResponse> getProvider({String? userType = "provider", required String type}) async {
-  return ProviderListResponse.fromJson(await handleResponse(await buildHttpResponse('user-list?user_type=$userType&type=$type&per_page=all', method: HttpMethodType.GET)));
+Future<ProviderListResponse> getProvider(
+    {String? userType = "provider", required String type}) async {
+  return ProviderListResponse.fromJson(await handleResponse(
+      await buildHttpResponse(
+          'user-list?user_type=$userType&type=$type&per_page=all',
+          method: HttpMethodType.GET)));
 }
 //endregion
 
 //region Handyman Api
 Future<UserData> getHandymanDetail(int id) async {
-  return UserData.fromJson(await handleResponse(await buildHttpResponse('user-detail?id=$id', method: HttpMethodType.GET)));
+  return UserData.fromJson(await handleResponse(await buildHttpResponse(
+      'user-detail?id=$id',
+      method: HttpMethodType.GET)));
 }
 
 Future<BaseResponseModel> handymanRating(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('save-handyman-rating', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('save-handyman-rating',
+          request: request, method: HttpMethodType.POST)));
 }
 //endregion
 
@@ -851,7 +1037,7 @@ Future<List<BookingData>> getBookingList(
   if (USE_MOCK_DATA) {
     await simulateNetworkDelay(null, milliseconds: 300);
     if (page == 1) bookings.clear();
-    
+
     // Filtrer par statut si spécifié
     List<BookingData> mockBookings = getMockBookingsByStatus(bookingStatus);
     bookings.addAll(mockBookings);
@@ -867,20 +1053,28 @@ Future<List<BookingData>> getBookingList(
     String serviceIds = serviceId.isNotEmpty ? 'service_id=$serviceId&' : '';
     String dateStart = dateFrom.isNotEmpty ? 'date_from=$dateFrom&' : '';
     String dateEnd = dateTo.isNotEmpty ? '&date_to=$dateTo&' : '';
-    String providerIds = providerId.isNotEmpty ? 'provider_id=$providerId&' : '';
-    String handymanIds = handymanId.isNotEmpty ? 'handyman_id=$handymanId&' : '';
+    String providerIds =
+        providerId.isNotEmpty ? 'provider_id=$providerId&' : '';
+    String handymanIds =
+        handymanId.isNotEmpty ? 'handyman_id=$handymanId&' : '';
     String status = bookingStatus.isNotEmpty ? 'status=$bookingStatus&' : '';
-    String paymentStatuss = paymentStatus.isNotEmpty ? 'payment_status=$paymentStatus&' : '';
-    String paymentTypes = paymentType.isNotEmpty ? 'payment_type=$paymentType&' : '';
+    String paymentStatuss =
+        paymentStatus.isNotEmpty ? 'payment_status=$paymentStatus&' : '';
+    String paymentTypes =
+        paymentType.isNotEmpty ? 'payment_type=$paymentType&' : '';
 
     String perPageItem = 'per_page=$perPage&';
     String pageCount = 'page=$page';
 
     if (status == BOOKING_TYPE_ALL) {
-      res = BookingListResponse.fromJson(await handleResponse(await buildHttpResponse('booking-list?per_page=$perPage&page=$page', method: HttpMethodType.GET)));
+      res = BookingListResponse.fromJson(await handleResponse(
+          await buildHttpResponse('booking-list?per_page=$perPage&page=$page',
+              method: HttpMethodType.GET)));
     } else {
       res = BookingListResponse.fromJson(await handleResponse(
-          await buildHttpResponse('booking-list?$shopIds$serviceIds$dateStart$dateEnd$providerIds$handymanIds$status$paymentStatuss$paymentTypes$perPageItem$pageCount', method: HttpMethodType.GET)));
+          await buildHttpResponse(
+              'booking-list?$shopIds$serviceIds$dateStart$dateEnd$providerIds$handymanIds$status$paymentStatuss$paymentTypes$perPageItem$pageCount',
+              method: HttpMethodType.GET)));
     }
     if (page == 1) bookings.clear();
     bookings.addAll(res.data.validate());
@@ -898,36 +1092,45 @@ Future<List<BookingData>> getBookingList(
   }
 }
 
-Future<BookingDetailResponse> getBookingDetail(Map<String, dynamic> request, {Function(String)? callbackForStatus}) async {
+Future<BookingDetailResponse> getBookingDetail(Map<String, dynamic> request,
+    {Function(String)? callbackForStatus}) async {
   // Utiliser les données mockées si activé
   if (USE_MOCK_DATA) {
     await simulateNetworkDelay(null, milliseconds: 300);
     int bookingId = request[CommonKeys.bookingId].toString().toInt();
-    BookingDetailResponse mockResponse = getMockBookingDetailResponse(bookingId);
+    BookingDetailResponse mockResponse =
+        getMockBookingDetailResponse(bookingId);
     callbackForStatus?.call(mockResponse.bookingDetail!.status.validate());
-    
+
     if (!cachedBookingDetailList.any((element) => element?.$1 == bookingId)) {
       cachedBookingDetailList.add((bookingId, mockResponse));
     } else {
-      int index = cachedBookingDetailList.indexWhere((element) => element?.$1 == bookingId);
+      int index = cachedBookingDetailList
+          .indexWhere((element) => element?.$1 == bookingId);
       cachedBookingDetailList[index] = (bookingId, mockResponse);
     }
-    
+
     appStore.setLoading(false);
     return mockResponse;
   }
 
   try {
-    BookingDetailResponse bookingDetailResponse = BookingDetailResponse.fromJson(await handleResponse(await buildHttpResponse('booking-detail', request: request, method: HttpMethodType.POST)));
-    callbackForStatus?.call(bookingDetailResponse.bookingDetail!.status.validate());
-    bookingDetailResponse.bookingDetail?.couponData = bookingDetailResponse.couponData;
+    BookingDetailResponse bookingDetailResponse =
+        BookingDetailResponse.fromJson(await handleResponse(
+            await buildHttpResponse('booking-detail',
+                request: request, method: HttpMethodType.POST)));
+    callbackForStatus
+        ?.call(bookingDetailResponse.bookingDetail!.status.validate());
+    bookingDetailResponse.bookingDetail?.couponData =
+        bookingDetailResponse.couponData;
 
     int bookingId = request[CommonKeys.bookingId].toString().toInt();
 
     if (!cachedBookingDetailList.any((element) => element?.$1 == bookingId)) {
       cachedBookingDetailList.add((bookingId, bookingDetailResponse));
     } else {
-      int index = cachedBookingDetailList.indexWhere((element) => element?.$1 == bookingId);
+      int index = cachedBookingDetailList
+          .indexWhere((element) => element?.$1 == bookingId);
       cachedBookingDetailList[index] = (bookingId, bookingDetailResponse);
     }
 
@@ -941,14 +1144,17 @@ Future<BookingDetailResponse> getBookingDetail(Map<String, dynamic> request, {Fu
 }
 
 Future<BaseResponseModel> updateBooking(Map request) async {
-  BaseResponseModel baseResponse = BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('booking-update', request: request, method: HttpMethodType.POST)));
+  BaseResponseModel baseResponse = BaseResponseModel.fromJson(
+      await handleResponse(await buildHttpResponse('booking-update',
+          request: request, method: HttpMethodType.POST)));
   LiveStream().emit(LIVESTREAM_UPDATE_BOOKING_LIST);
 
   return baseResponse;
 }
 
 Future<BookingDetailResponse> saveBooking(Map request) async {
-  var res = await handleResponse(await buildHttpResponse('booking-save', request: request, method: HttpMethodType.POST));
+  var res = await handleResponse(await buildHttpResponse('booking-save',
+      request: request, method: HttpMethodType.POST));
 
   return await getBookingDetail({
     CommonKeys.bookingId: res[CommonKeys.bookingId],
@@ -958,12 +1164,17 @@ Future<BookingDetailResponse> saveBooking(Map request) async {
 
 Future<UpdateLocationResponse> getProviderLocation(int bookingId) async {
   return UpdateLocationResponse.fromJson(
-    await handleResponse(await buildHttpResponse("get-location?booking_id=$bookingId", method: HttpMethodType.GET).timeout(const Duration(seconds: GET_LOCATION_API_TIMEOUT_SECOND))),
+    await handleResponse(await buildHttpResponse(
+            "get-location?booking_id=$bookingId",
+            method: HttpMethodType.GET)
+        .timeout(const Duration(seconds: GET_LOCATION_API_TIMEOUT_SECOND))),
   );
 }
 
-Future<List<BookingStatusResponse>> bookingStatus({required List<BookingStatusResponse> list}) async {
-  Iterable res = await (handleResponse(await buildHttpResponse('booking-status', method: HttpMethodType.GET)));
+Future<List<BookingStatusResponse>> bookingStatus(
+    {required List<BookingStatusResponse> list}) async {
+  Iterable res = await (handleResponse(
+      await buildHttpResponse('booking-status', method: HttpMethodType.GET)));
   list = res.map((e) => BookingStatusResponse.fromJson(e)).toList();
   cachedBookingStatusDropdown = list;
 
@@ -973,26 +1184,37 @@ Future<List<BookingStatusResponse>> bookingStatus({required List<BookingStatusRe
 
 //region Payment Api
 Future<BaseResponseModel> savePayment(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('save-payment', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('save-payment',
+          request: request, method: HttpMethodType.POST)));
 }
 
-Future<List<PaymentSetting>> getPaymentGateways({bool requireCOD = true, bool requireWallet = true, bool isAddWallet = false}) async {
+Future<List<PaymentSetting>> getPaymentGateways(
+    {bool requireCOD = true,
+    bool requireWallet = true,
+    bool isAddWallet = false}) async {
   String isAddWalletStatus = isAddWallet ? '?is_add_wallet=$isAddWallet' : '';
 
   try {
-    Iterable it = await handleResponse(await buildHttpResponse('payment-gateways$isAddWalletStatus', method: HttpMethodType.GET));
-    List<PaymentSetting> res = it.map((e) => PaymentSetting.fromJson(e)).toList();
+    Iterable it = await handleResponse(await buildHttpResponse(
+        'payment-gateways$isAddWalletStatus',
+        method: HttpMethodType.GET));
+    List<PaymentSetting> res =
+        it.map((e) => PaymentSetting.fromJson(e)).toList();
 
-    if (!requireCOD) res.removeWhere((element) => element.type == PAYMENT_METHOD_COD);
+    if (!requireCOD)
+      res.removeWhere((element) => element.type == PAYMENT_METHOD_COD);
 
     if (requireWallet && appConfigurationStore.isEnableUserWallet) {
-      res.add(PaymentSetting(title: language.wallet, type: PAYMENT_METHOD_FROM_WALLET, status: 1));
+      res.add(PaymentSetting(
+          title: language.wallet, type: PAYMENT_METHOD_FROM_WALLET, status: 1));
     } else {
       res.removeWhere((element) => element.type == PAYMENT_METHOD_FROM_WALLET);
     }
 
     if (!appConfigurationStore.onlinePaymentStatus) {
-      res.removeWhere((element) => onlinePaymentGateways.contains(element.type));
+      res.removeWhere(
+          (element) => onlinePaymentGateways.contains(element.type));
     }
 
     return res;
@@ -1001,9 +1223,12 @@ Future<List<PaymentSetting>> getPaymentGateways({bool requireCOD = true, bool re
   }
 }
 
-Future<List<PaymentData>> getPaymentList(int page, int id, List<PaymentData> list, Function(bool)? lastPageCallback) async {
+Future<List<PaymentData>> getPaymentList(int page, int id,
+    List<PaymentData> list, Function(bool)? lastPageCallback) async {
   appStore.setLoading(true);
-  var res = PaymentListResponse.fromJson(await handleResponse(await buildHttpResponse('payment-list?booking_id=$id', method: HttpMethodType.GET)));
+  var res = PaymentListResponse.fromJson(await handleResponse(
+      await buildHttpResponse('payment-list?booking_id=$id',
+          method: HttpMethodType.GET)));
 
   if (page == 1) list.clear();
 
@@ -1021,7 +1246,10 @@ Future<List<PaymentData>> getPaymentList(int page, int id, List<PaymentData> lis
 Future<List<NotificationData>> getNotification({Map? request}) async {
   try {
     NotificationListResponse res = NotificationListResponse.fromJson(
-      await (handleResponse(await buildHttpResponse('notification-list?customer_id=${appStore.userId}', request: request, method: HttpMethodType.POST))),
+      await (handleResponse(await buildHttpResponse(
+          'notification-list?customer_id=${appStore.userId}',
+          request: request,
+          method: HttpMethodType.POST))),
     );
 
     appStore.setLoading(false);
@@ -1035,10 +1263,13 @@ Future<List<NotificationData>> getNotification({Map? request}) async {
 //endregion
 
 //region Notification Api
-Future<CouponListResponse> getCouponList({required int serviceId, required num price}) async {
+Future<CouponListResponse> getCouponList(
+    {required int serviceId, required num price}) async {
   try {
     CouponListResponse res = CouponListResponse.fromJson(
-      await (handleResponse(await buildHttpResponse('coupon-list?service_id=$serviceId&price=$price', method: HttpMethodType.GET))),
+      await (handleResponse(await buildHttpResponse(
+          'coupon-list?service_id=$serviceId&price=$price',
+          method: HttpMethodType.GET))),
     );
 
     appStore.setLoading(false);
@@ -1053,12 +1284,18 @@ Future<CouponListResponse> getCouponList({required int serviceId, required num p
 
 //region Review Api
 Future<BaseResponseModel> updateReview(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('save-booking-rating', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('save-booking-rating',
+          request: request, method: HttpMethodType.POST)));
 }
 
 Future<List<RatingData>> serviceReviews(Map request) async {
   try {
-    ServiceReviewResponse res = ServiceReviewResponse.fromJson(await handleResponse(await buildHttpResponse('service-reviews?per_page=all', request: request, method: HttpMethodType.POST)));
+    ServiceReviewResponse res = ServiceReviewResponse.fromJson(
+        await handleResponse(await buildHttpResponse(
+            'service-reviews?per_page=all',
+            request: request,
+            method: HttpMethodType.POST)));
     appStore.setLoading(false);
     return res.ratingList.validate();
   } catch (e) {
@@ -1069,7 +1306,10 @@ Future<List<RatingData>> serviceReviews(Map request) async {
 
 Future<List<RatingData>> customerReviews() async {
   try {
-    ServiceReviewResponse res = ServiceReviewResponse.fromJson(await handleResponse(await buildHttpResponse('get-user-ratings?per_page=all', method: HttpMethodType.GET)));
+    ServiceReviewResponse res = ServiceReviewResponse.fromJson(
+        await handleResponse(await buildHttpResponse(
+            'get-user-ratings?per_page=all',
+            method: HttpMethodType.GET)));
     appStore.setLoading(false);
     cachedRatingList = res.ratingList;
     return res.ratingList.validate();
@@ -1081,7 +1321,11 @@ Future<List<RatingData>> customerReviews() async {
 
 Future<List<RatingData>> handymanReviews(Map request) async {
   try {
-    ServiceReviewResponse res = ServiceReviewResponse.fromJson(await handleResponse(await buildHttpResponse('handyman-reviews?per_page=all', request: request, method: HttpMethodType.POST)));
+    ServiceReviewResponse res = ServiceReviewResponse.fromJson(
+        await handleResponse(await buildHttpResponse(
+            'handyman-reviews?per_page=all',
+            request: request,
+            method: HttpMethodType.POST)));
     appStore.setLoading(false);
     return res.ratingList.validate();
   } catch (e) {
@@ -1091,23 +1335,34 @@ Future<List<RatingData>> handymanReviews(Map request) async {
 }
 
 Future<BaseResponseModel> deleteReview({required int id}) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('delete-booking-rating', request: {"id": id}, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('delete-booking-rating',
+          request: {"id": id}, method: HttpMethodType.POST)));
 }
 
 Future<BaseResponseModel> deleteHandymanReview({required int id}) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('delete-handyman-rating', request: {"id": id}, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('delete-handyman-rating',
+          request: {"id": id}, method: HttpMethodType.POST)));
 }
 //endregion
 
 //region WishList Api
-Future<List<ServiceData>> getWishlist(int page, {var perPage = PER_PAGE_ITEM, required List<ServiceData> services, Function(bool)? lastPageCallBack}) async {
+Future<List<ServiceData>> getWishlist(int page,
+    {var perPage = PER_PAGE_ITEM,
+    required List<ServiceData> services,
+    Function(bool)? lastPageCallBack}) async {
   try {
-    ServiceResponse serviceResponse = ServiceResponse.fromJson(await (handleResponse(await buildHttpResponse('user-favourite-service?per_page=$perPage&page=$page', method: HttpMethodType.GET))));
+    ServiceResponse serviceResponse = ServiceResponse.fromJson(
+        await (handleResponse(await buildHttpResponse(
+            'user-favourite-service?per_page=$perPage&page=$page',
+            method: HttpMethodType.GET))));
 
     if (page == 1) services.clear();
     services.addAll(serviceResponse.serviceList.validate());
 
-    lastPageCallBack?.call(serviceResponse.serviceList.validate().length != PER_PAGE_ITEM);
+    lastPageCallBack
+        ?.call(serviceResponse.serviceList.validate().length != PER_PAGE_ITEM);
 
     cachedServiceFavList = services;
     appStore.setLoading(false);
@@ -1119,19 +1374,29 @@ Future<List<ServiceData>> getWishlist(int page, {var perPage = PER_PAGE_ITEM, re
 }
 
 Future<BaseResponseModel> addWishList(request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('save-favourite', method: HttpMethodType.POST, request: request)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('save-favourite',
+          method: HttpMethodType.POST, request: request)));
 }
 
 Future<BaseResponseModel> removeWishList(request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('delete-favourite', method: HttpMethodType.POST, request: request)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('delete-favourite',
+          method: HttpMethodType.POST, request: request)));
 }
 
 //endregion
 
 //region Provider WishList Api
-Future<List<UserData>> getProviderWishlist(int page, {var perPage = PER_PAGE_ITEM, required List<UserData> providers, Function(bool)? lastPageCallBack}) async {
+Future<List<UserData>> getProviderWishlist(int page,
+    {var perPage = PER_PAGE_ITEM,
+    required List<UserData> providers,
+    Function(bool)? lastPageCallBack}) async {
   try {
-    ProviderListResponse res = ProviderListResponse.fromJson(await (handleResponse(await buildHttpResponse('user-favourite-provider?per_page=$perPage&page=$page', method: HttpMethodType.GET))));
+    ProviderListResponse res = ProviderListResponse.fromJson(
+        await (handleResponse(await buildHttpResponse(
+            'user-favourite-provider?per_page=$perPage&page=$page',
+            method: HttpMethodType.GET))));
 
     if (page == 1) providers.clear();
     providers.addAll(res.providerList.validate());
@@ -1148,42 +1413,60 @@ Future<List<UserData>> getProviderWishlist(int page, {var perPage = PER_PAGE_ITE
 }
 
 Future<BaseResponseModel> addProviderWishList(request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('save-favourite-provider', method: HttpMethodType.POST, request: request)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('save-favourite-provider',
+          method: HttpMethodType.POST, request: request)));
 }
 
 Future<BaseResponseModel> removeProviderWishList(request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('delete-favourite-provider', method: HttpMethodType.POST, request: request)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('delete-favourite-provider',
+          method: HttpMethodType.POST, request: request)));
 }
 //endregion
 
 //region Get My Service List API
 Future<ServiceResponse> getMyServiceList() async {
-  return ServiceResponse.fromJson(await handleResponse(await buildHttpResponse('service-list?customer_id=${appStore.userId.validate()}', method: HttpMethodType.GET)));
+  return ServiceResponse.fromJson(await handleResponse(await buildHttpResponse(
+      'service-list?customer_id=${appStore.userId.validate()}',
+      method: HttpMethodType.GET)));
 }
 //endregion
 
 //region Get My post job
 
 Future<BaseResponseModel> savePostJob(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('save-post-job', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('save-post-job',
+          request: request, method: HttpMethodType.POST)));
 }
 
 Future<BaseResponseModel> deletePostRequest({required num id}) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('post-job-delete/$id', request: {}, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('post-job-delete/$id',
+          request: {}, method: HttpMethodType.POST)));
 }
 
 Future<BaseResponseModel> deleteServiceRequest(int id) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('service-delete/$id', request: {}, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('service-delete/$id',
+          request: {}, method: HttpMethodType.POST)));
 }
 
-Future<List<PostJobData>> getPostJobList(int page, {var perPage = PER_PAGE_ITEM, required List<PostJobData> postJobList, Function(bool)? lastPageCallBack}) async {
+Future<List<PostJobData>> getPostJobList(int page,
+    {var perPage = PER_PAGE_ITEM,
+    required List<PostJobData> postJobList,
+    Function(bool)? lastPageCallBack}) async {
   try {
-    var res = GetPostJobResponse.fromJson(await handleResponse(await buildHttpResponse('get-post-job?per_page=$perPage&page=$page', method: HttpMethodType.GET)));
+    var res = GetPostJobResponse.fromJson(await handleResponse(
+        await buildHttpResponse('get-post-job?per_page=$perPage&page=$page',
+            method: HttpMethodType.GET)));
 
     if (page == 1) postJobList.clear();
     postJobList.addAll(res.myPostJobData.validate());
 
-    lastPageCallBack?.call(res.myPostJobData.validate().length != PER_PAGE_ITEM);
+    lastPageCallBack
+        ?.call(res.myPostJobData.validate().length != PER_PAGE_ITEM);
     cachedPostJobList = postJobList;
     appStore.setLoading(false);
   } catch (e) {
@@ -1196,7 +1479,9 @@ Future<List<PostJobData>> getPostJobList(int page, {var perPage = PER_PAGE_ITEM,
 
 Future<PostJobDetailResponse> getPostJobDetail(Map request) async {
   try {
-    var res = PostJobDetailResponse.fromJson(await handleResponse(await buildHttpResponse('get-post-job-detail', request: request, method: HttpMethodType.POST)));
+    var res = PostJobDetailResponse.fromJson(await handleResponse(
+        await buildHttpResponse('get-post-job-detail',
+            request: request, method: HttpMethodType.POST)));
     appStore.setLoading(false);
 
     return res;
@@ -1209,9 +1494,13 @@ Future<PostJobDetailResponse> getPostJobDetail(Map request) async {
 //endregion
 
 //region FlutterWave Verify Transaction API
-Future<VerifyTransactionResponse> verifyPayment({required String transactionId, required String flutterWaveSecretKey}) async {
+Future<VerifyTransactionResponse> verifyPayment(
+    {required String transactionId,
+    required String flutterWaveSecretKey}) async {
   return VerifyTransactionResponse.fromJson(
-    await handleResponse(await buildHttpResponse("https://api.flutterwave.com/v3/transactions/$transactionId/verify", header: buildHeaderForFlutterWave(flutterWaveSecretKey))),
+    await handleResponse(await buildHttpResponse(
+        "https://api.flutterwave.com/v3/transactions/$transactionId/verify",
+        header: buildHeaderForFlutterWave(flutterWaveSecretKey))),
   );
 }
 //endregion
@@ -1234,7 +1523,8 @@ Future<String> sadadLogin(Map request) async {
   }
 }
 
-Future sadadCreateInvoice({required Map<String, dynamic> request, required String sadadToken}) async {
+Future sadadCreateInvoice(
+    {required Map<String, dynamic> request, required String sadadToken}) async {
   return await handleSadadResponse(
     await buildHttpResponse(
       '$SADAD_API_URL/api/invoices/createInvoice',
@@ -1248,12 +1538,15 @@ Future sadadCreateInvoice({required Map<String, dynamic> request, required Strin
 
 // region Send Invoice on Email
 Future<BaseResponseModel> sentInvoiceOnMail(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('download-invoice', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('download-invoice',
+          request: request, method: HttpMethodType.POST)));
 }
 //endregion
 
 //region CommonFunctions
-Future<Map<String, String>> getMultipartFields({required Map<String, dynamic> val}) async {
+Future<Map<String, String>> getMultipartFields(
+    {required Map<String, dynamic> val}) async {
   Map<String, String> data = {};
 
   val.forEach((key, value) {
@@ -1263,13 +1556,15 @@ Future<Map<String, String>> getMultipartFields({required Map<String, dynamic> va
   return data;
 }
 
-Future<List<MultipartFile>> getMultipartImages({required List<File> files, required String name}) async {
+Future<List<MultipartFile>> getMultipartImages(
+    {required List<File> files, required String name}) async {
   List<MultipartFile> multiPartRequest = [];
 
   await Future.forEach<File>(files, (element) async {
     int i = files.indexOf(element);
 
-    multiPartRequest.add(await MultipartFile.fromPath('${'$name' + i.toString()}', element.path));
+    multiPartRequest.add(await MultipartFile.fromPath(
+        '${'$name' + i.toString()}', element.path));
   });
 
   return multiPartRequest;
@@ -1277,15 +1572,21 @@ Future<List<MultipartFile>> getMultipartImages({required List<File> files, requi
 //endregion
 
 Future<BaseResponseModel> deleteImage(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('remove-file', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('remove-file',
+          request: request, method: HttpMethodType.POST)));
 }
 
 Future<BaseResponseModel> chooseDefaulBank({required int bankId}) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('default-bank?id=$bankId', request: {}, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('default-bank?id=$bankId',
+          request: {}, method: HttpMethodType.POST)));
 }
 
 Future<BaseResponseModel> deleteBank({int? bankId}) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('delete-bank/$bankId', request: {}, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('delete-bank/$bankId',
+          request: {}, method: HttpMethodType.POST)));
 }
 
 Future<List<BankHistory>> getBankListDetail({
@@ -1296,7 +1597,9 @@ Future<List<BankHistory>> getBankListDetail({
   Function(bool)? lastPageCallback,
 }) async {
   BankListResponse res = BankListResponse.fromJson(
-    await handleResponse(await buildHttpResponse('user-bank-detail?per_page=$perPage&page=$page&user_id=$userId', method: HttpMethodType.GET)),
+    await handleResponse(await buildHttpResponse(
+        'user-bank-detail?per_page=$perPage&page=$page&user_id=$userId',
+        method: HttpMethodType.GET)),
   );
 
   if (page == 1) list.clear();
@@ -1312,11 +1615,15 @@ Future<List<BankHistory>> getBankListDetail({
 }
 
 Future<BaseResponseModel> providerPayOut({required Map request}) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('provider-payout', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('provider-payout',
+          request: request, method: HttpMethodType.POST)));
 }
 
 Future<BaseResponseModel> walletMoneyWithdrawal({required Map request}) async {
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('withdraw-money', request: request, method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('withdraw-money',
+          request: request, method: HttpMethodType.POST)));
 }
 
 Future<List<ShopModel>> getShopList(
@@ -1334,7 +1641,8 @@ Future<List<ShopModel>> getShopList(
     if (providerIds.isNotEmpty) searchParam += '&provider_id=$providerIds';
     String apiUrl = 'shop-list?per_page=$perPage&page=$page$searchParam';
 
-    ShopResponse res = await ShopResponse.fromJson(await handleResponse(await buildHttpResponse(apiUrl, method: HttpMethodType.GET)));
+    ShopResponse res = await ShopResponse.fromJson(await handleResponse(
+        await buildHttpResponse(apiUrl, method: HttpMethodType.GET)));
 
     if (page == 1) shopList.clear();
     // No longer need to resolve location names as API provides them directly
@@ -1351,7 +1659,9 @@ Future<List<ShopModel>> getShopList(
 
 Future<ShopDetailResponse> getShopDetail(int shopId) async {
   try {
-    var res = ShopDetailResponse.fromJson(await handleResponse(await buildHttpResponse('shop-detail/$shopId', method: HttpMethodType.GET)));
+    var res = ShopDetailResponse.fromJson(await handleResponse(
+        await buildHttpResponse('shop-detail/$shopId',
+            method: HttpMethodType.GET)));
     appStore.setLoading(false);
     return res;
   } catch (e) {
@@ -1360,9 +1670,14 @@ Future<ShopDetailResponse> getShopDetail(int shopId) async {
   }
 }
 
-Future<List<ShopModel>> getWishlistShops(int page, {var perPage = PER_PAGE_ITEM, required List<ShopModel> shops, Function(bool)? lastPageCallBack}) async {
+Future<List<ShopModel>> getWishlistShops(int page,
+    {var perPage = PER_PAGE_ITEM,
+    required List<ShopModel> shops,
+    Function(bool)? lastPageCallBack}) async {
   try {
-    var res = ShopResponse.fromJson(await handleResponse(await buildHttpResponse('wishlist-shops?per_page=$perPage&page=$page', method: HttpMethodType.GET)));
+    var res = ShopResponse.fromJson(await handleResponse(
+        await buildHttpResponse('wishlist-shops?per_page=$perPage&page=$page',
+            method: HttpMethodType.GET)));
 
     if (page == 1) shops.clear();
     shops.addAll(res.shopList.validate());
@@ -1404,11 +1719,14 @@ Future<List<ZoneModel>> getZoneList({
     throw e;
   }
 }
+
 //endregion
 // region Loyalty
 Future<BaseResponseModel> checkReferralCode(String referralCode) async {
   String encodedCode = Uri.encodeComponent(referralCode.trim());
-  return BaseResponseModel.fromJson(await handleResponse(await buildHttpResponse('check-referral?referral_code=$encodedCode', method: HttpMethodType.POST)));
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('check-referral?referral_code=$encodedCode',
+          method: HttpMethodType.POST)));
 }
 
 Future<List<LoyaltyHistoryItem>> getLoyaltyHistory({
@@ -1418,9 +1736,12 @@ Future<List<LoyaltyHistoryItem>> getLoyaltyHistory({
   required List<LoyaltyHistoryItem> loyaltyHistoryList,
   Function(bool)? lastPageCallBack,
 }) async {
-  final filterQuery = filter.trim().isNotEmpty ? '&filter=${Uri.encodeComponent(filter)}' : '';
+  final filterQuery =
+      filter.trim().isNotEmpty ? '&filter=${Uri.encodeComponent(filter)}' : '';
   final res = LoyaltyHistoryResponse.fromJson(await handleResponse(
-    await buildHttpResponse('loyalty-history?user_id=${appStore.userId}&per_page=$perPage&page=$page$filterQuery', method: HttpMethodType.GET),
+    await buildHttpResponse(
+        'loyalty-history?user_id=${appStore.userId}&per_page=$perPage&page=$page$filterQuery',
+        method: HttpMethodType.GET),
   ));
 
   if (page == 1) loyaltyHistoryList.clear();
@@ -1431,9 +1752,14 @@ Future<List<LoyaltyHistoryItem>> getLoyaltyHistory({
   return loyaltyHistoryList;
 }
 
-Future<int?> getServiceEarnPoints({required int serviceId, required num subTotal,required String type}) async {
-  final endPoint = 'get-earn-points?service_id=$serviceId&sub_total=$subTotal&type=$type';
-  final res = await handleResponse(await buildHttpResponse(endPoint, method: HttpMethodType.GET));
+Future<int?> getServiceEarnPoints(
+    {required int serviceId,
+    required num subTotal,
+    required String type}) async {
+  final endPoint =
+      'get-earn-points?service_id=$serviceId&sub_total=$subTotal&type=$type';
+  final res = await handleResponse(
+      await buildHttpResponse(endPoint, method: HttpMethodType.GET));
 
   if (res is Map<String, dynamic>) {
     final value = res['earn_points'];
@@ -1445,3 +1771,94 @@ Future<int?> getServiceEarnPoints({required int serviceId, required num subTotal
   return null;
 }
 //endregion
+
+// region Mison API - Orders & Services
+// Documentation: BACKEND_API_README.md
+// Base URL: https://api.mison.app/api/
+
+/// GET /api/services - Liste des services disponibles
+Future<MisonServicesResponse> getMisonServices() async {
+  try {
+    final response = await buildHttpResponse('services', method: HttpMethodType.GET);
+    return MisonServicesResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// GET /api/orders - Liste des commandes du client authentifié
+/// @param status - Filtre optionnel: PENDING, ASSIGNED, ACCEPTED, IN_PROGRESS, COMPLETED, CANCELLED, REJECTED
+Future<MisonOrderResponse> getMisonOrders({String? status}) async {
+  try {
+    String endpoint = 'orders';
+    if (status != null && status.isNotEmpty) {
+      endpoint += '?status=$status';
+    }
+    final response = await buildHttpResponse(endpoint, method: HttpMethodType.GET);
+    return MisonOrderResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// GET /api/orders/{id} - Détails d'une commande spécifique
+Future<MisonOrderDetailResponse> getMisonOrderDetail(String orderId) async {
+  try {
+    final response = await buildHttpResponse('orders/$orderId', method: HttpMethodType.GET);
+    return MisonOrderDetailResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/orders - Créer une nouvelle commande
+/// @param request - Contient service (UUID), description, service_date (ISO8601), service_address
+Future<MisonOrderDetailResponse> createMisonOrder(MisonCreateOrderRequest request) async {
+  try {
+    final response = await buildHttpResponse(
+      'orders',
+      request: request.toJson(),
+      method: HttpMethodType.POST,
+    );
+    return MisonOrderDetailResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/orders/{id}/artisan-decision - Décision de l'artisan sur une commande
+/// @param orderId - UUID de la commande
+/// @param decision - APPROVE ou REJECT
+Future<MisonActionResponse> artisanDecisionMisonOrder(String orderId, String decision) async {
+  try {
+    final request = MisonArtisanDecisionRequest(decision: decision);
+    final response = await buildHttpResponse(
+      'orders/$orderId/artisan-decision',
+      request: request.toJson(),
+      method: HttpMethodType.POST,
+    );
+    return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/orders/{id}/rate - Noter une commande complétée
+/// @param orderId - UUID de la commande
+/// @param rating - Note de 1 à 5
+/// @param review - Commentaire de la notation
+Future<MisonActionResponse> rateMisonOrder(String orderId, int rating, String review) async {
+  try {
+    final request = MisonRateOrderRequest(rating: rating, review: review);
+    final response = await buildHttpResponse(
+      'orders/$orderId/rate',
+      request: request.toJson(),
+      method: HttpMethodType.POST,
+    );
+    return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+//endregion Mison API

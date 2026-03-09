@@ -19,6 +19,7 @@ dependencies:
   intl: ^0.20.2
   cached_network_image: ^3.4.1
   url_launcher: ^6.3.2
+  animate_do: ^3.3.4
   speech_to_text: ^7.3.0
 
   # FIREBASE
@@ -94,6 +95,9 @@ dependencies:
   google_maps_flutter: ^2.14.0
   geolocator: ^14.0.2
   geocoding: ^4.0.0
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.1
+  google_places_flutter: ^2.0.9
 
   crypto: ^3.0.6 #required for in phonepe
 

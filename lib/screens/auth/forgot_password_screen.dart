@@ -44,24 +44,27 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       formKey.currentState!.save();
       appStore.setLoading(true);
 
+      // Capture email before async operation
+      final email = emailCont.text.validate();
+
       Map req = {
-        UserKeys.email: emailCont.text.validate(),
+        UserKeys.email: email,
       };
 
-      forgotPassword(req).then((res) {
+      try {
+        final res = await forgotPassword(req);
         appStore.setLoading(false);
         if (mounted) {
-          _email = emailCont.text.validate();
+          _email = email;
           setState(() {
             _showOtpStep = true;
           });
           toast(res.message.validate());
         }
-      }).catchError((e) {
+      } catch (e) {
         toast(e.toString(), print: true);
-      }).whenComplete(() {
         if (mounted) appStore.setLoading(false);
-      });
+      }
     }
   }
 
@@ -70,12 +73,14 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     hideKeyboard(context);
 
     // Validation manuelle du code OTP
+    if (!mounted) return;
     if (otpCont.text.length != 6) {
       toast(language.pleaseEnterValidOTP);
       return;
     }
 
     if (resetFormKey.currentState!.validate()) {
+      if (!mounted) return;
       if (newPasswordCont.text != confirmPasswordCont.text) {
         toast(language.passwordNotMatch);
         return;
@@ -84,23 +89,28 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       resetFormKey.currentState!.save();
       appStore.setLoading(true);
 
+      // Capture values before async operation
+      final email = _email;
+      final otpCode = otpCont.text.validate();
+      final newPassword = newPasswordCont.text.validate();
+
       Map req = {
-        'email': _email,
-        'otp_code': otpCont.text.validate(),
-        'new_password': newPasswordCont.text.validate(),
+        'email': email,
+        'otp_code': otpCode,
+        'new_password': newPassword,
       };
 
-      resetPassword(req).then((res) {
+      try {
+        final res = await resetPassword(req);
         appStore.setLoading(false);
+        toast(res.message.validate());
         if (mounted) {
           finish(context);
-          toast(res.message.validate());
         }
-      }).catchError((e) {
+      } catch (e) {
         toast(e.toString(), print: true);
-      }).whenComplete(() {
         if (mounted) appStore.setLoading(false);
-      });
+      }
     }
   }
 
@@ -112,12 +122,14 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       UserKeys.email: _email,
     };
 
-    forgotPassword(req).then((res) {
-      appStore.setLoading(false);
+    try {
+      await forgotPassword(req);
+      if (mounted) appStore.setLoading(false);
       toast(language.otpSentSuccessfully);
-    }).catchError((e) {
+    } catch (e) {
       toast(e.toString(), print: true);
-    }).whenComplete(() => appStore.setLoading(false));
+      if (mounted) appStore.setLoading(false);
+    }
   }
 
   @override

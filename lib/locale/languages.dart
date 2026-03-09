@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 abstract class BaseLanguage {
-  static BaseLanguage of(BuildContext context) => Localizations.of<BaseLanguage>(context, BaseLanguage)!;
+  static BaseLanguage of(BuildContext context) =>
+      Localizations.of<BaseLanguage>(context, BaseLanguage)!;
 
   String get walkTitle1;
 
@@ -88,6 +89,10 @@ abstract class BaseLanguage {
   String get hintDescription;
 
   String get lblGallery;
+
+  String get lblDocumentSelected;
+
+  String get lblUploadIdentityDocument;
 
   String get yourReview;
 
@@ -1465,7 +1470,7 @@ abstract class BaseLanguage {
 
   String get lblShare;
 
-  String shareYourPromoCode(String referrerPoints,String referredPoints);
+  String shareYourPromoCode(String referrerPoints, String referredPoints);
 
   String get copyYourCodeAndShare;
 
@@ -1506,7 +1511,7 @@ abstract class BaseLanguage {
   String get didNotReceiveCode;
   String get resendOTP;
   String get resendIn;
-  
+
   // Artisan Registration
   String get registerAsArtisan;
   // Profile selection labels

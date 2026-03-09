@@ -1,9 +1,10 @@
 import 'package:booking_system_flutter/component/image_border_component.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
-import 'package:booking_system_flutter/screens/category/category_screen.dart';
+import 'package:booking_system_flutter/screens/category/mison_category_fragment.dart';
 import 'package:booking_system_flutter/screens/chat/chat_list_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/booking_fragment.dart';
+import 'package:booking_system_flutter/screens/dashboard/fragment/mison_booking_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/dashboard_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/profile_fragment.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
@@ -147,8 +148,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 }
               },
             ),
-            Observer(builder: (context) => appStore.isLoggedIn ? BookingFragment() : const SignInScreen(isFromDashboard: true)),
-            CategoryScreen(),
+            Observer(builder: (context) => appStore.isLoggedIn ? const MisonBookingFragment() : const SignInScreen(isFromDashboard: true)),
+            const MisonCategoryFragment(),
             if (appConfigurationStore.isEnableChat) Observer(builder: (context) => appStore.isLoggedIn ? ChatListScreen() : const SignInScreen(isFromDashboard: true)),
             ProfileFragment(),
           ][currentIndex],
@@ -180,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 NavigationDestination(
                   icon: ic_category.iconImage(color: appTextSecondaryColor),
                   selectedIcon: ic_category.iconImage(color: context.primaryColor),
-                  label: language.category,
+                  label: 'Service',
                 ),
                 if (appConfigurationStore.isEnableChat)
                   NavigationDestination(

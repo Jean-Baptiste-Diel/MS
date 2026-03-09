@@ -12,7 +12,8 @@ import 'package:booking_system_flutter/model/user_data_model.dart';
 import 'package:booking_system_flutter/model/pagination_model.dart';
 
 /// Flag pour activer/désactiver les données mockées
-const bool USE_MOCK_DATA = true;
+/// Mettre à false pour utiliser l'API Mison réelle
+const bool USE_MOCK_DATA = false;
 
 /// ============================================
 /// MOCK DATA - CATEGORIES

@@ -282,7 +282,7 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
           ],
-        ),
+        )/* ,
         TextButton(
           onPressed: () {
             if (isAndroid) {
@@ -300,7 +300,7 @@ class _SignInScreenState extends State<SignInScreen> {
             }
           },
           child: Text(language.lblRegisterAsPartner, style: boldTextStyle(color: primaryColor)),
-        )
+        ) */
       ],
     );
   }

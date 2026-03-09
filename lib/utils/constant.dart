@@ -88,14 +88,19 @@ const LIVESTREAM_UPDATE_HELP_DESK_LIST = "LIVESTREAM_UPDATE_HELP_DESK_LIST";
 //endregion
 
 //region default USER login
-const DEFAULT_EMAIL = 'demo@user.com';
-const DEFAULT_PASS = '12345678';
+const DEFAULT_EMAIL = 'cheikhadefnipa@gmail.com';
+const DEFAULT_PASS = '1111Pg1111@';
 //endregion
 
 //region THEME MODE TYPE
 const THEME_MODE_LIGHT = 0;
 const THEME_MODE_DARK = 1;
 const THEME_MODE_SYSTEM = 2;
+//endregion
+
+// region Google Places API
+
+const GOOGLE_PLACES_API_KEY = 'AIzaSyB-MWQIflh9vAeBdQJrzoZj33akbUyh-QU';
 //endregion
 
 //region SHARED PREFERENCES KEYS
