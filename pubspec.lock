@@ -25,22 +25,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "9.0.0"
-  animate_do:
-    dependency: "direct main"
-    description:
-      name: animate_do
-      sha256: b6ff08dc6cf3cb5586a86d7f32a3b5f45502d2e08e3fb4f5a484c8421c9b3fc0
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.3.9"
-  ansicolor:
-    dependency: transitive
-    description:
-      name: ansicolor
-      sha256: "50e982d500bc863e1d703448afdbf9e5a72eb48840a4f766fa361ffd6877055f"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.3"
   app_links:
     dependency: "direct main"
     description:
@@ -189,10 +173,10 @@ packages:
     dependency: transitive
     description:
       name: characters
-      sha256: f71061c654a3380576a52b451dd5532377954cf9dbd272a78fc8479606670803
+      sha256: faf38497bda5ead2a8c7615f4f7939df04333478bf32e4173fcb06d428b5716b
       url: "https://pub.dev"
     source: hosted
-    version: "1.4.0"
+    version: "1.4.1"
   checked_yaml:
     dependency: transitive
     description:
@@ -315,7 +299,7 @@ packages:
     source: hosted
     version: "0.3.5+2"
   crypto:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: crypto
       sha256: c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf
@@ -354,14 +338,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.9.1"
-  dio_smart_retry:
-    dependency: transitive
-    description:
-      name: dio_smart_retry
-      sha256: c8e20da5f49289fa7dce5c9c6b5b120928e3661aefa0fa2d206ea6d93f580928
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.0.1"
   dio_web_adapter:
     dependency: transitive
     description:
@@ -378,14 +354,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.0"
-  equatable:
-    dependency: transitive
-    description:
-      name: equatable
-      sha256: "3e0141505477fd8ad55d6eb4e7776d3fe8430be8e497ccb1521370c3f21a3e2b"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.8"
   eventify:
     dependency: transitive
     description:
@@ -663,14 +631,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.0"
-  flutter_dotenv:
-    dependency: transitive
-    description:
-      name: flutter_dotenv
-      sha256: d4130c4a43e0b13fefc593bc3961f2cb46e30cb79e253d4a526b1b5d24ae1ce4
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.0.0"
   flutter_html:
     dependency: "direct main"
     description:
@@ -830,54 +790,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.33"
-  flutter_secure_storage:
-    dependency: transitive
-    description:
-      name: flutter_secure_storage
-      sha256: "9cad52d75ebc511adfae3d447d5d13da15a55a92c9410e50f67335b6d21d16ea"
-      url: "https://pub.dev"
-    source: hosted
-    version: "9.2.4"
-  flutter_secure_storage_linux:
-    dependency: transitive
-    description:
-      name: flutter_secure_storage_linux
-      sha256: be76c1d24a97d0b98f8b54bce6b481a380a6590df992d0098f868ad54dc8f688
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.3"
-  flutter_secure_storage_macos:
-    dependency: transitive
-    description:
-      name: flutter_secure_storage_macos
-      sha256: "6c0a2795a2d1de26ae202a0d78527d163f4acbb11cde4c75c670f3a0fc064247"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.1.3"
-  flutter_secure_storage_platform_interface:
-    dependency: transitive
-    description:
-      name: flutter_secure_storage_platform_interface
-      sha256: cf91ad32ce5adef6fba4d736a542baca9daf3beac4db2d04be350b87f69ac4a8
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.2"
-  flutter_secure_storage_web:
-    dependency: transitive
-    description:
-      name: flutter_secure_storage_web
-      sha256: f4ebff989b4f07b2656fb16b47852c0aab9fed9b4ec1c70103368337bc1886a9
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.1"
-  flutter_secure_storage_windows:
-    dependency: transitive
-    description:
-      name: flutter_secure_storage_windows
-      sha256: b20b07cb5ed4ed74fc567b78a72936203f587eba460af1df11281c9326cd3709
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.1.2"
   flutter_stripe:
     dependency: "direct main"
     description:
@@ -1033,14 +945,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.5"
-  get_it:
-    dependency: transitive
-    description:
-      name: get_it
-      sha256: "1d648d2dd2047d7f7450d5727ca24ee435f240385753d90b49650e3cdff32e56"
-      url: "https://pub.dev"
-    source: hosted
-    version: "9.2.0"
   glob:
     dependency: transitive
     description:
@@ -1313,14 +1217,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.5"
-  js:
-    dependency: transitive
-    description:
-      name: js
-      sha256: f2c445dce49627136094980615a031419f7f3eb393237e4ecd97ac15dea343f3
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.6.7"
   json_annotation:
     dependency: transitive
     description:
@@ -1405,18 +1301,18 @@ packages:
     dependency: transitive
     description:
       name: matcher
-      sha256: dc58c723c3c24bf8d3e2d3ad3f2f9d7bd9cf43ec6feaa64181775e60190153f2
+      sha256: "12956d0ad8390bbcc63ca2e1469c0619946ccb52809807067a7020d57e647aa6"
       url: "https://pub.dev"
     source: hosted
-    version: "0.12.17"
+    version: "0.12.18"
   material_color_utilities:
     dependency: transitive
     description:
       name: material_color_utilities
-      sha256: f7142bb1154231d7ea5f96bc7bde4bda2a0945d2806bb11670e30b850d56bdec
+      sha256: "9c337007e82b1889149c82ed242ed1cb24a66044e30979c44912381e9be4c48b"
       url: "https://pub.dev"
     source: hosted
-    version: "0.11.1"
+    version: "0.13.0"
   meta:
     dependency: transitive
     description:
@@ -1706,30 +1602,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.6"
-  playx_core:
-    dependency: transitive
-    description:
-      name: playx_core
-      sha256: b49e07caeda91353f04f68d52c751fdec0513faf46646c74ef785ca258fd1683
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.7.4"
-  playx_network:
-    dependency: transitive
-    description:
-      name: playx_network
-      sha256: "5914f1fc3a74ae349a592b2224296eac72a9c7800672de965be86c2fa02f3a1c"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.6.0"
-  playx_version_update:
-    dependency: "direct main"
-    description:
-      name: playx_version_update
-      sha256: bd14b5e56a6812ad0739a65c69739ef7118fc4841cee7940ff1a579177be9a97
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.1"
   plugin_platform_interface:
     dependency: transitive
     description:
@@ -1834,22 +1706,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.0"
-  sentry:
-    dependency: transitive
-    description:
-      name: sentry
-      sha256: e57e57123968b673c8ca19892eecf93113b4811b8e5cd5d165749ca7f7319fdb
-      url: "https://pub.dev"
-    source: hosted
-    version: "9.13.0"
-  sentry_dio:
-    dependency: transitive
-    description:
-      name: sentry_dio
-      sha256: e49951f822fcc91057d8361053200657567e674cbc9eb6652a5d84c8729969a3
-      url: "https://pub.dev"
-    source: hosted
-    version: "9.13.0"
   share_plus:
     dependency: "direct main"
     description:
@@ -1983,14 +1839,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0+beta.8"
-  sprintf:
-    dependency: transitive
-    description:
-      name: sprintf
-      sha256: "1fc9ffe69d4df602376b52949af107d8f5703b77cda567c4d7d86a0693120f23"
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.0.0"
   sqflite:
     dependency: transitive
     description:
@@ -2095,30 +1943,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.4.0"
-  talker:
-    dependency: transitive
-    description:
-      name: talker
-      sha256: "4160d27f4da6d87f016212bbe6abfb15c8954b72726a0f154d72f77664c48b8c"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.1.13"
-  talker_dio_logger:
-    dependency: transitive
-    description:
-      name: talker_dio_logger
-      sha256: c5769f4b1ee6fcc1a0670cdfc7f3253016a1090b583aeb70e3ccd73f479970a8
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.1.13"
-  talker_logger:
-    dependency: transitive
-    description:
-      name: talker_logger
-      sha256: ed5f8434f17f3988548abc5f617b88e7a5d2d61d7a975e7c12eee75755848aa8
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.1.13"
   term_glyph:
     dependency: transitive
     description:
@@ -2131,10 +1955,10 @@ packages:
     dependency: transitive
     description:
       name: test_api
-      sha256: ab2726c1a94d3176a45960b6234466ec367179b87dd74f1611adb1f3b5fb9d55
+      sha256: "93167629bfc610f71560ab9312acdda4959de4df6fac7492c89ff0d3886f6636"
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.7"
+    version: "0.7.9"
   the_apple_sign_in:
     dependency: "direct main"
     description:
@@ -2367,14 +2191,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.0"
-  worker_manager:
-    dependency: transitive
-    description:
-      name: worker_manager
-      sha256: "1bce9f894a0c187856f5fc0e150e7fe1facce326f048ca6172947754dac3d4f3"
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.2.7"
   xdg_directories:
     dependency: transitive
     description:

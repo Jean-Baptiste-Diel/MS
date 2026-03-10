@@ -3,28 +3,19 @@ import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/user_data_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
-import 'package:booking_system_flutter/screens/about_screen.dart';
 import 'package:booking_system_flutter/screens/auth/change_password_screen.dart';
 import 'package:booking_system_flutter/screens/auth/edit_profile_screen.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
-import 'package:booking_system_flutter/screens/service/favourite_service_screen.dart';
 import 'package:booking_system_flutter/screens/setting_screen.dart';
-import 'package:booking_system_flutter/screens/wallet/user_wallet_balance_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
-import 'package:booking_system_flutter/utils/extensions/num_extenstions.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
-
-import '../../bankDetails/view/bank_details.dart';
-import '../../favourite_provider_screen.dart';
-import '../../helpDesk/help_desk_list_screen.dart';
-import '../component/wallet_history.dart';
 
 class ProfileFragment extends StatefulWidget {
   @override
@@ -90,14 +81,6 @@ class ProfileFragmentState extends State<ProfileFragment> {
     await removeKey(LAST_USER_DETAILS_SYNCED_TIME);
     await init();
     setState(() {});
-  }
-
-  void _openBookings() {
-    DashboardScreen(redirectToBooking: true).launch(
-      context,
-      isNewTask: true,
-      pageRouteAnimation: PageRouteAnimation.Fade,
-    );
   }
 
   void _deleteAccount() {
@@ -301,32 +284,6 @@ class ProfileFragmentState extends State<ProfileFragment> {
               ).expand(),
             ],
           ),
-          if (appConfigurationStore.isEnableUserWallet) ...[
-            12.height,
-            Container(
-              width: context.width(),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: boxDecorationWithRoundedCorners(
-                borderRadius: radius(12),
-                backgroundColor: primaryColor,
-              ),
-              child: Row(
-                children: [
-                  Image.asset(ic_wallet_cartoon, height: 20),
-                  8.width,
-                  Text(language.walletBalance,
-                      style: boldTextStyle(color: white, size: 12)),
-                  const Spacer(),
-                  Text(
-                    appStore.userWalletAmount.toPriceFormat(),
-                    style: boldTextStyle(color: white, size: 12),
-                  ),
-                ],
-              ),
-            ).onTap(() {
-              UserWalletBalanceScreen().launch(context);
-            }),
-          ],
         ],
       ),
     );
@@ -346,7 +303,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
           Text('Bienvenue sur Mison', style: boldTextStyle(size: 18)),
           6.height,
           Text(
-            'Connectez-vous pour gérer votre profil, vos favoris et vos réservations.',
+            'Connectez-vous pour gérer votre profil et vos paramètres.',
             style: secondaryTextStyle(size: 12),
           ),
           14.height,
@@ -421,114 +378,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
                           },
                         ),
                       ]),
-                      _sectionTitle('Activité'),
-                      _menuCard([
-                        _menuItem(
-                          title: 'Mes réservations',
-                          subtitle: 'Suivre vos services en cours',
-                          icon: ic_ticket,
-                          onTap: _openBookings,
-                        ),
-                        if (appConfigurationStore.isEnableUserWallet)
-                          _menuItem(
-                            title: language.walletBalance,
-                            subtitle: 'Recharger et suivre votre solde',
-                            icon: ic_un_fill_wallet,
-                            onTap: () {
-                              UserWalletBalanceScreen().launch(context);
-                            },
-                          ),
-                        if (appConfigurationStore.isEnableUserWallet)
-                          _menuItem(
-                            title: language.walletHistory,
-                            subtitle: 'Historique de vos transactions',
-                            icon: ic_wallet_history,
-                            onTap: () {
-                              const UserWalletHistoryScreen().launch(context);
-                            },
-                          ),
-                        _menuItem(
-                          title: 'Services favoris',
-                          subtitle: 'Retrouvez vos services enregistrés',
-                          icon: ic_heart,
-                          onTap: () {
-                            const FavouriteServiceScreen().launch(context);
-                          },
-                        ),
-                        _menuItem(
-                          title: 'Prestataires favoris',
-                          subtitle: 'Vos artisans suivis',
-                          icon: ic_profile2,
-                          onTap: () {
-                            const FavouriteProviderScreen().launch(context);
-                          },
-                        ),
-                        if (rolesAndPermissionStore.bankList)
-                          _menuItem(
-                            title: language.lblBankDetails,
-                            subtitle: 'Comptes bancaires et paiements',
-                            icon: ic_card,
-                            onTap: () {
-                              const BankDetails().launch(context);
-                            },
-                          ),
-                      ]),
                     ],
-                    _sectionTitle('Assistance et légal'),
-                    _menuCard([
-                      if (appStore.isLoggedIn &&
-                          rolesAndPermissionStore.helpDeskList)
-                        _menuItem(
-                          title: language.helpDesk,
-                          subtitle: 'Support et suivi de vos demandes',
-                          icon: ic_help_desk,
-                          onTap: () {
-                            HelpDeskListScreen().launch(context);
-                          },
-                        ),
-                      if (rolesAndPermissionStore.aboutUs)
-                        _menuItem(
-                          title: language.lblAboutApp,
-                          subtitle: 'Informations sur Mison',
-                          icon: ic_about_us,
-                          onTap: () {
-                            AboutScreen().launch(context);
-                          },
-                        ),
-                      if (rolesAndPermissionStore.privacyPolicy)
-                        _menuItem(
-                          title: language.privacyPolicy,
-                          subtitle: 'Protection de vos données',
-                          icon: ic_shield_done,
-                          onTap: () {
-                            checkIfLink(
-                                context, appConfigurationStore.privacyPolicy,
-                                title: language.privacyPolicy);
-                          },
-                        ),
-                      if (rolesAndPermissionStore.termCondition)
-                        _menuItem(
-                          title: language.termsCondition,
-                          subtitle: 'Conditions d\'utilisation',
-                          icon: ic_document,
-                          onTap: () {
-                            checkIfLink(
-                                context, appConfigurationStore.termConditions,
-                                title: language.termsCondition);
-                          },
-                        ),
-                      if (rolesAndPermissionStore.refundAndCancellationPolicy)
-                        _menuItem(
-                          title: language.refundPolicy,
-                          subtitle: 'Modalités de remboursement',
-                          icon: ic_refund,
-                          onTap: () {
-                            checkIfLink(
-                                context, appConfigurationStore.refundPolicy,
-                                title: language.refundPolicy);
-                          },
-                        ),
-                    ]),
                     _sectionTitle('Session',
                         color: appStore.isLoggedIn ? redColor : primaryColor),
                     _menuCard([

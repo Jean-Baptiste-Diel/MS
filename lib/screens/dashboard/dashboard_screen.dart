@@ -3,8 +3,8 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/category/mison_category_fragment.dart';
 import 'package:booking_system_flutter/screens/chat/chat_list_screen.dart';
-import 'package:booking_system_flutter/screens/dashboard/fragment/mison_booking_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/dashboard_fragment.dart';
+import 'package:booking_system_flutter/screens/dashboard/fragment/mison_booking_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/profile_fragment.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
@@ -57,7 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       };
     });
 
-    /// Handle Firebase Notification click and redirect to that Service & BookDetail screen
+    /// Handle Firebase Notification click
     LiveStream().on(LIVESTREAM_FIREBASE, (value) {
       if (value == 3) {
         currentIndex = 3;
