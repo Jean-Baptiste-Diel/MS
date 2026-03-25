@@ -8,6 +8,7 @@ import 'package:booking_system_flutter/screens/auth/edit_profile_screen.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/screens/setting_screen.dart';
+import 'package:booking_system_flutter/screens/support_chat/support_chat_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
@@ -375,6 +376,19 @@ class ProfileFragmentState extends State<ProfileFragment> {
                           icon: ic_setting,
                           onTap: () {
                             SettingScreen().launch(context);
+                          },
+                        ),
+                      ]),
+                    ],
+                    if (appStore.isLoggedIn) ...[
+                      _sectionTitle('Aide'),
+                      _menuCard([
+                        _menuItem(
+                          title: 'Contacter le support',
+                          subtitle: 'Discuter avec notre équipe',
+                          icon: ic_helpAndSupport,
+                          onTap: () {
+                            const SupportChatScreen().launch(context);
                           },
                         ),
                       ]),

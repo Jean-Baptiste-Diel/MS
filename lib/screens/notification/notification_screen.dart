@@ -60,13 +60,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
         loadingWidget: LoaderWidget(),
         errorBuilder: (error) {
           return NoDataWidget(
-            title: error,
-            imageWidget: const ErrorStateWidget(),
-            retryText: language.reload,
-            onRetry: () {
-              init();
-              setState(() {});
-            },
+            title: language.noNotifications,
+            subTitle: language.noNotificationsSubTitle,
+            imageWidget: const EmptyStateWidget(),
           );
         },
         onSuccess: (list) {

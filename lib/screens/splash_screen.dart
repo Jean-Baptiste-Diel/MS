@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/screens/maintenance_mode_screen.dart';
 import 'package:booking_system_flutter/screens/mison_welcome_screen.dart';
@@ -67,8 +68,10 @@ class _SplashScreenState extends State<SplashScreen> {
       } else {
         if (getBoolAsync(IS_FIRST_TIME, defaultValue: true)) {
           const MisonWelcomeScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
-        } else {
+        } else if (appStore.isLoggedIn) {
           DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
+        } else {
+          SignInScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
         }
       }
     }

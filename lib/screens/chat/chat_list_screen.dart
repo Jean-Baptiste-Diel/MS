@@ -1,7 +1,6 @@
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/user_data_model.dart';
-import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/chat/widget/user_item_widget.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -44,22 +43,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
           onSuccess: (isLoggedIn) {
             if (!isLoggedIn) {
               return NoDataWidget(
-                title: language.youAreNotConnectedWithChatServer,
-                subTitle: language.NotConnectedWithChatServerMessage,
-                onRetry: () async {
-                  if (!appStore.isLoggedIn) {
-                    const SignInScreen().launch(context);
-                  } else {
-                    appStore.setLoading(true);
-                    await authService.verifyFirebaseUser().then((value) {
-                      setState(() {});
-                    }).catchError((e) {
-                      toast(e.toString());
-                    });
-                    appStore.setLoading(false);
-                  }
-                },
-                retryText: language.connect,
+                title: language.noConversation,
+                subTitle: language.noConversationSubTitle,
                 imageWidget: const EmptyStateWidget(),
               ).paddingSymmetric(horizontal: 16);
             } else {

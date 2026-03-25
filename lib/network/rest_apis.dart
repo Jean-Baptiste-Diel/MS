@@ -30,7 +30,7 @@ import 'package:booking_system_flutter/model/user_data_model.dart';
 import 'package:booking_system_flutter/model/user_wallet_history.dart';
 import 'package:booking_system_flutter/model/verify_transaction_response.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
-import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
+import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
@@ -360,6 +360,8 @@ Future<void> saveUserData(UserData data,
 
   await appStore.setUserProfile(data.profileImage.validate());
   await appStore.setReferralCode(data.referral_code.validate());
+  await setValue(ACCOUNT_TYPE, data.userAccountType.validate());
+  await setValue(COMPANY_NAME, data.companyName.validate());
 
   /// Subscribe Firebase Topic
   subscribeToFirebaseTopic();
@@ -468,9 +470,8 @@ Future<void> logout(BuildContext context) async {
                       cachedWalletHistoryList!.clear();
 
                     appStore.setLoading(false);
-                    //todo:
                     toast("Your Account has logged out successfully");
-                    DashboardScreen().launch(context,
+                    SignInScreen().launch(context,
                         isNewTask: true,
                         pageRouteAnimation: PageRouteAnimation.Fade);
                   } else {
