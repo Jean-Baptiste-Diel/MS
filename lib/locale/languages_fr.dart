@@ -2196,7 +2196,7 @@ class LanguageFr extends BaseLanguage {
 
   @override
   String get passwordLengthShouldBe =>
-      'La longueur du mot de passe doit être comprise entre 8 et 12 caractères.';
+      'Le mot de passe doit contenir au moins 8 caractères.';
 
   @override
   String get cash => 'Espèces';

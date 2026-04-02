@@ -7,8 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-/// Écran de succès après création d'une commande Mison
-/// Correspond au design Figma "Thank you"
 class MisonBookingSuccessScreen extends StatelessWidget {
   final MisonOrder order;
   final String serviceName;
@@ -22,79 +20,100 @@ class MisonBookingSuccessScreen extends StatelessWidget {
   }) : super(key: key);
 
   String _formatDate(String? isoDate) {
-    if (isoDate == null) return '';
+    if (isoDate == null || isoDate.isEmpty) return '—';
     try {
-      final date = DateTime.parse(isoDate);
-      return DateFormat('dd MMM yyyy', 'fr_FR').format(date);
-    } catch (e) {
+      final date = DateTime.parse(isoDate).toLocal();
+      return DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(date);
+    } catch (_) {
       return isoDate;
     }
   }
 
   String _formatTime(String? isoDate) {
-    if (isoDate == null) return '';
+    if (isoDate == null || isoDate.isEmpty) return '—';
     try {
-      final date = DateTime.parse(isoDate);
+      final date = DateTime.parse(isoDate).toLocal();
       return DateFormat('HH:mm').format(date);
-    } catch (e) {
-      return '';
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  Color _statusColor(String? s) {
+    switch (s) {
+      case 'PENDING':    return pending;
+      case 'ASSIGNED':   return assigned_booking;
+      case 'ACCEPTED':   return accept;
+      case 'IN_PROGRESS':return in_progress;
+      case 'COMPLETED':  return completed;
+      case 'CANCELLED':  return cancelled;
+      case 'REJECTED':   return rejected;
+      default:           return defaultStatus;
+    }
+  }
+
+  String _statusLabel(String? s) {
+    switch (s) {
+      case 'PENDING':    return 'En attente';
+      case 'ASSIGNED':   return 'Artisan assigné';
+      case 'ACCEPTED':   return 'Accepté';
+      case 'IN_PROGRESS':return 'En cours';
+      case 'COMPLETED':  return 'Terminé';
+      case 'CANCELLED':  return 'Annulé';
+      case 'REJECTED':   return 'Refusé';
+      default:           return s ?? '—';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        DashboardScreen().launch(context, isNewTask: true);
-        return false;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) DashboardScreen().launch(context, isNewTask: true);
       },
       child: Scaffold(
         backgroundColor: context.scaffoldBackgroundColor,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
+          automaticallyImplyLeading: false,
           systemOverlayStyle: SystemUiOverlayStyle(
-            statusBarIconBrightness: appStore.isDarkMode ? Brightness.light : Brightness.dark,
+            statusBarIconBrightness:
+                appStore.isDarkMode ? Brightness.light : Brightness.dark,
             statusBarColor: Colors.transparent,
           ),
-          automaticallyImplyLeading: false,
         ),
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Column(
               children: [
-                // Success icon
+                // ── Icône succès ─────────────────────────────────────────
                 Container(
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: completed.withOpacity(0.1),
+                    color: completed.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    Icons.check_circle,
-                    size: 60,
-                    color: completed,
-                  ),
+                  child: Icon(Icons.check_circle_rounded,
+                      size: 62, color: completed),
                 ),
-                
                 24.height,
-                
-                // Thank you text
+
+                Text('Demande envoyée !',
+                    style: boldTextStyle(size: 26),
+                    textAlign: TextAlign.center),
+                10.height,
                 Text(
-                  'Thank You!',
-                  style: boldTextStyle(size: 28),
-                ),
-                8.height,
-                Text(
-                  'Your booking is confirmed.',
+                  'Votre demande a bien été enregistrée.\nUn artisan vous sera assigné prochainement.',
                   style: secondaryTextStyle(size: 14),
+                  textAlign: TextAlign.center,
                 ),
-                
                 32.height,
-                
-                // Booking details card
+
+                // ── Carte détails ─────────────────────────────────────────
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
@@ -105,66 +124,47 @@ class MisonBookingSuccessScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Service name
-                      Text(
-                        serviceName,
-                        style: boldTextStyle(size: 18),
-                      ),
-                      
+                      Text(serviceName, style: boldTextStyle(size: 17)),
                       16.height,
-                      
-                      // Date & Time
-                      _DetailRow(
-                        icon: Icons.calendar_today,
+
+                      _Row(
+                        icon: Icons.calendar_today_outlined,
                         label: 'Date',
                         value: _formatDate(order.serviceDate),
                       ),
                       12.height,
-                      _DetailRow(
-                        icon: Icons.access_time,
+                      _Row(
+                        icon: Icons.access_time_rounded,
                         label: 'Heure',
                         value: _formatTime(order.serviceDate),
                       ),
                       12.height,
-                      _DetailRow(
-                        icon: Icons.location_on,
+                      _Row(
+                        icon: Icons.location_on_outlined,
                         label: 'Adresse',
-                        value: order.serviceAddress ?? '',
+                        value: order.serviceAddress ?? '—',
                       ),
-                      
-                      const Divider(height: 32),
-                      
-                      // Payment info
-                      _DetailRow(
-                        icon: Icons.payment,
-                        label: 'Payment Mode',
-                        value: paymentMethod,
-                      ),
-                      12.height,
-                      _DetailRow(
-                        icon: Icons.receipt,
-                        label: 'Total',
-                        value: '100F', // Frais de booking
-                        valueColor: primaryColor,
-                      ),
-                      
-                      const Divider(height: 32),
-                      
-                      // Status
+
+                      const Divider(height: 28),
+
+                      // Statut
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          Text('Statut', style: secondaryTextStyle()),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: boxDecorationDefault(
-                              color: _getStatusColor(order.status).withOpacity(0.1),
-                              borderRadius: radius(20),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: _statusColor(order.status)
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              _getStatusLabel(order.status),
+                              _statusLabel(order.status),
                               style: boldTextStyle(
-                                size: 12,
-                                color: _getStatusColor(order.status),
-                              ),
+                                  size: 12,
+                                  color: _statusColor(order.status)),
                             ),
                           ),
                         ],
@@ -172,64 +172,66 @@ class MisonBookingSuccessScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                
-                32.height,
-                
-                // Info message
+
+                24.height,
+
+                // ── Bannière info ─────────────────────────────────────────
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: boxDecorationDefault(
-                    color: secondaryPrimaryColor,
-                    borderRadius: radius(12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: primaryColor.withValues(alpha: 0.2)),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: primaryColor),
+                      Icon(Icons.info_outline,
+                          color: primaryColor, size: 20),
                       12.width,
                       Expanded(
                         child: Text(
-                          'Booking Time And Date',
-                          style: primaryTextStyle(size: 14),
+                          'Vous recevrez une notification dès qu\'un artisan accepte votre demande.',
+                          style: secondaryTextStyle(size: 13),
                         ),
                       ),
                     ],
                   ),
                 ),
-                
+
                 40.height,
-                
-                // Action buttons
+
+                // ── Boutons ───────────────────────────────────────────────
                 Row(
                   children: [
                     Expanded(
                       child: AppButton(
-                        text: 'Go To Home',
+                        text: 'Accueil',
                         color: context.cardColor,
                         textColor: textPrimaryColorGlobal,
                         shapeBorder: RoundedRectangleBorder(
                           borderRadius: radius(12),
                           side: BorderSide(color: borderColor),
                         ),
-                        onTap: () {
-                          DashboardScreen().launch(context, isNewTask: true);
-                        },
+                        onTap: () => DashboardScreen()
+                            .launch(context, isNewTask: true),
                       ),
                     ),
                     16.width,
                     Expanded(
                       child: AppButton(
-                        text: 'Go To Review',
+                        text: 'Mes commandes',
                         color: primaryColor,
                         textColor: Colors.white,
-                        shapeBorder: RoundedRectangleBorder(borderRadius: radius(12)),
-                        onTap: () {
-                          // TODO: Navigate to booking detail screen
-                          DashboardScreen(redirectToBooking: true).launch(context, isNewTask: true);
-                        },
+                        shapeBorder: RoundedRectangleBorder(
+                            borderRadius: radius(12)),
+                        onTap: () => DashboardScreen(redirectToBooking: true)
+                            .launch(context, isNewTask: true),
                       ),
                     ),
                   ],
                 ),
+                16.height,
               ],
             ),
           ),
@@ -237,83 +239,33 @@ class MisonBookingSuccessScreen extends StatelessWidget {
       ),
     );
   }
-
-  Color _getStatusColor(String? status) {
-    switch (status) {
-      case 'PENDING':
-        return pending;
-      case 'ASSIGNED':
-        return assigned_booking;
-      case 'ACCEPTED':
-        return accept;
-      case 'IN_PROGRESS':
-        return in_progress;
-      case 'COMPLETED':
-        return completed;
-      case 'CANCELLED':
-        return cancelled;
-      case 'REJECTED':
-        return rejected;
-      default:
-        return defaultStatus;
-    }
-  }
-
-  String _getStatusLabel(String? status) {
-    switch (status) {
-      case 'PENDING':
-        return 'En attente';
-      case 'ASSIGNED':
-        return 'Artisan assigné';
-      case 'ACCEPTED':
-        return 'Accepté';
-      case 'IN_PROGRESS':
-        return 'En cours';
-      case 'COMPLETED':
-        return 'Terminé';
-      case 'CANCELLED':
-        return 'Annulé';
-      case 'REJECTED':
-        return 'Refusé';
-      default:
-        return status ?? 'Inconnu';
-    }
-  }
 }
 
-/// Widget for detail row
-class _DetailRow extends StatelessWidget {
+class _Row extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  final Color? valueColor;
 
-  const _DetailRow({
+  const _Row({
     required this.icon,
     required this.label,
     required this.value,
-    this.valueColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: Colors.grey),
-        12.width,
+        Icon(icon, size: 17, color: Colors.grey),
+        10.width,
+        Text('$label :', style: secondaryTextStyle()),
+        8.width,
         Expanded(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: secondaryTextStyle()),
-              Text(
-                value,
-                style: boldTextStyle(
-                  size: 14,
-                  color: valueColor,
-                ),
-              ),
-            ],
+          child: Text(
+            value,
+            style: boldTextStyle(size: 13),
+            textAlign: TextAlign.end,
           ),
         ),
       ],

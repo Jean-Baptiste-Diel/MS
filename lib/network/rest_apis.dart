@@ -288,7 +288,8 @@ Future<LoginResponse> loginUser(Map request,
             method: HttpMethodType.POST)));
 
     if (res.userData != null) {
-      if (res.userData!.userType != USER_TYPE_USER) {
+      if (res.userData!.userType != USER_TYPE_USER &&
+          res.userData!.userType != USER_TYPE_PROVIDER) {
         appStore.setLoading(false);
         throw language.lblNotValidUser;
       }
@@ -360,6 +361,8 @@ Future<void> saveUserData(UserData data,
 
   await appStore.setUserProfile(data.profileImage.validate());
   await appStore.setReferralCode(data.referral_code.validate());
+  if (data.userType.validate().isNotEmpty)
+    await appStore.setUserType(data.userType.validate());
   await setValue(ACCOUNT_TYPE, data.userAccountType.validate());
   await setValue(COMPANY_NAME, data.companyName.validate());
 
@@ -1854,6 +1857,59 @@ Future<MisonActionResponse> rateMisonOrder(String orderId, int rating, String re
     final response = await buildHttpResponse(
       'orders/$orderId/rate',
       request: request.toJson(),
+      method: HttpMethodType.POST,
+    );
+    return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// GET /api/worker-requests - Liste des demandes d'ouvrier du client authentifié
+Future<MisonWorkerRequestResponse> getWorkerRequests() async {
+  try {
+    final response = await buildHttpResponse('worker-requests', method: HttpMethodType.GET);
+    return MisonWorkerRequestResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/worker-requests - Créer une demande d'ouvrier
+Future<MisonOrderDetailResponse> createWorkerRequest(MisonWorkerRequestModel request) async {
+  try {
+    final response = await buildHttpResponse(
+      'worker-requests',
+      request: request.toJson(),
+      method: HttpMethodType.POST,
+    );
+    log('createWorkerRequest → ${request.toJson()}');
+    final res = MisonOrderDetailResponse.fromJson(await handleResponse(response));
+    log('createWorkerRequest ← ${res.message}');
+    return res;
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/orders/{id}/start - Artisan démarre une commande (ACCEPTED → IN_PROGRESS)
+Future<MisonActionResponse> artisanStartOrder(String orderId) async {
+  try {
+    final response = await buildHttpResponse(
+      'orders/$orderId/start',
+      method: HttpMethodType.POST,
+    );
+    return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/orders/{id}/complete - Artisan termine une commande (IN_PROGRESS → COMPLETED)
+Future<MisonActionResponse> artisanCompleteOrder(String orderId) async {
+  try {
+    final response = await buildHttpResponse(
+      'orders/$orderId/complete',
       method: HttpMethodType.POST,
     );
     return MisonActionResponse.fromJson(await handleResponse(response));

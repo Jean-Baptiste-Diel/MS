@@ -3,21 +3,20 @@ import 'dart:io';
 
 import 'package:booking_system_flutter/component/base_scaffold_widget.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
+import 'package:booking_system_flutter/utils/images.dart';
+import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:booking_system_flutter/component/custom_image_picker.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
-import 'package:booking_system_flutter/utils/images.dart';
-import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_vector_icons/flutter_vector_icons.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:mobx/mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -147,11 +146,20 @@ class EditProfileScreenState extends State<EditProfileScreen> {
         request.files.add(await http.MultipartFile.fromPath('profile_picture', imageFile!.path));
       }
 
+      log('update() → PATCH $uri');
+      log('update() → fields: ${request.fields}');
+      log('update() → files: ${request.files.map((f) => f.filename).toList()}');
+
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
       appStore.setLoading(false);
 
+      log('update() ← status: ${response.statusCode}');
+      log('update() ← body: ${response.body}');
+
       if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+
         // Mettre à jour les valeurs locales
         await setValue(FIRST_NAME, fNameCont.text.trim());
         await setValue(LAST_NAME, lNameCont.text.trim());
@@ -161,6 +169,13 @@ class EditProfileScreenState extends State<EditProfileScreen> {
         appStore.setFirstName(fNameCont.text.trim());
         appStore.setLastName(lNameCont.text.trim());
         appStore.setContactNumber(buildMobileNumber());
+
+        // Mettre à jour la photo de profil si retournée par le back
+        final newPhoto = body['profile_picture']?.toString() ?? body['profile_image']?.toString() ?? '';
+        if (newPhoto.isNotEmpty) {
+          await appStore.setUserProfile(newPhoto);
+          log('update() ← nouvelle photo: $newPhoto');
+        }
 
         toast(language.success);
         finish(context);
@@ -232,136 +247,171 @@ class EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      showLoader: true,
-      isLoading: Observable(appStore.isLoading),
+      showLoader: false,
       appBarTitle: language.editProfile,
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: formKey,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Photo de profil
-                Stack(
-                  children: [
-                    Container(
-                      decoration: boxDecorationDefault(
-                        border: Border.all(color: context.scaffoldBackgroundColor, width: 4),
-                        shape: BoxShape.circle,
-                      ),
-                      child: imageFile != null
-                          ? Image.file(imageFile!, width: 85, height: 85, fit: BoxFit.cover).cornerRadiusWithClipRRect(40)
-                          : Observer(
-                              builder: (_) => CachedImageWidget(
-                                url: appStore.userProfileImage,
-                                height: 85,
-                                width: 85,
-                                fit: BoxFit.cover,
-                                radius: 43,
-                              ),
+      child: Observer(
+        builder: (_) => Stack(
+          children: [
+            SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Form(
+                  key: formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Avatar
+                      Stack(
+                        children: [
+                          Container(
+                            decoration: boxDecorationDefault(
+                              border: Border.all(
+                                  color: context.scaffoldBackgroundColor,
+                                  width: 4),
+                              shape: BoxShape.circle,
                             ),
-                    ),
-                    Positioned(
-                      bottom: 4,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: boxDecorationWithRoundedCorners(
-                          boxShape: BoxShape.circle,
-                          backgroundColor: primaryColor,
-                          border: Border.all(color: Colors.white),
+                            child: imageFile != null
+                                ? Image.file(imageFile!,
+                                        width: 85,
+                                        height: 85,
+                                        fit: BoxFit.cover)
+                                    .cornerRadiusWithClipRRect(40)
+                                : Observer(
+                                    builder: (_) => CachedImageWidget(
+                                      url: appStore.userProfileImage,
+                                      height: 85,
+                                      width: 85,
+                                      fit: BoxFit.cover,
+                                      radius: 43,
+                                    ),
+                                  ),
+                          ),
+                          Positioned(
+                            bottom: 4,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: boxDecorationWithRoundedCorners(
+                                boxShape: BoxShape.circle,
+                                backgroundColor: primaryColor,
+                                border: Border.all(color: Colors.white),
+                              ),
+                              child: const Icon(AntDesign.camera,
+                                  color: Colors.white, size: 12),
+                            ).onTap(() => _showImgPickDialog(context)),
+                          ),
+                        ],
+                      ),
+                      24.height,
+                      // Prénom
+                      AppTextField(
+                        textFieldType: TextFieldType.NAME,
+                        controller: fNameCont,
+                        focus: fNameFocus,
+                        nextFocus: lNameFocus,
+                        errorThisFieldRequired: language.requiredText,
+                        decoration: inputDecoration(context,
+                            labelText: language.hintFirstNameTxt),
+                        suffix:
+                            ic_profile2.iconImage(size: 10).paddingAll(14),
+                      ),
+                      16.height,
+                      // Nom
+                      AppTextField(
+                        textFieldType: TextFieldType.NAME,
+                        controller: lNameCont,
+                        focus: lNameFocus,
+                        nextFocus: mobileFocus,
+                        errorThisFieldRequired: language.requiredText,
+                        decoration: inputDecoration(context,
+                            labelText: language.hintLastNameTxt),
+                        suffix:
+                            ic_profile2.iconImage(size: 10).paddingAll(14),
+                      ),
+                      16.height,
+                      // Téléphone
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            height: 48,
+                            margin: EdgeInsets.only(
+                                bottom: context.height() * 0.032),
+                            decoration: BoxDecoration(
+                              color: context.cardColor,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ValueListenableBuilder(
+                              valueListenable: valueNotifier,
+                              builder: (_, __, ___) => Row(
+                                children: [
+                                  Text(
+                                      '+${selectedCountryCode.phoneCode}',
+                                      style: primaryTextStyle(size: 12)),
+                                  const Icon(Icons.arrow_drop_down),
+                                ],
+                              ).paddingOnly(left: 8),
+                            ),
+                          ).onTap(_changeCountryCode),
+                          10.width,
+                          Expanded(
+                            child: AppTextField(
+                              textFieldType: isAndroid
+                                  ? TextFieldType.PHONE
+                                  : TextFieldType.NAME,
+                              controller: mobileCont,
+                              focus: mobileFocus,
+                              isValidationRequired: false,
+                              maxLength: 15,
+                              decoration: inputDecoration(context,
+                                      hintText:
+                                          language.hintContactNumberTxt)
+                                  .copyWith(
+                                      hintStyle: secondaryTextStyle()),
+                              suffix: ic_calling
+                                  .iconImage(size: 10)
+                                  .paddingAll(14),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (isEntreprise) ...[
+                        16.height,
+                        AppTextField(
+                          textFieldType: TextFieldType.NAME,
+                          controller: companyNameCont,
+                          focus: companyNameFocus,
+                          isValidationRequired: false,
+                          decoration: inputDecoration(context,
+                              labelText: 'Nom de l\'entreprise'),
+                          suffix: const Icon(Icons.business_outlined,
+                                  size: 18)
+                              .paddingAll(14),
                         ),
-                        child: const Icon(AntDesign.camera, color: Colors.white, size: 12),
-                      ).onTap(() => _showImgPickDialog(context)),
-                    ),
-                  ],
-                ),
-                24.height,
-                // Prénom
-                AppTextField(
-                  textFieldType: TextFieldType.NAME,
-                  controller: fNameCont,
-                  focus: fNameFocus,
-                  nextFocus: lNameFocus,
-                  errorThisFieldRequired: language.requiredText,
-                  decoration: inputDecoration(context, labelText: language.hintFirstNameTxt),
-                  suffix: ic_profile2.iconImage(size: 10).paddingAll(14),
-                ),
-                16.height,
-                // Nom
-                AppTextField(
-                  textFieldType: TextFieldType.NAME,
-                  controller: lNameCont,
-                  focus: lNameFocus,
-                  nextFocus: mobileFocus,
-                  errorThisFieldRequired: language.requiredText,
-                  decoration: inputDecoration(context, labelText: language.hintLastNameTxt),
-                  suffix: ic_profile2.iconImage(size: 10).paddingAll(14),
-                ),
-                16.height,
-                // Téléphone avec indicatif
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      height: 48,
-                      margin: EdgeInsets.only(bottom: context.height() * 0.032),
-                      decoration: BoxDecoration(
-                        color: context.cardColor,
-                        borderRadius: BorderRadius.circular(12),
+                      ],
+                      40.height,
+                      AppButton(
+                        text: language.save,
+                        color: primaryColor,
+                        textColor: white,
+                        width: context.width() - context.navigationBarHeight,
+                        onTap: () => ifNotTester(() => update()),
                       ),
-                      child: ValueListenableBuilder(
-                        valueListenable: valueNotifier,
-                        builder: (_, __, ___) => Row(
-                          children: [
-                            Text('+${selectedCountryCode.phoneCode}', style: primaryTextStyle(size: 12)),
-                            const Icon(Icons.arrow_drop_down),
-                          ],
-                        ).paddingOnly(left: 8),
-                      ),
-                    ).onTap(_changeCountryCode),
-                    10.width,
-                    Expanded(
-                      child: AppTextField(
-                        textFieldType: isAndroid ? TextFieldType.PHONE : TextFieldType.NAME,
-                        controller: mobileCont,
-                        focus: mobileFocus,
-                        isValidationRequired: false,
-                        maxLength: 15,
-                        decoration: inputDecoration(context, hintText: language.hintContactNumberTxt).copyWith(
-                          hintStyle: secondaryTextStyle(),
-                        ),
-                        suffix: ic_calling.iconImage(size: 10).paddingAll(14),
-                      ),
-                    ),
-                  ],
-                ),
-                if (isEntreprise) ...[
-                  16.height,
-                  AppTextField(
-                    textFieldType: TextFieldType.NAME,
-                    controller: companyNameCont,
-                    focus: companyNameFocus,
-                    isValidationRequired: false,
-                    decoration: inputDecoration(context, labelText: 'Nom de l\'entreprise'),
-                    suffix: const Icon(Icons.business_outlined, size: 18).paddingAll(14),
+                      24.height,
+                    ],
                   ),
-                ],
-                40.height,
-                AppButton(
-                  text: language.save,
-                  color: primaryColor,
-                  textColor: white,
-                  width: context.width() - context.navigationBarHeight,
-                  onTap: () => ifNotTester(() => update()),
                 ),
-                24.height,
-              ],
+              ),
             ),
-          ),
+            if (appStore.isLoading)
+              const Positioned.fill(
+                child: AbsorbPointer(
+                  absorbing: true,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ),
+          ],
         ),
       ),
     );

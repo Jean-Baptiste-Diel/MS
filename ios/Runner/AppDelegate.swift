@@ -14,7 +14,7 @@ import GoogleMaps
       }
 
       GeneratedPluginRegistrant.register(with: self)
-      GMSServices.provideAPIKey("YOUR_IOS_GOOGLE_MAP_KEY")
+      GMSServices.provideAPIKey("AIzaSyBtos9vMzqgH_Z9USy6eYMBtftzvhDYZhI")
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 }

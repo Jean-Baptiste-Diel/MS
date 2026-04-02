@@ -100,7 +100,7 @@ const THEME_MODE_SYSTEM = 2;
 
 // region Google Places API
 
-const GOOGLE_PLACES_API_KEY = 'AIzaSyB-MWQIflh9vAeBdQJrzoZj33akbUyh-QU';
+const GOOGLE_PLACES_API_KEY = 'AIzaSyBtos9vMzqgH_Z9USy6eYMBtftzvhDYZhI';
 //endregion
 
 //region SHARED PREFERENCES KEYS

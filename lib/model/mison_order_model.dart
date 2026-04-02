@@ -266,6 +266,107 @@ class MisonCreateOrderRequest {
       };
 }
 
+/// Request model for worker request order (POST /api/worker-requests or /api/orders with worker_count)
+class MisonWorkerRequestModel {
+  String service; // UUID
+  int workerCount;
+  String description;
+  String serviceDate; // ISO8601
+  String serviceAddress;
+
+  MisonWorkerRequestModel({
+    required this.service,
+    required this.workerCount,
+    required this.description,
+    required this.serviceDate,
+    required this.serviceAddress,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'service': service,
+        'worker_count': workerCount,
+        'description': description,
+        'service_date': serviceDate,
+        'service_address': serviceAddress,
+      };
+}
+
+/// Response model for GET /api/worker-requests
+class MisonWorkerRequestResponse {
+  String? message;
+  List<MisonWorkerRequest>? data;
+
+  MisonWorkerRequestResponse({this.message, this.data});
+
+  factory MisonWorkerRequestResponse.fromJson(Map<String, dynamic> json) {
+    return MisonWorkerRequestResponse(
+      message: json['message']?.toString(),
+      data: json['data'] != null
+          ? (json['data'] as List)
+              .map((e) => MisonWorkerRequest.fromJson(e as Map<String, dynamic>))
+              .toList()
+          : null,
+    );
+  }
+}
+
+class MisonWorkerRequest {
+  String? id;
+  MisonClient? client;
+  MisonServiceInfo? service;
+  int? workerCount;
+  String? description;
+  String? serviceDate;
+  String? serviceAddress;
+  String? status;
+  List<MisonClient>? assignedArtisans;
+  String? createdAt;
+
+  MisonWorkerRequest({
+    this.id,
+    this.client,
+    this.service,
+    this.workerCount,
+    this.description,
+    this.serviceDate,
+    this.serviceAddress,
+    this.status,
+    this.assignedArtisans,
+    this.createdAt,
+  });
+
+  factory MisonWorkerRequest.fromJson(Map<String, dynamic> json) {
+    return MisonWorkerRequest(
+      id: json['id']?.toString(),
+      client: json['client'] != null
+          ? MisonClient.fromJson(json['client'] as Map<String, dynamic>)
+          : null,
+      service: json['service'] != null
+          ? MisonServiceInfo.fromJson(json['service'] as Map<String, dynamic>)
+          : null,
+      workerCount: json['worker_count'] != null
+          ? int.tryParse(json['worker_count'].toString())
+          : null,
+      description: json['description']?.toString(),
+      serviceDate: json['service_date']?.toString(),
+      serviceAddress: json['service_address']?.toString(),
+      status: json['status']?.toString(),
+      assignedArtisans: json['assigned_artisans'] != null
+          ? (json['assigned_artisans'] as List)
+              .map((e) => MisonClient.fromJson(e as Map<String, dynamic>))
+              .toList()
+          : [],
+      createdAt: json['created_at']?.toString(),
+    );
+  }
+
+  bool get isPending => status == 'PENDING';
+  bool get isAssigned => status == 'ASSIGNED';
+  bool get isCompleted => status == 'COMPLETED';
+  bool get isCancelled => status == 'CANCELLED';
+  bool get hasArtisans => assignedArtisans != null && assignedArtisans!.isNotEmpty;
+}
+
 /// Request model for rating an order
 class MisonRateOrderRequest {
   int rating; // 1-5

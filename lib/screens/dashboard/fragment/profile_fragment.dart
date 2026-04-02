@@ -221,7 +221,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
         children: [
           Row(
             children: [
-              Builder(builder: (_) {
+              Observer(builder: (_) {
                 final String profileUrl = appStore.userProfileImage.validate();
                 final bool hasProfileImage = profileUrl.isNotEmpty;
 

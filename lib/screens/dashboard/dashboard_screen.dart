@@ -21,6 +21,7 @@ import '../newDashboard/dashboard_1/dashboard_fragment_1.dart';
 import '../newDashboard/dashboard_2/dashboard_fragment_2.dart';
 import '../newDashboard/dashboard_3/dashboard_fragment_3.dart';
 import '../newDashboard/dashboard_4/dashboard_fragment_4.dart';
+import 'artisan_dashboard_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final bool? redirectToBooking;
@@ -126,6 +127,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (appStore.userType == USER_TYPE_PROVIDER) {
+      return const ArtisanDashboardScreen();
+    }
+
     return DoublePressBackWidget(
       message: language.lblBackPressMsg,
       child: Scaffold(

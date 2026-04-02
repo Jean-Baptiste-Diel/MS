@@ -1,6 +1,7 @@
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:mobx/mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 import '../utils/constant.dart';
@@ -26,7 +27,6 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final loading = showLoader && (isLoading?.value ?? false);
     return Scaffold(
       appBar: appBarTitle != null
           ? AppBar(
@@ -41,14 +41,19 @@ class AppScaffold extends StatelessWidget {
             )
           : null,
       backgroundColor: scaffoldBackgroundColor,
-      body: Stack(
-        children: [
-          AbsorbPointer(
-            absorbing: loading,
-            child: child,
-          ),
-          if (loading) LoaderWidget().center(),
-        ],
+      body: Observer(
+        builder: (_) {
+          final loading = showLoader && (isLoading?.value ?? false);
+          return Stack(
+            children: [
+              AbsorbPointer(
+                absorbing: loading,
+                child: child,
+              ),
+              if (loading) LoaderWidget().center(),
+            ],
+          );
+        },
       ),
       bottomNavigationBar: bottomNavigationBar,
     );

@@ -101,10 +101,38 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  /// Normalise l'identifiant avant envoi au back :
+  /// - email ou numéro déjà préfixé '+' → envoi direct
+  /// - numéro avec indicatif mais sans '+' (≥ 10 chiffres) → ajoute '+'
+  /// - numéro sans indicatif (< 10 chiffres) → lève une exception
+  String _normalizeIdentifier(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.contains('@')) return trimmed;
+    if (trimmed.startsWith('+')) return trimmed;
+
+    final digitsOnly = trimmed.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    if (RegExp(r'^\d+$').hasMatch(digitsOnly)) {
+      if (digitsOnly.length >= 10) {
+        return '+$digitsOnly';
+      }
+      throw Exception("L'indicatif téléphonique est requis (ex: +221XXXXXXXXX)");
+    }
+    return trimmed;
+  }
+
   void _handleLoginUsers() async {
     hideKeyboard(context);
+
+    String identifier;
+    try {
+      identifier = _normalizeIdentifier(emailCont.text);
+    } catch (e) {
+      toast(e.toString());
+      return;
+    }
+
     Map<String, dynamic> request = {
-      'identifier': emailCont.text.trim(),
+      'identifier': identifier,
       'password': passwordCont.text.trim(),
     };
 
@@ -942,6 +970,16 @@ class _SignInScreenState extends State<SignInScreen> {
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) {
                                 return language.requiredText;
+                              }
+                              final trimmed = val.trim();
+                              if (!trimmed.contains('@') &&
+                                  !trimmed.startsWith('+')) {
+                                final digitsOnly = trimmed.replaceAll(
+                                    RegExp(r'[\s\-\(\)]'), '');
+                                if (RegExp(r'^\d+$').hasMatch(digitsOnly) &&
+                                    digitsOnly.length < 10) {
+                                  return "L'indicatif téléphonique est requis (ex: +221...)";
+                                }
                               }
                               return null;
                             },
