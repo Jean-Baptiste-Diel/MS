@@ -174,7 +174,8 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
   }
 
   void _load() {
-    _future = getMisonOrders(status: _selectedStatus);
+    // Always fetch all orders — filter is applied client-side
+    _future = getMisonOrders();
     _key = UniqueKey();
   }
 
@@ -187,8 +188,13 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
       negativeText: 'Non',
       dialogType: DialogType.DELETE,
       onAccept: (_) async {
-        toast('Commande annulée');
-        setState(() => _load());
+        try {
+          await cancelMisonOrder(order.id ?? '');
+          toast('Commande annulée');
+          setState(() => _load());
+        } catch (e) {
+          toast('Erreur: ${e.toString()}');
+        }
       },
     );
   }
@@ -209,9 +215,10 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
                   (_selectedStatus == null && f['value'] == '');
               return GestureDetector(
                 onTap: () {
-                  _selectedStatus =
-                      f['value']!.isEmpty ? null : f['value'];
-                  setState(() => _load());
+                  setState(() {
+                    _selectedStatus =
+                        f['value']!.isEmpty ? null : f['value'];
+                  });
                 },
                 child: Container(
                   margin: const EdgeInsets.only(right: 8),
@@ -248,12 +255,20 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
               onRetry: () => setState(() => _load()),
             ),
             onSuccess: (response) {
-              final orders = response.data ?? [];
+              // Client-side filtering
+              final all = response.data ?? [];
+              final orders = _selectedStatus == null
+                  ? all
+                  : all.where((o) => o.status == _selectedStatus).toList();
+
               if (orders.isEmpty) {
                 return NoDataWidget(
-                  title: 'Aucune commande',
-                  subTitle:
-                      'Vous n\'avez pas encore de commande de mise en relation',
+                  title: _selectedStatus == null
+                      ? 'Aucune commande'
+                      : 'Aucune commande avec ce statut',
+                  subTitle: _selectedStatus == null
+                      ? 'Vous n\'avez pas encore de commande de mise en relation'
+                      : null,
                   imageWidget: const EmptyStateWidget(),
                 );
               }
@@ -321,6 +336,26 @@ class _DemandeOuvrierTabState extends State<_DemandeOuvrierTab>
     _key = UniqueKey();
   }
 
+  void _showCancelDialog(MisonWorkerRequest request) {
+    showConfirmDialogCustom(
+      context,
+      title: 'Annuler la demande',
+      subTitle: 'Êtes-vous sûr de vouloir annuler cette demande d\'ouvrier ?',
+      positiveText: 'Oui, annuler',
+      negativeText: 'Non',
+      dialogType: DialogType.DELETE,
+      onAccept: (_) async {
+        try {
+          await cancelWorkerRequest(request.id ?? '');
+          toast('Demande annulée');
+          setState(() => _load());
+        } catch (e) {
+          toast('Erreur: ${e.toString()}');
+        }
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -354,7 +389,13 @@ class _DemandeOuvrierTabState extends State<_DemandeOuvrierTab>
           fadeInConfiguration:
               FadeInConfiguration(duration: 2.seconds),
           itemBuilder: (_, i) {
-            return _WorkerRequestCard(request: requests[i]);
+            final request = requests[i];
+            return _WorkerRequestCard(
+              request: request,
+              onCancel: (request.status == 'PENDING' || request.status == 'ASSIGNED')
+                  ? () => _showCancelDialog(request)
+                  : null,
+            );
           },
           onSwipeRefresh: () async {
             setState(() => _load());
@@ -372,8 +413,9 @@ class _DemandeOuvrierTabState extends State<_DemandeOuvrierTab>
 
 class _WorkerRequestCard extends StatelessWidget {
   final MisonWorkerRequest request;
+  final VoidCallback? onCancel;
 
-  const _WorkerRequestCard({required this.request});
+  const _WorkerRequestCard({required this.request, this.onCancel});
 
   String _formatDate(String? iso) {
     if (iso == null) return '—';
@@ -638,6 +680,25 @@ class _WorkerRequestCard extends StatelessWidget {
               ],
             ),
           ),
+
+          // Bouton annuler
+          if (onCancel != null) ...[
+            14.height,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: AppButton(
+                width: double.infinity,
+                color: const Color.fromARGB(255, 248, 36, 32),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shapeBorder: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                onTap: onCancel,
+                child: Text('Annuler',
+                    style: boldTextStyle(color: Colors.white, size: 15)),
+              ),
+            ),
+          ],
+          18.height,
         ],
       ),
     );

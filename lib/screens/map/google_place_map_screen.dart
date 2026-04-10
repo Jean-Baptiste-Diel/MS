@@ -1,10 +1,10 @@
-import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/component/nominatim_address_field.dart';
+import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_places_flutter/google_places_flutter.dart';
-import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-/// Simple screen exposing Google Place Autocomplete and returning {name, lat, lon}
+/// Écran de recherche d'adresse avec autocomplétion Nominatim (sans clé API)
+/// Retourne {name, lat, lon} ou {use_map: true} pour ouvrir la carte OSM
 class GooglePlaceMapScreen extends StatefulWidget {
   const GooglePlaceMapScreen({Key? key}) : super(key: key);
 
@@ -25,7 +25,7 @@ class _GooglePlaceMapScreenState extends State<GooglePlaceMapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Choisir une adresse'),
+        title: const Text('Choisir une adresse'),
         backgroundColor: context.primaryColor,
         leading: BackButton(color: Colors.white),
       ),
@@ -37,48 +37,35 @@ class _GooglePlaceMapScreenState extends State<GooglePlaceMapScreen> {
               decoration: BoxDecoration(
                 color: context.cardColor,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: borderColor),
               ),
-              child: GooglePlaceAutoCompleteTextField(
-                textEditingController: _controller,
-                googleAPIKey: GOOGLE_PLACES_API_KEY,
-                inputDecoration: InputDecoration(
+              child: NominatimAddressField(
+                controller: _controller,
+                hintText: 'Rechercher une adresse...',
+                countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+                decoration: InputDecoration(
                   hintText: 'Rechercher une adresse...',
+                  hintStyle: secondaryTextStyle(),
+                  prefixIcon: Icon(Icons.search, color: primaryColor),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
-                debounceTime: 300,
-                isLatLngRequired: true,
-                countries: const ["sn", "ml", "ci", "bf", "gn", "ne", "tg", "bj", "mr", "gm"],
-                getPlaceDetailWithLatLng: (prediction) {
-                  final desc = prediction.description ?? '';
-                  final lat = double.tryParse(prediction.lat ?? '') ;
-                  final lng = double.tryParse(prediction.lng ?? '');
-
-                  // Return result
-                  final result = {
-                    'name': desc,
-                    'lat': lat,
-                    'lon': lng,
-                  };
-                  Navigator.of(context).pop(result);
-                },
-                itemClick: (p) {
-                  HapticFeedback.selectionClick();
-                },
-                seperatedBuilder: Divider(height: 1, color: Colors.grey.withOpacity(0.2)),
-                itemBuilder: (context, index, prediction) {
-                  return ListTile(
-                    leading: Icon(Icons.place, color: context.primaryColor),
-                    title: Text(prediction.description ?? ''),
-                  );
+                onSelected: (suggestion) {
+                  Navigator.of(context).pop({
+                    'name': suggestion.shortName,
+                    'lat': suggestion.lat,
+                    'lon': suggestion.lon,
+                  });
                 },
               ),
             ),
             8.height,
-            Text('Ou sélectionnez directement sur la carte', style: secondaryTextStyle(size: 12)),
+            Text('Ou sélectionnez directement sur la carte',
+                style: secondaryTextStyle(size: 12)),
             12.height,
             AppButton(
-              child: Text('Ouvrir la carte', style: boldTextStyle(color: Colors.white)),
+              child: Text('Ouvrir la carte',
+                  style: boldTextStyle(color: Colors.white)),
               width: double.infinity,
               color: context.primaryColor,
               onTap: () => finish(context, {'use_map': true}),

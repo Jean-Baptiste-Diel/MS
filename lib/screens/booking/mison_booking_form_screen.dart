@@ -28,7 +28,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   final _formKey = GlobalKey<FormState>();
   
   // Controllers
-  final TextEditingController projectNameCont = TextEditingController();
   final TextEditingController descriptionCont = TextEditingController();
   final TextEditingController zoneCont = TextEditingController();
   
@@ -44,18 +43,8 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   // Payment method
   String selectedPaymentMethod = 'wave';
   
-  // FAQ items
-  final List<Map<String, String>> faqItems = [
-    {'q': 'Comment ça marche ?', 'a': 'Décrivez votre projet, choisissez une date et confirmez. Un artisan qualifié vous sera assigné.'},
-    {'q': 'Qui fournit les matériaux ?', 'a': 'Vous pouvez fournir les matériaux ou demander à l\'artisan de les inclure dans le devis.'},
-    {'q': 'Qui contacter en cas de retards ?', 'a': 'Contactez notre service client via l\'application ou par téléphone.'},
-    {'q': 'Que se passe-t-il en cas de retards ?', 'a': 'L\'artisan vous contactera pour vous informer et convenir d\'un nouveau créneau.'},
-    {'q': 'Qui contacter en cas de retards ?', 'a': 'Notre équipe support est disponible 24/7 dans l\'application.'},
-  ];
-
   @override
   void dispose() {
-    projectNameCont.dispose();
     descriptionCont.dispose();
     zoneCont.dispose();
     super.dispose();
@@ -110,7 +99,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
 
   String _getServiceDateISO() {
     if (isImmediateService) {
-      return DateTime.now().toIso8601String();
+      return DateTime.now().add(const Duration(minutes: 30)).toIso8601String();
     }
     
     if (selectedDate != null && selectedTime != null) {
@@ -142,7 +131,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
       // Navigate to confirmation screen
       MisonConfirmBookingScreen(
         service: widget.service,
-        projectName: projectNameCont.text,
         description: descriptionCont.text,
         zone: zoneCont.text,
         serviceDate: _getServiceDateISO(),
@@ -156,16 +144,16 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: appBarWidget(
-        '',
-        textColor: Colors.white,
-        color: Colors.white,
+        widget.service.name ?? '',
+        textColor: appStore.isDarkMode ? Colors.white : Colors.black,
+        color: context.scaffoldBackgroundColor,
         elevation: 0,
         systemUiOverlayStyle: SystemUiOverlayStyle(
           statusBarIconBrightness: appStore.isDarkMode ? Brightness.light : Brightness.dark,
-          statusBarColor: Colors.transparent,
+          statusBarColor: context.scaffoldBackgroundColor,
         ),
         showBack: true,
-        backWidget: BackWidget(iconColor: Colors.black),
+        backWidget: BackWidget(iconColor: context.iconColor),
       ),
       body: Form(
         key: _formKey,
@@ -190,10 +178,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
                 24.height,
               ],
               
-              // Project name
-              _buildProjectNameField(),
-              16.height,
-              
               // Zone selection
               _buildZoneDropdown(),
               16.height,
@@ -209,10 +193,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
               // Promise section
               _buildPromiseSection(),
               24.height,
-              
-              // FAQ
-              _buildFAQSection(),
-              32.height,
               
               // Continue button
               AppButton(
@@ -457,29 +437,27 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
     );
   }
 
-  Widget _buildProjectNameField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Nom du projet', style: boldTextStyle(size: 14)),
-        8.height,
-        AppTextField(
-          controller: projectNameCont,
-          textFieldType: TextFieldType.NAME,
-          decoration: inputDecoration(context).copyWith(
-            hintText: 'Donnez un nom à ce projet',
-            fillColor: context.cardColor,
-            filled: true,
-          ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Le nom du projet est requis';
-            }
-            return null;
-          },
-        ),
-      ],
-    );
+  Future<void> _openZonePicker() async {
+    final result = await const GooglePlaceMapScreen().launch(context);
+    if (result == null || result is! Map<String, dynamic>) return;
+
+    if (result['use_map'] == true) {
+      final mapResult = await const OsmMapScreen().launch(context);
+      if (mapResult != null && mapResult is Map<String, dynamic>) {
+        setState(() {
+          zoneCont.text = mapResult['name'] ?? '';
+          zoneLat = mapResult['lat'] as double?;
+          zoneLon = mapResult['lon'] as double?;
+        });
+      }
+      return;
+    }
+
+    setState(() {
+      zoneCont.text = result['name'] ?? '';
+      zoneLat = result['lat'] as double?;
+      zoneLon = result['lon'] as double?;
+    });
   }
 
   Widget _buildZoneDropdown() {
@@ -489,77 +467,54 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         Text('Zone d\'intervention', style: boldTextStyle(size: 14)),
         8.height,
         GestureDetector(
-          onTap: () async {
-            final result = await const GooglePlaceMapScreen().launch(context);
-
-            // If user chose to use the map from the GooglePlace screen, fallback to OsmMap
-            if (result != null && result is Map<String, dynamic> && result.containsKey('use_map') && result['use_map'] == true) {
-              final mapResult = await const OsmMapScreen().launch(context);
-              if (mapResult != null && mapResult is Map<String, dynamic>) {
-                setState(() {
-                  zoneCont.text = mapResult['name'] ?? '';
-                  zoneLat = mapResult['lat'] as double?;
-                  zoneLon = mapResult['lon'] as double?;
-                });
-                log('Zone sélectionnée (map): ${zoneCont.text}, Lat: $zoneLat, Lon: $zoneLon');
-              }
-              return;
-            }
-
-            if (result != null && result is Map<String, dynamic>) {
-              setState(() {
-                zoneCont.text = result['name'] ?? '';
-                zoneLat = result['lat'] as double?;
-                zoneLon = result['lon'] as double?;
-              });
-              log('Zone sélectionnée: ${zoneCont.text}, Lat: $zoneLat, Lon: $zoneLon');
-            }
-          },
+          onTap: _openZonePicker,
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: boxDecorationDefault(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            decoration: BoxDecoration(
               color: context.cardColor,
-              borderRadius: radius(8),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: borderColor),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.location_on_outlined,
-                  color: zoneCont.text.isEmpty ? grey : primaryColor,
                   size: 20,
+                  color: zoneCont.text.isNotEmpty ? primaryColor : grey,
                 ),
-                12.width,
+                10.width,
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        zoneCont.text.isEmpty ? 'Choisir votre adresse sur la carte' : zoneCont.text,
-                        style: zoneCont.text.isEmpty
-                            ? secondaryTextStyle()
-                            : primaryTextStyle(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (zoneLat != null && zoneLon != null)
-                        Text(
-                          '${zoneLat!.toStringAsFixed(4)}, ${zoneLon!.toStringAsFixed(4)}',
-                          style: secondaryTextStyle(size: 11, color: primaryColor),
-                        ),
-                    ],
+                  child: Text(
+                    zoneCont.text.isNotEmpty
+                        ? zoneCont.text
+                        : 'Rechercher une adresse...',
+                    style: zoneCont.text.isNotEmpty
+                        ? primaryTextStyle(size: 14)
+                        : secondaryTextStyle(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Icon(
-                  Icons.map_outlined,
-                  color: primaryColor,
-                  size: 20,
-                ),
+                Icon(Icons.search, size: 18, color: grey),
               ],
             ),
           ),
         ),
+        if (zoneLat != null && zoneLon != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 2),
+            child: Row(
+              children: [
+                Icon(Icons.gps_fixed_rounded, size: 12, color: Colors.green.shade600),
+                4.width,
+                Text(
+                  '${zoneLat!.toStringAsFixed(4)}, ${zoneLon!.toStringAsFixed(4)}',
+                  style: secondaryTextStyle(size: 11, color: Colors.green.shade600),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -595,14 +550,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         ),
         16.height,
         _PaymentMethodTile(
-          icon: Icons.account_balance_wallet,
-          label: 'Payer par solde',
-          iconColor: primaryColor,
-          isSelected: selectedPaymentMethod == 'solde',
-          onTap: () => setState(() => selectedPaymentMethod = 'solde'),
-        ),
-        8.height,
-        _PaymentMethodTile(
           assetPath: orange_money_logo,
           icon: Icons.account_balance_wallet,
           label: 'Payer par Orange Money',
@@ -618,15 +565,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
           iconColor: Colors.blue,
           isSelected: selectedPaymentMethod == 'wave',
           onTap: () => setState(() => selectedPaymentMethod = 'wave'),
-        ),
-        8.height,
-        _PaymentMethodTile(
-          assetPath: max_logo,
-          icon: Icons.payment,
-          label: 'Payer par mix',
-          iconColor: Colors.purple,
-          isSelected: selectedPaymentMethod == 'mix',
-          onTap: () => setState(() => selectedPaymentMethod = 'mix'),
         ),
       ],
     );
@@ -653,19 +591,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
     );
   }
 
-  Widget _buildFAQSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Questions fréquentes', style: boldTextStyle(size: 16)),
-        12.height,
-        ...faqItems.map((faq) => _FAQTile(
-          question: faq['q']!,
-          answer: faq['a']!,
-        )).toList(),
-      ],
-    );
-  }
 }
 
 /// Toggle button for date selection (Tout de suite / Plus tard)
@@ -796,52 +721,3 @@ class _PromiseItem extends StatelessWidget {
   }
 }
 
-/// FAQ expandable tile
-class _FAQTile extends StatefulWidget {
-  final String question;
-  final String answer;
-
-  const _FAQTile({required this.question, required this.answer});
-
-  @override
-  State<_FAQTile> createState() => _FAQTileState();
-}
-
-class _FAQTileState extends State<_FAQTile> {
-  bool isExpanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => setState(() => isExpanded = !isExpanded),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: boxDecorationDefault(
-          color: context.cardColor,
-          borderRadius: radius(8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(widget.question, style: primaryTextStyle(size: 14)),
-                ),
-                Icon(
-                  isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                  size: 20,
-                ),
-              ],
-            ),
-            if (isExpanded) ...[
-              8.height,
-              Text(widget.answer, style: secondaryTextStyle(size: 12)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}

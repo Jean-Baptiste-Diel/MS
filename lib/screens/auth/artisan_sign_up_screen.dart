@@ -11,15 +11,13 @@ import 'package:booking_system_flutter/services/location_service.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
-import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/component/nominatim_address_field.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:google_places_flutter/google_places_flutter.dart';
-import 'package:google_places_flutter/model/prediction.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -905,10 +903,13 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                   : 1,
             ),
           ),
-          child: GooglePlaceAutoCompleteTextField(
-            textEditingController: addressCont,
-            googleAPIKey: GOOGLE_PLACES_API_KEY,
-            inputDecoration: InputDecoration(
+          child: NominatimAddressField(
+            controller: addressCont,
+            hintText: isLoadingLocation
+                ? 'Récupération...'
+                : 'Rechercher une adresse...',
+            countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+            decoration: InputDecoration(
               hintText: isLoadingLocation
                   ? 'Récupération...'
                   : 'Rechercher une adresse...',
@@ -922,51 +923,13 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
-            debounceTime: 400,
-            countries: const ['sn','ml','ci','bf','gn','ne','tg','bj','mr','gm'],
-            isLatLngRequired: true,
-            getPlaceDetailWithLatLng: (Prediction p) {
+            onSelected: (suggestion) {
               setState(() {
-                addressCont.text = p.description ?? '';
-                addressLat = double.tryParse(p.lat ?? '');
-                addressLon = double.tryParse(p.lng ?? '');
+                addressLat = suggestion.lat;
+                addressLon = suggestion.lon;
                 fieldErrors.remove('address');
               });
             },
-            itemClick: (Prediction p) {
-              addressCont.text = p.description ?? '';
-              addressCont.selection = TextSelection.fromPosition(
-                  TextPosition(offset: p.description?.length ?? 0));
-            },
-            seperatedBuilder:
-                Divider(height: 1, color: Colors.grey.withValues(alpha: 0.15)),
-            containerHorizontalPadding: 0,
-            itemBuilder: (_, __, Prediction p) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Icon(Icons.place_outlined,
-                      size: 18, color: textSecondaryColorGlobal),
-                  12.width,
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p.structuredFormatting?.mainText ?? '',
-                            style: primaryTextStyle(size: 13),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        2.height,
-                        Text(p.structuredFormatting?.secondaryText ?? '',
-                            style: secondaryTextStyle(size: 11),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ),
         if (addressLat != null)

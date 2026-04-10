@@ -163,13 +163,8 @@ Future<BaseResponseModel> createArtisan(
   String lastName = request['last_name']?.toString() ?? '';
   String service =
       request['service']?.toString() ?? ''; // ✅ Changé: profession → service
-  String experienceYears = request['experience_years']?.toString() ?? '';
   String bio = request['bio']?.toString() ?? '';
   String address = request['address']?.toString() ?? '';
-
-  // Champs optionnels
-  String hourlyRate = request['hourly_rate']?.toString() ?? '';
-  String dailyRate = request['daily_rate']?.toString() ?? '';
 
   // Validation des champs requis
   if (email.isEmpty ||
@@ -178,7 +173,6 @@ Future<BaseResponseModel> createArtisan(
       firstName.isEmpty ||
       lastName.isEmpty ||
       service.isEmpty ||
-      experienceYears.isEmpty ||
       bio.isEmpty ||
       address.isEmpty) {
     completer.completeError(language.requiredText);
@@ -209,19 +203,9 @@ Future<BaseResponseModel> createArtisan(
   multiPartRequest.fields['phone'] = phone; // ✅ phone au lieu de contact_number
   multiPartRequest.fields['first_name'] = firstName;
   multiPartRequest.fields['last_name'] = lastName;
-  multiPartRequest.fields['service'] =
-      service; // ✅ service au lieu de profession
-  multiPartRequest.fields['experience_years'] = experienceYears;
+  multiPartRequest.fields['service'] = service;
   multiPartRequest.fields['bio'] = bio;
   multiPartRequest.fields['address'] = address;
-
-  // Ajouter les champs optionnels
-  if (hourlyRate.isNotEmpty) {
-    multiPartRequest.fields['hourly_rate'] = hourlyRate;
-  }
-  if (dailyRate.isNotEmpty) {
-    multiPartRequest.fields['daily_rate'] = dailyRate;
-  }
 
   // Ajouter photo de profil (profile_picture)
   if (profilePicture != null && profilePicture.existsSync()) {
@@ -1815,6 +1799,16 @@ Future<MisonOrderDetailResponse> getMisonOrderDetail(String orderId) async {
   }
 }
 
+/// POST /api/orders/{id}/cancel - Annuler une commande
+Future<void> cancelMisonOrder(String orderId) async {
+  try {
+    final response = await buildHttpResponse('orders/$orderId/cancel', method: HttpMethodType.POST);
+    await handleResponse(response);
+  } catch (e) {
+    throw e;
+  }
+}
+
 /// POST /api/orders - Créer une nouvelle commande
 /// @param request - Contient service (UUID), description, service_date (ISO8601), service_address
 Future<MisonOrderDetailResponse> createMisonOrder(MisonCreateOrderRequest request) async {
@@ -1870,6 +1864,16 @@ Future<MisonWorkerRequestResponse> getWorkerRequests() async {
   try {
     final response = await buildHttpResponse('worker-requests', method: HttpMethodType.GET);
     return MisonWorkerRequestResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/worker-requests/{id}/cancel - Annuler une demande d'ouvrier
+Future<void> cancelWorkerRequest(String requestId) async {
+  try {
+    final response = await buildHttpResponse('worker-requests/$requestId/cancel', method: HttpMethodType.POST);
+    await handleResponse(response);
   } catch (e) {
     throw e;
   }

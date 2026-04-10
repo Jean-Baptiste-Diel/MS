@@ -17,7 +17,6 @@ import 'package:url_launcher/url_launcher.dart';
 /// Affiche le récapitulatif et confirme la commande via l'API
 class MisonConfirmBookingScreen extends StatefulWidget {
   final MisonService service;
-  final String projectName;
   final String description;
   final String zone;
   final String serviceDate;
@@ -27,7 +26,6 @@ class MisonConfirmBookingScreen extends StatefulWidget {
   const MisonConfirmBookingScreen({
     Key? key,
     required this.service,
-    required this.projectName,
     required this.description,
     required this.zone,
     required this.serviceDate,
@@ -43,7 +41,6 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
   bool isLoading = false;
   
   // Frais de réservation (à ajuster selon le backend)
-  final num bookingFee = 100;
 
   String _formatDate(String isoDate) {
     try {
@@ -85,7 +82,7 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
       // Créer la commande via l'API
       final request = MisonCreateOrderRequest(
         service: widget.service.id ?? '',
-        description: '${widget.projectName}\n\n${widget.description}',
+        description: widget.description,
         serviceDate: widget.serviceDate,
         serviceAddress: widget.zone,
       );
@@ -145,7 +142,7 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               color: primaryColor,
               child: Text(
-                'Services',
+                'Confirmation',
                 style: boldTextStyle(color: Colors.white, size: 16),
                 textAlign: TextAlign.center,
               ),
@@ -171,12 +168,12 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
                   ),
                   16.height,
                   Text(
-                    'Confirm Booking',
+                    'Confirmer la commande',
                     style: boldTextStyle(size: 18),
                   ),
                   8.height,
                   Text(
-                    'Do You Want To Confirm The Booking ?',
+                    'Voulez-vous confirmer cette commande ?',
                     style: secondaryTextStyle(),
                     textAlign: TextAlign.center,
                   ),
@@ -188,7 +185,7 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Date', style: secondaryTextStyle(size: 12)),
+                            Text('Date', style: secondaryTextStyle(size: 12)),  // même en FR
                             4.height,
                             Text(
                               widget.isImmediate ? 'Maintenant' : _formatDate(widget.serviceDate),
@@ -206,7 +203,7 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text('Time', style: secondaryTextStyle(size: 12)),
+                            Text('Heure', style: secondaryTextStyle(size: 12)),
                             4.height,
                             Text(
                               widget.isImmediate ? '--:--' : _formatTime(widget.serviceDate),
@@ -220,15 +217,6 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
                   16.height,
                   const Divider(),
                   16.height,
-                  // Frais De Booking
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Frais De Booking', style: secondaryTextStyle()),
-                      Text('${bookingFee}F', style: boldTextStyle(color: primaryColor)),
-                    ],
-                  ),
-                  8.height,
                   // Frais De Déplacement (barré)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -269,7 +257,7 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
                             shape: RoundedRectangleBorder(borderRadius: radius(8)),
                             side: BorderSide(color: borderColor),
                           ),
-                          child: Text('Cancel', style: primaryTextStyle()),
+                          child: Text('Annuler', style: primaryTextStyle()),
                         ),
                       ),
                       12.width,
@@ -284,7 +272,7 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: radius(8)),
                           ),
-                          child: Text('Confirm', style: boldTextStyle(color: Colors.white)),
+                          child: Text('Valider', style: boldTextStyle(color: Colors.white)),
                         ),
                       ),
                     ],
@@ -369,13 +357,6 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
                         value: _getPaymentMethodLabel(),
                       ),
                       const Divider(height: 24),
-                      
-                      // Frais de réservation
-                      _SummaryRow(
-                        label: 'Frais De Booking',
-                        value: '${bookingFee}F',
-                        valueStyle: boldTextStyle(color: primaryColor),
-                      ),
                       16.height,
                       
                       // Prix minimum service (info)
@@ -464,21 +445,28 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
 class _SummaryRow extends StatelessWidget {
   final String label;
   final String value;
-  final TextStyle? valueStyle;
-
   const _SummaryRow({
     required this.label,
     required this.value,
-    this.valueStyle,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: secondaryTextStyle()),
-        Text(value, style: valueStyle ?? boldTextStyle(size: 14)),
+        8.width,
+        Flexible(
+          child: Text(
+            value,
+            style: boldTextStyle(size: 14),
+            textAlign: TextAlign.end,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+          ),
+        ),
       ],
     );
   }

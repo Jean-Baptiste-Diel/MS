@@ -1,5 +1,6 @@
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
+import 'package:booking_system_flutter/component/nominatim_address_field.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
@@ -296,21 +297,24 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
                 Text('Adresse d\'intervention *',
                     style: boldTextStyle(size: 14)),
                 8.height,
-                AppTextField(
-                  textFieldType: TextFieldType.MULTILINE,
-                  controller: _addressCont,
-                  minLines: 1,
-                  maxLines: 3,
-                  isValidationRequired: true,
-                  decoration: inputDecoration(
-                    context,
-                    hintText: 'Ex: Rue 10, Dakar, Sénégal',
+                Container(
+                  decoration: BoxDecoration(
+                    color: context.cardColor,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: borderColor),
                   ),
-                  validator: (val) {
-                    if (val == null || val.trim().isEmpty)
-                      return language.requiredText;
-                    return null;
-                  },
+                  child: NominatimAddressField(
+                    controller: _addressCont,
+                    hintText: 'Rechercher une adresse...',
+                    countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher une adresse...',
+                      hintStyle: secondaryTextStyle(),
+                      prefixIcon: Icon(Icons.location_on_outlined, color: primaryColor, size: 20),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    ),
+                  ),
                 ),
                 32.height,
 
