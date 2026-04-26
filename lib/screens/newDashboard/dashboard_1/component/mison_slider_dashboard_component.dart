@@ -16,8 +16,8 @@ import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
 
+import '../../../booking/mison_search_service_screen.dart';
 import '../../../notification/notification_screen.dart';
-import '../../../service/search_service_screen.dart';
 
 /// Slider qui affiche les images des services Mison
 /// Design identique à SliderDashboardComponent1
@@ -241,7 +241,7 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
             16.width,
             GestureDetector(
               onTap: () {
-                SearchServiceScreen().launch(context);
+                MisonSearchServiceScreen().launch(context);
               },
               child: Container(
                 padding: const EdgeInsets.all(16),

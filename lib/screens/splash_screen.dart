@@ -8,11 +8,11 @@ import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../component/loader_widget.dart';
 import '../network/rest_apis.dart';
-import 'walk_through_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   @override
@@ -31,7 +31,23 @@ class _SplashScreenState extends State<SplashScreen> {
     });
   }
 
+  Future<void> _fetchAndStorePosition() async {
+    try {
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 6)),
+      );
+      await setValue(LATITUDE, pos.latitude);
+      await setValue(LONGITUDE, pos.longitude);
+    } catch (_) {}
+  }
+
   Future<void> init() async {
+    _fetchAndStorePosition(); // fire-and-forget — ne bloque pas le splash
     await appStore.setLanguage(getStringAsync(SELECTED_LANGUAGE_CODE, defaultValue: DEFAULT_LANGUAGE));
 
     // Sync new configurations when app is open

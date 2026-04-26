@@ -148,8 +148,6 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
       ArtisanSignUpScreen().launch(context);
     } else if (selectedType == 'INDIVIDUAL') {
       SignUpScreen(initialAccountType: 'PARTICULIER').launch(context);
-    } else if (selectedType == 'ENTERPRISE') {
-      SignUpScreen(initialAccountType: 'ENTREPRISE').launch(context);
     }
   }
 
@@ -190,9 +188,6 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                     12.height,
                     _option(context, language.individual, ic_profile2,
                         'INDIVIDUAL'),
-                    12.height,
-                    _option(context, language.enterprise, ic_category,
-                        'ENTERPRISE'),
                   ],
                 ),
               ),

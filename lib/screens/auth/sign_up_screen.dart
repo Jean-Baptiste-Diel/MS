@@ -156,7 +156,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
-  bool get _hasMin12Chars => passwordCont.text.trim().length >= 12;
+  bool get _hasMin12Chars => passwordCont.text.trim().length >= 8;
 
   bool get _hasSpecialChar => RegExp(r'[!@#$%^&*(),.?":{}|<>_\-\\/\[\]`~+=;]')
       .hasMatch(passwordCont.text);
@@ -534,7 +534,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildPasswordRule(
-            label: '12 caractères minimum', isValid: _hasMin12Chars),
+            label: '8 caractères minimum', isValid: _hasMin12Chars),
         4.height,
         _buildPasswordRule(
             label: '1 caractère spécial', isValid: _hasSpecialChar),

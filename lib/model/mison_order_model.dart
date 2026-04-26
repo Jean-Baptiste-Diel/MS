@@ -45,6 +45,9 @@ class MisonOrder {
   String? serviceAddress;
   String? status; // PENDING, ASSIGNED, ACCEPTED, REJECTED, IN_PROGRESS, COMPLETED, CANCELLED
   String? paymentStatus; // PENDING, PAID, REFUNDED
+  String? latitude;
+  String? longitude;
+  double? distanceKm;
   int? clientRating;
   String? clientReview;
   String? createdAt;
@@ -60,6 +63,9 @@ class MisonOrder {
     this.serviceAddress,
     this.status,
     this.paymentStatus,
+    this.latitude,
+    this.longitude,
+    this.distanceKm,
     this.clientRating,
     this.clientReview,
     this.createdAt,
@@ -75,14 +81,19 @@ class MisonOrder {
       service: json['service'] != null
           ? MisonServiceInfo.fromJson(json['service'] as Map<String, dynamic>)
           : null,
-      artisan: json['artisan'] != null
-          ? MisonArtisanInfo.fromJson(json['artisan'] as Map<String, dynamic>)
+      artisan: (json['artisan'] ?? json['assigned_artisan']) != null
+          ? MisonArtisanInfo.fromJson((json['artisan'] ?? json['assigned_artisan']) as Map<String, dynamic>)
           : null,
       description: json['description']?.toString(),
       serviceDate: json['service_date']?.toString(),
       serviceAddress: json['service_address']?.toString(),
       status: json['status']?.toString(),
       paymentStatus: json['payment_status']?.toString(),
+      latitude: json['latitude']?.toString(),
+      longitude: json['longitude']?.toString(),
+      distanceKm: json['distance_km'] != null
+          ? double.tryParse(json['distance_km'].toString())
+          : null,
       clientRating: json['client_rating'] != null
           ? int.tryParse(json['client_rating'].toString())
           : null,
@@ -103,6 +114,9 @@ class MisonOrder {
       'service_address': serviceAddress,
       'status': status,
       'payment_status': paymentStatus,
+      'latitude': latitude,
+      'longitude': longitude,
+      'distance_km': distanceKm,
       'client_rating': clientRating,
       'client_review': clientReview,
       'created_at': createdAt,
@@ -250,12 +264,18 @@ class MisonCreateOrderRequest {
   String description;
   String serviceDate; // ISO8601
   String serviceAddress;
+  double? latitude;
+  double? longitude;
+  String? artisanId; // UUID — prestataire souhaité
 
   MisonCreateOrderRequest({
     required this.service,
     required this.description,
     required this.serviceDate,
     required this.serviceAddress,
+    this.latitude,
+    this.longitude,
+    this.artisanId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -263,6 +283,9 @@ class MisonCreateOrderRequest {
         'description': description,
         'service_date': serviceDate,
         'service_address': serviceAddress,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        if (artisanId != null) 'artisan_id': artisanId,
       };
 }
 
@@ -365,6 +388,25 @@ class MisonWorkerRequest {
   bool get isCompleted => status == 'COMPLETED';
   bool get isCancelled => status == 'CANCELLED';
   bool get hasArtisans => assignedArtisans != null && assignedArtisans!.isNotEmpty;
+}
+
+/// Response for GET /api/artisans
+class MisonArtisanListResponse {
+  String? message;
+  List<MisonArtisanInfo>? data;
+
+  MisonArtisanListResponse({this.message, this.data});
+
+  factory MisonArtisanListResponse.fromJson(Map<String, dynamic> json) {
+    return MisonArtisanListResponse(
+      message: json['message']?.toString(),
+      data: json['data'] != null
+          ? (json['data'] as List)
+              .map((e) => MisonArtisanInfo.fromJson(e as Map<String, dynamic>))
+              .toList()
+          : null,
+    );
+  }
 }
 
 /// Request model for rating an order

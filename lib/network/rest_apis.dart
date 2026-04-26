@@ -37,6 +37,7 @@ import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/model_keys.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -200,12 +201,17 @@ Future<BaseResponseModel> createArtisan(
   // Remplir les champs requis avec les bons noms
   multiPartRequest.fields['email'] = email;
   multiPartRequest.fields['password'] = password;
-  multiPartRequest.fields['phone'] = phone; // ✅ phone au lieu de contact_number
+  multiPartRequest.fields['phone'] = phone;
   multiPartRequest.fields['first_name'] = firstName;
   multiPartRequest.fields['last_name'] = lastName;
   multiPartRequest.fields['service'] = service;
   multiPartRequest.fields['bio'] = bio;
   multiPartRequest.fields['address'] = address;
+  multiPartRequest.fields['experience_years'] = (request['experience_years'] ?? 0).toString();
+
+  // Coordonnées GPS (optionnelles)
+  multiPartRequest.fields['latitude'] = request['latitude']?.toString() ?? '';
+  multiPartRequest.fields['longitude'] = request['longitude']?.toString() ?? '';
 
   // Ajouter photo de profil (profile_picture)
   if (profilePicture != null && profilePicture.existsSync()) {
@@ -352,6 +358,11 @@ Future<void> saveUserData(UserData data,
 
   /// Subscribe Firebase Topic
   subscribeToFirebaseTopic();
+
+  /// Envoyer le FCM token au backend Mison
+  FirebaseMessaging.instance.getToken().then((token) {
+    if (token != null) saveFcmTokenToBackend(token);
+  }).catchError((e) { log('FCM getToken error: $e'); return null; });
 
   // Sync new configurations for secret keys
   if (forceSyncAppConfigurations)
@@ -1765,11 +1776,24 @@ Future<int?> getServiceEarnPoints(
 // Base URL: https://api.mison.app/api/
 
 /// GET /api/services - Liste des services disponibles
-Future<MisonServicesResponse> getMisonServices() async {
+MisonServicesResponse? _cachedServices;
+DateTime? _servicesCachedAt;
+
+Future<MisonServicesResponse> getMisonServices({bool forceRefresh = false}) async {
+  final now = DateTime.now();
+  if (!forceRefresh &&
+      _cachedServices != null &&
+      _servicesCachedAt != null &&
+      now.difference(_servicesCachedAt!) < const Duration(minutes: 10)) {
+    return _cachedServices!;
+  }
   try {
     final response = await buildHttpResponse('services', method: HttpMethodType.GET);
-    return MisonServicesResponse.fromJson(await handleResponse(response));
+    _cachedServices = MisonServicesResponse.fromJson(await handleResponse(response));
+    _servicesCachedAt = now;
+    return _cachedServices!;
   } catch (e) {
+    if (_cachedServices != null) return _cachedServices!;
     throw e;
   }
 }
@@ -1809,6 +1833,20 @@ Future<void> cancelMisonOrder(String orderId) async {
   }
 }
 
+/// POST /api/auth/fcm-token - Enregistrer le token FCM de l'appareil
+/// Le backend utilise ce token pour envoyer des notifications push ciblées
+Future<void> saveFcmTokenToBackend(String fcmToken) async {
+  try {
+    await buildHttpResponse(
+      'auth/fcm-token',
+      method: HttpMethodType.POST,
+      request: {'fcm_token': fcmToken},
+    );
+  } catch (e) {
+    log('saveFcmToken error: $e');
+  }
+}
+
 /// POST /api/orders - Créer une nouvelle commande
 /// @param request - Contient service (UUID), description, service_date (ISO8601), service_address
 Future<MisonOrderDetailResponse> createMisonOrder(MisonCreateOrderRequest request) async {
@@ -1824,9 +1862,20 @@ Future<MisonOrderDetailResponse> createMisonOrder(MisonCreateOrderRequest reques
   }
 }
 
-/// POST /api/orders/{id}/artisan-decision - Décision de l'artisan sur une commande
-/// @param orderId - UUID de la commande
-/// @param decision - APPROVE ou REJECT
+/// POST /api/orders/{id}/accept - Artisan accepte une commande (PENDING → ACCEPTED)
+Future<MisonActionResponse> artisanAcceptOrder(String orderId) async {
+  try {
+    final response = await buildHttpResponse(
+      'orders/$orderId/accept',
+      method: HttpMethodType.POST,
+    );
+    return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/orders/{id}/artisan-decision - Décision de l'artisan sur une commande (REJECT)
 Future<MisonActionResponse> artisanDecisionMisonOrder(String orderId, String decision) async {
   try {
     final request = MisonArtisanDecisionRequest(decision: decision);
@@ -1917,6 +1966,16 @@ Future<MisonActionResponse> artisanCompleteOrder(String orderId) async {
       method: HttpMethodType.POST,
     );
     return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// GET /api/artisans - Liste des artisans disponibles
+Future<MisonArtisanListResponse> getMisonArtisans() async {
+  try {
+    final response = await buildHttpResponse('artisans', method: HttpMethodType.GET);
+    return MisonArtisanListResponse.fromJson(await handleResponse(response));
   } catch (e) {
     throw e;
   }

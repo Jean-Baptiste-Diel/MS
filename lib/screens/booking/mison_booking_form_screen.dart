@@ -7,7 +7,6 @@ import 'package:booking_system_flutter/screens/map/osm_map_screen.dart';
 import 'package:booking_system_flutter/screens/map/google_place_map_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
-import 'package:booking_system_flutter/utils/images.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -17,8 +16,9 @@ import 'package:intl/intl.dart';
 /// Correspond au design Figma "Onboarding_001"
 class MisonBookingFormScreen extends StatefulWidget {
   final MisonService service;
+  final String? artisanId;
 
-  const MisonBookingFormScreen({Key? key, required this.service}) : super(key: key);
+  const MisonBookingFormScreen({Key? key, required this.service, this.artisanId}) : super(key: key);
 
   @override
   State<MisonBookingFormScreen> createState() => _MisonBookingFormScreenState();
@@ -39,9 +39,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   bool isImmediateService = true; // "Tout de suite" vs "Plus tard"
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
-  
-  // Payment method
-  String selectedPaymentMethod = 'wave';
   
   @override
   void dispose() {
@@ -135,7 +132,10 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         zone: zoneCont.text,
         serviceDate: _getServiceDateISO(),
         isImmediate: isImmediateService,
-        paymentMethod: selectedPaymentMethod,
+        paymentMethod: '',
+        latitude: zoneLat,
+        longitude: zoneLon,
+        artisanId: widget.artisanId,
       ).launch(context);
     }
   }
@@ -184,10 +184,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
               
               // Description
               _buildDescriptionField(),
-              24.height,
-              
-              // Payment methods
-              _buildPaymentMethods(),
               24.height,
               
               // Promise section
@@ -540,36 +536,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
     );
   }
 
-  Widget _buildPaymentMethods() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Choisir un moyen de paiement pour voir les coordonnées de l\'ouvrier',
-          style: boldTextStyle(size: 14),
-        ),
-        16.height,
-        _PaymentMethodTile(
-          assetPath: orange_money_logo,
-          icon: Icons.account_balance_wallet,
-          label: 'Payer par Orange Money',
-          iconColor: Colors.orange,
-          isSelected: selectedPaymentMethod == 'orange_money',
-          onTap: () => setState(() => selectedPaymentMethod = 'orange_money'),
-        ),
-        8.height,
-        _PaymentMethodTile(
-          assetPath: wave_logo,
-          icon: Icons.waves,
-          label: 'Payer par Wave',
-          iconColor: Colors.blue,
-          isSelected: selectedPaymentMethod == 'wave',
-          onTap: () => setState(() => selectedPaymentMethod = 'wave'),
-        ),
-      ],
-    );
-  }
-
   Widget _buildPromiseSection() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -635,60 +601,6 @@ class _DateToggleButton extends StatelessWidget {
                 color: isSelected ? Colors.white : null,
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Payment method tile
-class _PaymentMethodTile extends StatelessWidget {
-  final IconData? icon;
-  final String? assetPath;
-  final String label;
-  final Color iconColor;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _PaymentMethodTile({
-    this.icon,
-    this.assetPath,
-    required this.label,
-    required this.iconColor,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: boxDecorationDefault(
-          color: context.cardColor,
-          borderRadius: radius(8),
-          border: Border.all(
-            color: isSelected ? primaryColor : borderColor,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            if (assetPath != null)
-              Image.asset(
-                assetPath!,
-                width: 24,
-                height: 24,
-                errorBuilder: (_, __, ___) => Icon(icon ?? Icons.payment, color: iconColor, size: 24),
-              )
-            else
-              Icon(icon ?? Icons.payment, color: iconColor, size: 24),
-            12.width,
-            Expanded(child: Text(label, style: primaryTextStyle())),
-            if (isSelected)
-              Icon(Icons.check_circle, color: primaryColor, size: 20),
           ],
         ),
       ),

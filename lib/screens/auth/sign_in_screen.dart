@@ -17,6 +17,7 @@ import 'package:nb_utils/nb_utils.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 
 import '../../network/rest_apis.dart';
+import '../../network/network_utils.dart';
 
 class SignInScreen extends StatefulWidget {
   final bool? isFromDashboard;
@@ -153,8 +154,63 @@ class _SignInScreenState extends State<SignInScreen> {
       onLoginSuccessRedirection();
     } catch (e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      final msg = e.toString();
+      if (msg == kPendingApprovalError) {
+        _showPendingApprovalSheet();
+      } else {
+        toast(msg);
+      }
     }
+  }
+
+  void _showPendingApprovalSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isDismissible: true,
+      builder: (_) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
+            ),
+            24.height,
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 36),
+            ),
+            20.height,
+            Text('Compte en attente', style: boldTextStyle(size: 18)),
+            12.height,
+            Text(
+              'Votre compte artisan est en cours de vérification par notre équipe.\n\nVous recevrez une notification dès que votre compte sera approuvé.',
+              style: secondaryTextStyle(size: 14),
+              textAlign: TextAlign.center,
+            ),
+            28.height,
+            AppButton(
+              width: double.infinity,
+              color: primaryColor,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              onTap: () => Navigator.pop(context),
+              child: Text('Compris', style: boldTextStyle(color: Colors.white, size: 15)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void googleSignIn() async {

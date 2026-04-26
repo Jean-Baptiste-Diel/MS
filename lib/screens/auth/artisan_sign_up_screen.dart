@@ -46,6 +46,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   TextEditingController passwordCont = TextEditingController();
   TextEditingController professionCont = TextEditingController();
   TextEditingController bioCont = TextEditingController();
+  TextEditingController experienceCont = TextEditingController();
   TextEditingController addressCont = TextEditingController();
 
   FocusNode fNameFocus = FocusNode();
@@ -103,6 +104,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     passwordCont.dispose();
     professionCont.dispose();
     bioCont.dispose();
+    experienceCont.dispose();
     addressCont.dispose();
     _pageController.dispose();
     _progressAnimationController.dispose();
@@ -279,12 +281,24 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['email'] = 'Email invalide';
           v = false;
         }
-        if (passwordCont.text.trim().isEmpty) {
+        if (passwordCont.text.isEmpty) {
           fieldErrors['password'] = 'Mot de passe requis';
           v = false;
-        } else if (passwordCont.text.length < 8) {
-          fieldErrors['password'] = language.passwordLengthShouldBe;
-          v = false;
+        } else {
+          final p = passwordCont.text;
+          if (p.length < 8) {
+            fieldErrors['password'] = '8 caractères minimum';
+            v = false;
+          } else if (!RegExp(r'[A-Z]').hasMatch(p)) {
+            fieldErrors['password'] = 'Au moins 1 majuscule requise';
+            v = false;
+          } else if (!RegExp(r'[0-9]').hasMatch(p)) {
+            fieldErrors['password'] = 'Au moins 1 chiffre requis';
+            v = false;
+          } else if (!RegExp(r'[!@#$%^&*()\-_=+\[\]{};:,.<>?/\\|~]').hasMatch(p)) {
+            fieldErrors['password'] = 'Au moins 1 caractère spécial requis (!@#...)';
+            v = false;
+          }
         }
         if (mobileCont.text.trim().isEmpty) {
           fieldErrors['mobile'] = 'Téléphone requis';
@@ -309,8 +323,18 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['bio'] = 'Minimum 20 caractères';
           v = false;
         }
+        if (experienceCont.text.trim().isEmpty) {
+          fieldErrors['experience'] = 'Années d\'expérience requises';
+          v = false;
+        } else if (int.tryParse(experienceCont.text.trim()) == null) {
+          fieldErrors['experience'] = 'Valeur invalide';
+          v = false;
+        }
         if (addressCont.text.trim().isEmpty) {
           fieldErrors['address'] = 'Adresse requise';
+          v = false;
+        } else if (addressLat == null || addressLon == null) {
+          fieldErrors['address'] = 'Veuillez sélectionner une adresse dans la liste';
           v = false;
         }
         setState(() {});
@@ -405,7 +429,10 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             ? selectedServiceId!.trim()
             : professionCont.text.trim(),
         'bio': bioCont.text.trim(),
+        'experience_years': int.parse(experienceCont.text.trim()),
         'address': addressCont.text.trim(),
+        'latitude': addressLat!.toString(),
+        'longitude': addressLon!.toString(),
       };
       File? profilePictureFile;
       if (!kIsWeb && profileImageFile != null) {
@@ -809,7 +836,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     style: primaryTextStyle(size: 14),
                     dropdownColor: context.cardColor,
                     iconEnabledColor: textSecondaryColorGlobal,
-                    hint: Text('Sélectionner un service',
+                    hint: Text('Sélectionnez un service',
                         style: secondaryTextStyle(size: 14)),
                     items: serviceOptions.map((s) {
                       return DropdownMenuItem<String>(
@@ -855,6 +882,23 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           onChanged: (_) => setState(() => fieldErrors.remove('bio')),
         ),
         _fieldError('bio'),
+        20.height,
+
+        // Années d'expérience
+        Text("Années d'expérience *", style: secondaryTextStyle(size: 13)),
+        8.height,
+        TextField(
+          controller: experienceCont,
+          keyboardType: TextInputType.number,
+          style: primaryTextStyle(),
+          decoration: _dec("ex: 3").copyWith(
+            labelText: null,
+            hintText: "Nombre d'années d'expérience",
+            hintStyle: secondaryTextStyle(size: 13),
+          ),
+          onChanged: (_) => setState(() => fieldErrors.remove('experience')),
+        ),
+        _fieldError('experience'),
         20.height,
 
         // Adresse
@@ -907,12 +951,12 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             controller: addressCont,
             hintText: isLoadingLocation
                 ? 'Récupération...'
-                : 'Rechercher une adresse...',
+                : 'Recherchez une adresse...',
             countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
             decoration: InputDecoration(
               hintText: isLoadingLocation
                   ? 'Récupération...'
-                  : 'Rechercher une adresse...',
+                  : 'Recherchez une adresse...',
               hintStyle: secondaryTextStyle(size: 13),
               prefixIcon: Icon(Icons.location_on_outlined,
                   color: addressCont.text.isNotEmpty

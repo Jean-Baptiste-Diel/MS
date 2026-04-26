@@ -22,6 +22,9 @@ class MisonConfirmBookingScreen extends StatefulWidget {
   final String serviceDate;
   final bool isImmediate;
   final String paymentMethod;
+  final double? latitude;
+  final double? longitude;
+  final String? artisanId;
 
   const MisonConfirmBookingScreen({
     Key? key,
@@ -31,6 +34,9 @@ class MisonConfirmBookingScreen extends StatefulWidget {
     required this.serviceDate,
     required this.isImmediate,
     required this.paymentMethod,
+    this.latitude,
+    this.longitude,
+    this.artisanId,
   }) : super(key: key);
 
   @override
@@ -85,6 +91,9 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
         description: widget.description,
         serviceDate: widget.serviceDate,
         serviceAddress: widget.zone,
+        latitude: widget.latitude,
+        longitude: widget.longitude,
+        artisanId: widget.artisanId,
       );
 
       final response = await createMisonOrder(request);
@@ -130,157 +139,173 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: radius(16)),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header orange
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              color: primaryColor,
-              child: Text(
-                'Confirmation',
-                style: boldTextStyle(color: Colors.white, size: 16),
-                textAlign: TextAlign.center,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: Container(
+          decoration: BoxDecoration(
+            color: context.cardColor,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header gradient
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [primaryColor, primaryColor.withOpacity(0.8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.receipt_long_rounded,
+                          color: Colors.white, size: 28),
+                    ),
+                    12.height,
+                    Text(
+                      'Confirmer la commande',
+                      style: boldTextStyle(color: Colors.white, size: 17),
+                    ),
+                    6.height,
+                    Text(
+                      widget.service.name ?? '',
+                      style: secondaryTextStyle(color: Colors.white.withOpacity(0.85), size: 13),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  // Checkmark icon
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.green,
-                      size: 40,
-                    ),
-                  ),
-                  16.height,
-                  Text(
-                    'Confirmer la commande',
-                    style: boldTextStyle(size: 18),
-                  ),
-                  8.height,
-                  Text(
-                    'Voulez-vous confirmer cette commande ?',
-                    style: secondaryTextStyle(),
-                    textAlign: TextAlign.center,
-                  ),
-                  24.height,
-                  // Date and Time row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Date', style: secondaryTextStyle(size: 12)),  // même en FR
-                            4.height,
-                            Text(
-                              widget.isImmediate ? 'Maintenant' : _formatDate(widget.serviceDate),
-                              style: boldTextStyle(size: 14),
-                            ),
-                          ],
+
+              // Body
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Date & Heure chips
+                    Row(
+                      children: [
+                        _InfoChip(
+                          icon: Icons.calendar_today_rounded,
+                          label: 'Date',
+                          value: widget.isImmediate
+                              ? 'Maintenant'
+                              : _formatDate(widget.serviceDate),
                         ),
-                      ),
-                      Container(
-                        width: 1,
-                        height: 40,
-                        color: borderColor,
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('Heure', style: secondaryTextStyle(size: 12)),
-                            4.height,
-                            Text(
-                              widget.isImmediate ? '--:--' : _formatTime(widget.serviceDate),
-                              style: boldTextStyle(size: 14),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  16.height,
-                  const Divider(),
-                  16.height,
-                  // Frais De Déplacement (barré)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Frais De Déplacement', style: secondaryTextStyle()),
-                      Text(
-                        '2 000F',
-                        style: secondaryTextStyle().copyWith(
-                          decoration: TextDecoration.lineThrough,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  16.height,
-                  // Note
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: boxDecorationDefault(
-                      color: primaryColor.withOpacity(0.1),
-                      borderRadius: radius(8),
-                    ),
-                    child: Text(
-                      'En cliquant sur "Valider", j\'atteste avoir lu et accepter les Conditions Générales d\'Utilisation.',
-                      style: secondaryTextStyle(size: 11),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  24.height,
-                  // Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: radius(8)),
-                            side: BorderSide(color: borderColor),
+                        12.width,
+                        if (!widget.isImmediate)
+                          _InfoChip(
+                            icon: Icons.access_time_rounded,
+                            label: 'Heure',
+                            value: _formatTime(widget.serviceDate),
                           ),
-                          child: Text('Annuler', style: primaryTextStyle()),
-                        ),
+                      ],
+                    ),
+                    16.height,
+
+                    // Zone
+                    _DetailRow(
+                      icon: Icons.location_on_rounded,
+                      label: 'Zone',
+                      value: widget.zone,
+                    ),
+                    12.height,
+
+                    // Paiement
+                    _DetailRow(
+                      icon: Icons.payment_rounded,
+                      label: 'Paiement',
+                      value: _getPaymentMethodLabel(),
+                    ),
+                    12.height,
+
+                    // Frais de déplacement
+                    _DetailRow(
+                      icon: Icons.directions_car_rounded,
+                      label: 'Frais de déplacement',
+                      value: '2 000 F',
+                    ),
+                    20.height,
+
+                    // CGU note
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.07),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: primaryColor.withOpacity(0.15)),
                       ),
-                      12.width,
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _confirmBooking();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: radius(8)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline_rounded,
+                              color: primaryColor, size: 16),
+                          8.width,
+                          Expanded(
+                            child: Text(
+                              'En validant, j\'accepte les Conditions Générales d\'Utilisation de Mison.',
+                              style: secondaryTextStyle(size: 11),
+                            ),
                           ),
-                          child: Text('Valider', style: boldTextStyle(color: Colors.white)),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    24.height,
+
+                    // Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              side: BorderSide(color: borderColor),
+                            ),
+                            child: Text('Annuler', style: primaryTextStyle(size: 14)),
+                          ),
+                        ),
+                        12.width,
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _confirmBooking();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Valider',
+                                style: boldTextStyle(color: Colors.white, size: 14)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -357,28 +382,6 @@ class _MisonConfirmBookingScreenState extends State<MisonConfirmBookingScreen> {
                         value: _getPaymentMethodLabel(),
                       ),
                       const Divider(height: 24),
-                      16.height,
-                      
-                      // Prix minimum service (info)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: boxDecorationDefault(
-                          color: secondaryPrimaryColor,
-                          borderRadius: radius(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, color: primaryColor, size: 20),
-                            12.width,
-                            Expanded(
-                              child: Text(
-                                'Le tarif final sera confirmé par l\'artisan. Prix minimum: ${widget.service.minPrice ?? '0'}F',
-                                style: secondaryTextStyle(size: 12),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -465,6 +468,72 @@ class _SummaryRow extends StatelessWidget {
             textAlign: TextAlign.end,
             overflow: TextOverflow.ellipsis,
             maxLines: 2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _InfoChip({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: context.scaffoldBackgroundColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: primaryColor),
+            10.width,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: secondaryTextStyle(size: 11)),
+                  2.height,
+                  Text(value, style: boldTextStyle(size: 13),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _DetailRow({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: primaryColor),
+        10.width,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: secondaryTextStyle(size: 11)),
+              2.height,
+              Text(value, style: boldTextStyle(size: 13), maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+            ],
           ),
         ),
       ],

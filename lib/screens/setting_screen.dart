@@ -3,13 +3,9 @@ import 'package:booking_system_flutter/component/theme_selection_dialog.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/language_screen.dart';
 import 'package:booking_system_flutter/utils/common.dart';
-import 'package:booking_system_flutter/utils/constant.dart';
-import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 class SettingScreen extends StatefulWidget {
@@ -52,32 +48,6 @@ class _SettingScreenState extends State<SettingScreen> {
               );
             },
           ),
-          if (appStore.isLoggedIn)
-            SettingItemWidget(
-              leading: ic_notification.iconImage(size: SETTING_ICON_SIZE),
-              title: language.pushNotification,
-              titleTextStyle: primaryTextStyle(),
-              trailing: Transform.scale(
-                scale: 0.7,
-                child: Observer(builder: (context) {
-                  return Switch.adaptive(
-                    value: FirebaseAuth.instance.currentUser != null && appStore.isSubscribedForPushNotification,
-                    onChanged: (v) async {
-                      if (appStore.isLoading) return;
-                      appStore.setLoading(true);
-
-                      if (v) {
-                        await subscribeToFirebaseTopic();
-                      } else {
-                        await unsubscribeFirebaseTopic(appStore.userId);
-                      }
-                      appStore.setLoading(false);
-                      setState(() {});
-                    },
-                  ).withHeight(18);
-                },),
-              ),
-            ),
         ],
       ),
     );

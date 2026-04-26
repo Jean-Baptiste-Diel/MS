@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/http.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:dio/dio.dart' as dio_package;
+
+const kPendingApprovalError = 'PENDING_APPROVAL';
 
 Map<String, String> buildHeaderTokens() {
   Map<String, String> header = {};
@@ -69,11 +72,14 @@ Future<Response> buildHttpResponse(
     );
 
     if (appStore.isLoggedIn && response.statusCode == 401 && !endPoint.startsWith('http')) {
-      return await reGenerateToken().then((value) async {
-        return await buildHttpResponse(endPoint, method: method, request: request, header: header);
-      }).catchError((e) {
-        throw e.toString();
-      });
+      try {
+        await reGenerateToken();
+      } catch (_) {
+        // Refresh échoué — on retente quand même avec le token actuel
+        // (401 transitoire côté backend)
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+      return await buildHttpResponse(endPoint, method: method, request: request, header: header);
     } else {
       return response;
     }
@@ -96,6 +102,16 @@ Future handleResponse(Response response, {HttpResponseType httpResponseType = Ht
       }
     }
   } else if (response.statusCode == 403) {
+    if (response.body.isJson()) {
+      final body = jsonDecode(response.body);
+      if (body is Map) {
+        final msg = (body['message'] ?? '').toString().toLowerCase();
+        if (msg.contains('approbation') || msg.contains('attente') || msg.contains('pending') || msg.contains('approval')) {
+          throw kPendingApprovalError;
+        }
+        if (body.containsKey('message')) throw parseHtmlString(body['message']);
+      }
+    }
     throw '${language.forbidden}';
   } else if (response.statusCode == 404) {
     throw '${language.pageNotFound}';
@@ -152,9 +168,33 @@ Future<Map<String, dynamic>> handleSadadResponse(Response res) async {
   }
 }
 
+// Mutex pour éviter les refreshs concurrents
+bool _isRefreshing = false;
+Completer<void>? _refreshCompleter;
+
 /// Refresh access token using refresh token
 /// POST /api/auth/refresh avec { refresh: refreshToken }
 Future<void> reGenerateToken() async {
+  // Si un refresh est déjà en cours, attendre sa completion
+  if (_isRefreshing) {
+    return _refreshCompleter!.future;
+  }
+  _isRefreshing = true;
+  _refreshCompleter = Completer<void>();
+
+  try {
+    await _doReGenerateToken();
+    _refreshCompleter!.complete();
+  } catch (e) {
+    _refreshCompleter!.completeError(e);
+    rethrow;
+  } finally {
+    _isRefreshing = false;
+    _refreshCompleter = null;
+  }
+}
+
+Future<void> _doReGenerateToken() async {
   log('Regenerating Token using refresh token');
   
   String refreshToken = appStore.refreshToken;

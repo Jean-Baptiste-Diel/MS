@@ -1,8 +1,7 @@
 import 'package:booking_system_flutter/main.dart';
-import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_category_component.dart';
+import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_artisan_list_component.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_service_list_component.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_slider_dashboard_component.dart';
-import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_new_request_dashboard_component.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -62,6 +61,9 @@ class _DashboardFragmentState extends State<DashboardFragment> {
             
               // Catégories (services Mison affichés comme catégories)
         /*    //   const MisonCategoryComponent(), */
+              // Liste des prestataires disponibles
+              const MisonArtisanListComponent(),
+
               // Liste des services avec détails (image, description, prix)
               const MisonServiceListComponent(),
               32.height,
