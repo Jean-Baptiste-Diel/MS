@@ -1981,4 +1981,77 @@ Future<MisonArtisanListResponse> getMisonArtisans() async {
   }
 }
 
+/// POST /api/orders/{id}/set-fee - Artisan définit les frais de déplacement (ACCEPTED → AWAITING_TRAVEL_PAYMENT)
+Future<MisonActionResponse> setTravelFee(String orderId, num amount) async {
+  try {
+    final response = await buildHttpResponse(
+      'orders/$orderId/set-fee',
+      method: HttpMethodType.POST,
+      request: {'travel_fee': amount},
+    );
+    return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/orders/{id}/set-realization-fee - Artisan définit les frais de réalisation (IN_PROGRESS → AWAITING_REALIZATION_PAYMENT)
+Future<MisonActionResponse> setRealizationFee(String orderId, num amount) async {
+  try {
+    final response = await buildHttpResponse(
+      'orders/$orderId/set-realization-fee',
+      method: HttpMethodType.POST,
+      request: {'realization_fee': amount},
+    );
+    return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/payments/checkout - Client initie un paiement Wave pour une commande
+Future<MisonActionResponse> paymentCheckout(String orderId) async {
+  try {
+    final response = await buildHttpResponse(
+      'payments/checkout',
+      method: HttpMethodType.POST,
+      request: {'order_id': orderId},
+    );
+    return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/payments/checkout/orange - Initie un paiement Orange Money
+Future<MisonActionResponse> paymentCheckoutOrange(String orderId) async {
+  try {
+    final response = await buildHttpResponse(
+      'payments/checkout/orange',
+      method: HttpMethodType.POST,
+      request: {
+        'order_id': orderId,
+        'success_url': 'mison://payment/success',
+        'cancel_url': 'mison://payment/error',
+      },
+    );
+    return MisonActionResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
+/// POST /api/orders/{id}/call-token - Initie ou rejoint un appel VoIP Agora
+Future<MisonCallTokenResponse> getCallToken(String orderId) async {
+  try {
+    final response = await buildHttpResponse(
+      'orders/$orderId/call-token',
+      method: HttpMethodType.POST,
+    );
+    return MisonCallTokenResponse.fromJson(await handleResponse(response));
+  } catch (e) {
+    throw e;
+  }
+}
+
 //endregion Mison API

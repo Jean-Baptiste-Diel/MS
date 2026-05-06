@@ -114,12 +114,14 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   late Future<MisonOrderResponse> _future;
   UniqueKey _key = UniqueKey();
   bool _isAvailable = true;
+  Position? _artisanPosition;
 
   @override
   void initState() {
     super.initState();
     _load();
     _restoreBadge();
+    _fetchPosition();
     LiveStream().on(LIVESTREAM_ARTISAN_HOME_REFRESH, (_) {
       if (mounted) setState(() => _load());
     });
@@ -129,6 +131,46 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   void dispose() {
     LiveStream().dispose(LIVESTREAM_ARTISAN_HOME_REFRESH);
     super.dispose();
+  }
+
+  Future<void> _fetchPosition() async {
+    try {
+      Position? pos = await Geolocator.getLastKnownPosition();
+      if (pos == null) {
+        final perm = await Geolocator.checkPermission();
+        if (perm != LocationPermission.denied && perm != LocationPermission.deniedForever) {
+          pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 5)),
+          );
+        }
+      }
+      if (pos == null) {
+        final lat = getDoubleAsync(LATITUDE);
+        final lon = getDoubleAsync(LONGITUDE);
+        if (lat != 0.0 && lon != 0.0) {
+          pos = Position(
+            latitude: lat, longitude: lon,
+            timestamp: DateTime.now(),
+            accuracy: 0, altitude: 0, altitudeAccuracy: 0,
+            heading: 0, headingAccuracy: 0, speed: 0, speedAccuracy: 0,
+          );
+        }
+      }
+      if (pos != null && mounted) setState(() => _artisanPosition = pos);
+    } catch (_) {
+      try {
+        final lat = getDoubleAsync(LATITUDE);
+        final lon = getDoubleAsync(LONGITUDE);
+        if (lat != 0.0 && lon != 0.0 && mounted) {
+          setState(() => _artisanPosition = Position(
+            latitude: lat, longitude: lon,
+            timestamp: DateTime.now(),
+            accuracy: 0, altitude: 0, altitudeAccuracy: 0,
+            heading: 0, headingAccuracy: 0, speed: 0, speedAccuracy: 0,
+          ));
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> _restoreBadge() async {
@@ -301,7 +343,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                 ),
                 onSuccess: (response) {
                   final orders = response.data ?? [];
-                  return _DashboardBody(orders: orders);
+                  return _DashboardBody(orders: orders, artisanPosition: _artisanPosition);
                 },
               ),
             ),
@@ -314,7 +356,18 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
 
 class _DashboardBody extends StatelessWidget {
   final List<MisonOrder> orders;
-  const _DashboardBody({required this.orders});
+  final Position? artisanPosition;
+  const _DashboardBody({required this.orders, this.artisanPosition});
+
+  double? _distanceTo(MisonOrder order) {
+    if (artisanPosition == null) return null;
+    final lat = double.tryParse(order.latitude ?? '');
+    final lon = double.tryParse(order.longitude ?? '');
+    if (lat == null || lon == null) return null;
+    return Geolocator.distanceBetween(
+          artisanPosition!.latitude, artisanPosition!.longitude, lat, lon) /
+        1000;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +377,7 @@ class _DashboardBody extends StatelessWidget {
     final missions  = orders.where((o) => o.artisan != null).toList();
 
     final total     = missions.length;
-    final enCours   = missions.where((o) => o.isAccepted || o.isInProgress).length;
+    final enCours   = missions.where((o) => o.isAccepted || o.isAwaitingTravelPayment || o.isInProgress || o.isAwaitingRealizationPayment).length;
     final terminees = missions.where((o) => o.isCompleted).length;
     final refusees  = missions.where((o) => o.isRejected).length;
 
@@ -381,7 +434,10 @@ class _DashboardBody extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             itemCount: urgentes.length,
             separatorBuilder: (_, __) => 10.height,
-            itemBuilder: (ctx, i) => _UrgentOrderTile(order: urgentes[i]),
+            itemBuilder: (ctx, i) => _UrgentOrderTile(
+              order: urgentes[i],
+              distanceKm: _distanceTo(urgentes[i]),
+            ),
           ),
         ],
 
@@ -426,7 +482,8 @@ class _SectionTitle extends StatelessWidget {
 
 class _UrgentOrderTile extends StatelessWidget {
   final MisonOrder order;
-  const _UrgentOrderTile({required this.order});
+  final double? distanceKm;
+  const _UrgentOrderTile({required this.order, this.distanceKm});
 
   String _formatDate(String? iso) {
     if (iso == null) return '';
@@ -437,7 +494,7 @@ class _UrgentOrderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => MisonOrderDetailScreen(orderId: order.id ?? '').launch(context),
+      onTap: () => MisonOrderDetailScreen(orderId: order.id ?? '', distanceKm: distanceKm).launch(context),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -558,23 +615,27 @@ class _RecentOrderTile extends StatelessWidget {
 
   Color _statusColor(String? s) {
     switch (s) {
-      case 'ASSIGNED':   return assigned_booking;
-      case 'ACCEPTED':   return accept;
-      case 'IN_PROGRESS':return in_progress;
-      case 'COMPLETED':  return completed;
-      case 'REJECTED':   return rejected;
-      default:           return defaultStatus;
+      case 'ASSIGNED':                     return assigned_booking;
+      case 'ACCEPTED':                     return accept;
+      case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
+      case 'IN_PROGRESS':                  return in_progress;
+      case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
+      case 'COMPLETED':                    return completed;
+      case 'REJECTED':                     return rejected;
+      default:                             return defaultStatus;
     }
   }
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'ASSIGNED':    return 'Assignée';
-      case 'ACCEPTED':    return 'Acceptée';
-      case 'IN_PROGRESS': return 'En cours';
-      case 'COMPLETED':   return 'Terminée';
-      case 'REJECTED':    return 'Refusée';
-      default:            return s ?? '';
+      case 'ASSIGNED':                     return 'Assignée';
+      case 'ACCEPTED':                     return 'Acceptée';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'Frais déplacement';
+      case 'IN_PROGRESS':                  return 'En cours';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'Frais réalisation';
+      case 'COMPLETED':                    return 'Terminée';
+      case 'REJECTED':                     return 'Refusée';
+      default:                             return s ?? '';
     }
   }
 
@@ -788,6 +849,28 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
     );
   }
 
+  void _showFeeModal({
+    required String title,
+    required Future<MisonActionResponse> Function(num) apiCall,
+  }) {
+    final ctrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _FeeBottomSheet(
+        title: title,
+        ctrl: ctrl,
+        onConfirm: () {
+          final amount = num.tryParse(ctrl.text.trim());
+          if (amount == null || amount <= 0) { toast('Montant invalide'); return; }
+          Navigator.pop(context);
+          _doAction(() => apiCall(amount));
+        },
+      ),
+    );
+  }
+
   Widget _buildCard(MisonOrder order) {
     final distanceKm = (order.isPending && order.artisan == null) ? _distanceTo(order) : null;
     return GestureDetector(
@@ -802,18 +885,16 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
                   action: () => artisanAcceptOrder(order.id!),
                 )
             : null,
-        onStart: order.isAccepted
-            ? () => _confirmAction(
-                  title: 'Démarrer la commande',
-                  subtitle: 'Confirmez-vous le démarrage de cette commande ?',
-                  action: () => artisanStartOrder(order.id!),
+        onSetTravelFee: order.isAccepted
+            ? () => _showFeeModal(
+                  title: 'Frais de déplacement',
+                  apiCall: (amount) => setTravelFee(order.id!, amount),
                 )
             : null,
-        onComplete: order.isInProgress
-            ? () => _confirmAction(
-                  title: 'Terminer la commande',
-                  subtitle: 'Confirmez-vous la fin de cette commande ?',
-                  action: () => artisanCompleteOrder(order.id!),
+        onSetRealizationFee: order.isInProgress
+            ? () => _showFeeModal(
+                  title: 'Frais de réalisation',
+                  apiCall: (amount) => setRealizationFee(order.id!, amount),
                 )
             : null,
       ),
@@ -959,15 +1040,15 @@ class _ArtisanOrderCard extends StatelessWidget {
   final MisonOrder order;
   final double? distanceKm;
   final VoidCallback? onApprove;
-  final VoidCallback? onStart;
-  final VoidCallback? onComplete;
+  final VoidCallback? onSetTravelFee;
+  final VoidCallback? onSetRealizationFee;
 
   const _ArtisanOrderCard({
     required this.order,
     this.distanceKm,
     this.onApprove,
-    this.onStart,
-    this.onComplete,
+    this.onSetTravelFee,
+    this.onSetRealizationFee,
   });
 
   String _formatDate(String? iso) {
@@ -984,23 +1065,27 @@ class _ArtisanOrderCard extends StatelessWidget {
 
   Color _statusColor(String? s) {
     switch (s) {
-      case 'ASSIGNED':    return assigned_booking;
-      case 'ACCEPTED':    return accept;
-      case 'IN_PROGRESS': return in_progress;
-      case 'COMPLETED':   return completed;
-      case 'REJECTED':    return rejected;
-      default:            return defaultStatus;
+      case 'ASSIGNED':                     return assigned_booking;
+      case 'ACCEPTED':                     return accept;
+      case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
+      case 'IN_PROGRESS':                  return in_progress;
+      case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
+      case 'COMPLETED':                    return completed;
+      case 'REJECTED':                     return rejected;
+      default:                             return defaultStatus;
     }
   }
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'ASSIGNED':    return 'Assignée';
-      case 'ACCEPTED':    return 'Acceptée';
-      case 'IN_PROGRESS': return 'En cours';
-      case 'COMPLETED':   return 'Terminée';
-      case 'REJECTED':    return 'Refusée';
-      default:            return s ?? '';
+      case 'ASSIGNED':                     return 'Assignée';
+      case 'ACCEPTED':                     return 'Acceptée';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'Frais déplacement';
+      case 'IN_PROGRESS':                  return 'En cours';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'Frais réalisation';
+      case 'COMPLETED':                    return 'Terminée';
+      case 'REJECTED':                     return 'Refusée';
+      default:                             return s ?? '';
     }
   }
 
@@ -1137,7 +1222,7 @@ class _ArtisanOrderCard extends StatelessWidget {
             ),
 
           // Action buttons
-          if (onApprove != null || onStart != null || onComplete != null)
+          if (onApprove != null || onSetTravelFee != null || onSetRealizationFee != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               child: Column(
@@ -1151,29 +1236,106 @@ class _ArtisanOrderCard extends StatelessWidget {
                       onTap: onApprove,
                       child: Text('Accepter', style: boldTextStyle(color: Colors.white, size: 14)),
                     ),
-                  if (onStart != null)
+                  if (onSetTravelFee != null)
                     AppButton(
                       width: double.infinity,
-                      color: primaryColor,
+                      color: const Color(0xFFC99700),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      onTap: onStart,
-                      child: Text('Démarrer', style: boldTextStyle(color: Colors.white, size: 15)),
+                      onTap: onSetTravelFee,
+                      child: Text('Définir frais de déplacement', style: boldTextStyle(color: Colors.white, size: 14)),
                     ),
-                  if (onComplete != null)
+                  if (onSetRealizationFee != null)
                     AppButton(
                       width: double.infinity,
                       color: completed,
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      onTap: onComplete,
-                      child: Text('Terminer', style: boldTextStyle(color: Colors.white, size: 15)),
+                      onTap: onSetRealizationFee,
+                      child: Text('Définir frais de réalisation', style: boldTextStyle(color: Colors.white, size: 14)),
                     ),
                 ],
               ),
             )
           else
             16.height,
+        ],
+      ),
+    );
+  }
+}
+
+class _FeeBottomSheet extends StatelessWidget {
+  final String title;
+  final TextEditingController ctrl;
+  final VoidCallback onConfirm;
+
+  const _FeeBottomSheet({
+    required this.title,
+    required this.ctrl,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          20.height,
+          Text(title, style: boldTextStyle(size: 18)),
+          20.height,
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            style: boldTextStyle(size: 16),
+            decoration: InputDecoration(
+              hintText: 'Montant en FCFA',
+              hintStyle: secondaryTextStyle(size: 14),
+              suffixText: 'FCFA',
+              suffixStyle: secondaryTextStyle(size: 13),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: primaryColor, width: 1.5),
+              ),
+            ),
+          ),
+          20.height,
+          AppButton(
+            text: 'Confirmer',
+            color: primaryColor,
+            textColor: Colors.white,
+            width: double.infinity,
+            height: 50,
+            shapeBorder: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            onTap: onConfirm,
+          ),
         ],
       ),
     );

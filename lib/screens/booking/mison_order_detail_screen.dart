@@ -11,7 +11,10 @@ import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../component/empty_error_state_widget.dart';
+import '../call/mison_call_screen.dart';
 
 class MisonOrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -29,6 +32,18 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
   void initState() {
     super.initState();
     init();
+    LiveStream().on(LIVESTREAM_ORDER_PAYMENT_UPDATE, (orderId) {
+      if (orderId.toString() == widget.orderId) {
+        init();
+        if (mounted) setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    LiveStream().dispose(LIVESTREAM_ORDER_PAYMENT_UPDATE);
+    super.dispose();
   }
 
   void init() => future = getMisonOrderDetail(widget.orderId);
@@ -49,40 +64,46 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
 
   Color _statusColor(String? s) {
     switch (s) {
-      case 'PENDING':     return pending;
-      case 'ASSIGNED':    return assigned_booking;
-      case 'ACCEPTED':    return accept;
-      case 'IN_PROGRESS': return in_progress;
-      case 'COMPLETED':   return completed;
-      case 'CANCELLED':   return cancelled;
-      case 'REJECTED':    return rejected;
-      default:            return defaultStatus;
+      case 'PENDING':                      return pending;
+      case 'ASSIGNED':                     return assigned_booking;
+      case 'ACCEPTED':                     return accept;
+      case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
+      case 'IN_PROGRESS':                  return in_progress;
+      case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
+      case 'COMPLETED':                    return completed;
+      case 'CANCELLED':                    return cancelled;
+      case 'REJECTED':                     return rejected;
+      default:                             return defaultStatus;
     }
   }
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':     return 'En attente';
-      case 'ASSIGNED':    return 'Artisan assigné';
-      case 'ACCEPTED':    return 'Accepté';
-      case 'IN_PROGRESS': return 'En cours';
-      case 'COMPLETED':   return 'Terminé';
-      case 'CANCELLED':   return 'Annulé';
-      case 'REJECTED':    return 'Refusé';
-      default:            return s ?? 'Inconnu';
+      case 'PENDING':                      return 'En attente';
+      case 'ASSIGNED':                     return 'Artisan assigné';
+      case 'ACCEPTED':                     return 'Accepté';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'Frais de déplacement';
+      case 'IN_PROGRESS':                  return 'En cours';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'Frais de réalisation';
+      case 'COMPLETED':                    return 'Terminé';
+      case 'CANCELLED':                    return 'Annulé';
+      case 'REJECTED':                     return 'Refusé';
+      default:                             return s ?? 'Inconnu';
     }
   }
 
   IconData _statusIcon(String? s) {
     switch (s) {
-      case 'PENDING':     return Icons.hourglass_empty_rounded;
-      case 'ASSIGNED':    return Icons.person_add_rounded;
-      case 'ACCEPTED':    return Icons.check_circle_rounded;
-      case 'IN_PROGRESS': return Icons.construction_rounded;
-      case 'COMPLETED':   return Icons.verified_rounded;
-      case 'CANCELLED':   return Icons.cancel_rounded;
-      case 'REJECTED':    return Icons.block_rounded;
-      default:            return Icons.info_rounded;
+      case 'PENDING':                      return Icons.hourglass_empty_rounded;
+      case 'ASSIGNED':                     return Icons.person_add_rounded;
+      case 'ACCEPTED':                     return Icons.check_circle_rounded;
+      case 'AWAITING_TRAVEL_PAYMENT':      return Icons.directions_car_rounded;
+      case 'IN_PROGRESS':                  return Icons.construction_rounded;
+      case 'AWAITING_REALIZATION_PAYMENT': return Icons.payments_rounded;
+      case 'COMPLETED':                    return Icons.verified_rounded;
+      case 'CANCELLED':                    return Icons.cancel_rounded;
+      case 'REJECTED':                     return Icons.block_rounded;
+      default:                             return Icons.info_rounded;
     }
   }
 
@@ -98,24 +119,32 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
     finally { appStore.setLoading(false); }
   }
 
-  Future<void> _startOrder(String id) async {
-    appStore.setLoading(true);
-    try {
-      final res = await artisanStartOrder(id);
-      toast(res.message ?? 'Mission démarrée');
-      init(); setState(() {});
-    } catch (e) { toast(e.toString()); }
-    finally { appStore.setLoading(false); }
-  }
-
-  Future<void> _completeOrder(String id) async {
-    appStore.setLoading(true);
-    try {
-      final res = await artisanCompleteOrder(id);
-      toast(res.message ?? 'Mission terminée');
-      init(); setState(() {});
-    } catch (e) { toast(e.toString()); }
-    finally { appStore.setLoading(false); }
+  void _showSetFeeModal({
+    required String title,
+    required Future<MisonActionResponse> Function(num) apiCall,
+  }) {
+    final ctrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _FeeBottomSheet(
+        title: title,
+        ctrl: ctrl,
+        onConfirm: () async {
+          final amount = num.tryParse(ctrl.text.trim());
+          if (amount == null || amount <= 0) { toast('Veuillez saisir un montant valide'); return; }
+          Navigator.pop(context);
+          appStore.setLoading(true);
+          try {
+            final res = await apiCall(amount);
+            toast(res.message ?? 'Succès');
+            init(); setState(() {});
+          } catch (e) { toast(e.toString()); }
+          finally { appStore.setLoading(false); }
+        },
+      ),
+    );
   }
 
   Future<void> _cancelOrder(String id) async {
@@ -195,60 +224,87 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
     );
   }
 
-  void _showPaymentModal() {
-    final ctrl = TextEditingController();
-    showDialog(
+  void _showPaymentModal(MisonOrder order) {
+    final isTravel = order.isAwaitingTravelPayment;
+    final title = isTravel ? 'Frais de déplacement' : 'Frais de réalisation';
+    final desc  = isTravel
+        ? 'Ces frais couvrent le déplacement de l\'artisan jusqu\'à votre lieu d\'intervention.'
+        : 'Ces frais correspondent à la réalisation de la prestation par l\'artisan.';
+    final feeRaw = order.currentFeeAmount;
+    final feeNum = num.tryParse(feeRaw ?? '');
+    final feeLabel = feeNum != null
+        ? '${feeNum.toStringAsFixed(0)} FCFA'
+        : (feeRaw != null ? '$feeRaw FCFA' : 'Montant non défini');
+
+    showModalBottomSheet(
       context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: radius(16)),
-          title: Text('Frais de déplacement', style: boldTextStyle()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded, color: primaryColor, size: 18),
-                    8.width,
-                    Expanded(child: Text('Ces frais couvrent le déplacement de l\'artisan jusqu\'à votre lieu d\'intervention.', style: secondaryTextStyle(size: 12))),
-                  ],
-                ),
-              ),
-              16.height,
-              AppTextField(
-                controller: ctrl,
-                textFieldType: TextFieldType.PHONE,
-                decoration: inputDecoration(context).copyWith(
-                  hintText: 'Montant (FCFA)',
-                  filled: true, fillColor: context.cardColor,
-                  prefixIcon: const Icon(Icons.payments_outlined),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: primaryTextStyle(color: Colors.grey))),
-            AppButton(
-              text: 'Payer',
-              color: const Color(0xFFC99700),
-              textColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              onTap: () {
-                if (ctrl.text.trim().isEmpty) { toast('Veuillez saisir un montant'); return; }
-                Navigator.pop(ctx);
-                toast('Paiement de ${ctrl.text.trim()} FCFA en cours…');
-              },
-            ),
-          ],
-        ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PaymentBottomSheet(
+        title: title,
+        desc: desc,
+        feeLabel: feeLabel,
+        onPayWave: () async {
+          Navigator.pop(context);
+          appStore.setLoading(true);
+          try {
+            final res = await paymentCheckout(order.id ?? '');
+            if (res.waveLaunchUrl != null && res.waveLaunchUrl!.isNotEmpty) {
+              await launchUrl(Uri.parse(res.waveLaunchUrl!), mode: LaunchMode.externalApplication);
+            } else {
+              toast(res.message ?? 'Paiement Wave initié');
+            }
+            init(); setState(() {});
+          } catch (e) { toast(e.toString()); }
+          finally { appStore.setLoading(false); }
+        },
+        onPayOrange: () async {
+          Navigator.pop(context);
+          appStore.setLoading(true);
+          try {
+            final res = await paymentCheckoutOrange(order.id ?? '');
+            if (res.deeplink != null && res.deeplink!.isNotEmpty) {
+              await launchUrl(Uri.parse(res.deeplink!), mode: LaunchMode.externalApplication);
+            } else {
+              toast(res.message ?? 'Paiement Orange Money initié');
+            }
+            init(); setState(() {});
+          } catch (e) { toast(e.toString()); }
+          finally { appStore.setLoading(false); }
+        },
       ),
     );
+  }
+
+  Future<void> _startCall(MisonOrder order) async {
+    appStore.setLoading(true);
+    try {
+      final tokenData = await getCallToken(order.id!);
+      appStore.setLoading(false);
+      if (!mounted) return;
+      final otherName = appStore.userType == USER_TYPE_PROVIDER
+          ? order.client != null
+              ? '${order.client!.firstName ?? ''} ${order.client!.lastName ?? ''}'.trim()
+              : 'Client'
+          : order.artisan?.fullName ?? 'Artisan';
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MisonCallScreen(
+            orderId: order.id!,
+            otherPartyName: otherName.isNotEmpty ? otherName : 'Correspondant',
+            appId: tokenData.appId ?? '',
+            channel: tokenData.channel ?? '',
+            token: tokenData.token ?? '',
+            uid: tokenData.uid ?? 1,
+          ),
+        ),
+      );
+    } catch (e, st) {
+      appStore.setLoading(false);
+      log('_startCall error: $e\n$st');
+      toast('Impossible d\'initier l\'appel : $e');
+    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────────
@@ -284,11 +340,18 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
                 statusLabel: _statusLabel,
                 statusIcon: _statusIcon,
                 onAccept: () => _confirm(title: 'Accepter la commande', subtitle: 'Confirmez-vous l\'acceptation ?', onConfirm: () => _acceptOrder(order.id!)),
-                onStart:  () => _confirm(title: 'Démarrer la mission',  subtitle: 'Confirmez-vous le démarrage ?',  onConfirm: () => _startOrder(order.id!)),
-                onComplete: () => _confirm(title: 'Terminer la mission', subtitle: 'Confirmez-vous la fin ?', onConfirm: () => _completeOrder(order.id!)),
+                onSetTravelFee: () => _showSetFeeModal(
+                  title: 'Frais de déplacement',
+                  apiCall: (amount) => setTravelFee(order.id!, amount),
+                ),
+                onSetRealizationFee: () => _showSetFeeModal(
+                  title: 'Frais de réalisation',
+                  apiCall: (amount) => setRealizationFee(order.id!, amount),
+                ),
                 onCancel: () => _confirm(title: 'Annuler la commande', subtitle: 'Êtes-vous sûr de vouloir annuler ?', type: DialogType.DELETE, onConfirm: () => _cancelOrder(order.id!)),
-                onPay: _showPaymentModal,
+                onPay: () => _showPaymentModal(order),
                 onRate: () => _showRatingDialog(order),
+                onCall: () => _startCall(order),
               );
             },
           ),
@@ -312,11 +375,12 @@ class _OrderDetailBody extends StatelessWidget {
   final String Function(String?) statusLabel;
   final IconData Function(String?) statusIcon;
   final VoidCallback onAccept;
-  final VoidCallback onStart;
-  final VoidCallback onComplete;
+  final VoidCallback onSetTravelFee;
+  final VoidCallback onSetRealizationFee;
   final VoidCallback onCancel;
   final VoidCallback onPay;
   final VoidCallback onRate;
+  final VoidCallback onCall;
 
   const _OrderDetailBody({
     required this.order,
@@ -327,27 +391,28 @@ class _OrderDetailBody extends StatelessWidget {
     required this.statusLabel,
     required this.statusIcon,
     required this.onAccept,
-    required this.onStart,
-    required this.onComplete,
+    required this.onSetTravelFee,
+    required this.onSetRealizationFee,
     required this.onCancel,
     required this.onPay,
     required this.onRate,
+    required this.onCall,
   });
 
   bool get _isArtisan => appStore.userType == USER_TYPE_PROVIDER;
   bool get _isClient  => !_isArtisan;
 
   bool get _showPayButton =>
-      _isClient &&
-      order.artisan != null &&
-      order.paymentStatus?.toUpperCase() != 'PAID' &&
-      (order.isAssigned || order.isAccepted || order.isInProgress);
+      _isClient && order.isAwaitingAnyPayment;
 
   @override
   Widget build(BuildContext context) {
     final sColor = statusColor(order.status);
+    final showBottomCall = order.canCall;
 
-    return CustomScrollView(
+    return Stack(
+      children: [
+      CustomScrollView(
       slivers: [
         // ── Hero header ─────────────────────────────────────────────────────
         SliverAppBar(
@@ -416,7 +481,7 @@ class _OrderDetailBody extends StatelessWidget {
 
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+            padding: EdgeInsets.fromLTRB(16, 20, 16, showBottomCall ? 100 : 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -451,6 +516,7 @@ class _OrderDetailBody extends StatelessWidget {
                   16.height,
                 ],
 
+
                 // ── Frais de déplacement — bouton primaire client ─────────────
                 if (_showPayButton) ...[
                   _PaymentBanner(onPay: onPay),
@@ -477,7 +543,7 @@ class _OrderDetailBody extends StatelessWidget {
                   20.height,
                 ],
 
-                // ── Artisan : Démarrer / Terminer ───────────────────────────
+                // ── Artisan : Définir frais déplacement / réalisation ────────
                 if (_isArtisan && order.artisan != null) ...[
                   if (order.isAccepted) ...[
                     AppButton(
@@ -485,13 +551,13 @@ class _OrderDetailBody extends StatelessWidget {
                       color: primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      onTap: onStart,
+                      onTap: onSetTravelFee,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.play_circle_outline_rounded, color: Colors.white, size: 20),
+                          const Icon(Icons.directions_car_rounded, color: Colors.white, size: 20),
                           8.width,
-                          Text('Démarrer la mission', style: boldTextStyle(color: Colors.white, size: 15)),
+                          Text('Définir les frais de déplacement', style: boldTextStyle(color: Colors.white, size: 15)),
                         ],
                       ),
                     ),
@@ -503,13 +569,13 @@ class _OrderDetailBody extends StatelessWidget {
                       color: completed,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      onTap: onComplete,
+                      onTap: onSetRealizationFee,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
+                          const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 20),
                           8.width,
-                          Text('Terminer la mission', style: boldTextStyle(color: Colors.white, size: 15)),
+                          Text('Définir les frais de réalisation', style: boldTextStyle(color: Colors.white, size: 15)),
                         ],
                       ),
                     ),
@@ -614,7 +680,43 @@ class _OrderDetailBody extends StatelessWidget {
           ),
         ),
       ],
-    );
+      ),  // end CustomScrollView
+
+      // ── Bouton appel fixe en bas — artisan uniquement ──────────────────
+      if (showBottomCall)
+        Positioned(
+          bottom: 0, left: 0, right: 0,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+            decoration: BoxDecoration(
+              color: context.scaffoldBackgroundColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: AppButton(
+              width: double.infinity,
+              height: 52,
+              color: Colors.green,
+              shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              onTap: onCall,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.call_rounded, color: Colors.white, size: 20),
+                  10.width,
+                  Text(_isArtisan ? 'Appeler le client' : 'Appeler l\'artisan', style: boldTextStyle(color: Colors.white, size: 15)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],  // end Stack children
+    );  // end Stack
   }
 
   String _paymentLabel(String? s) {
@@ -865,4 +967,280 @@ class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Divider(height: 1, indent: 48, color: Colors.grey.withValues(alpha: 0.15));
+}
+
+class _FeeBottomSheet extends StatelessWidget {
+  final String title;
+  final TextEditingController ctrl;
+  final VoidCallback onConfirm;
+
+  const _FeeBottomSheet({
+    required this.title,
+    required this.ctrl,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Poignée
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          20.height,
+          Text(title, style: boldTextStyle(size: 18)),
+          20.height,
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            style: boldTextStyle(size: 16),
+            decoration: InputDecoration(
+              hintText: 'Montant en FCFA',
+              hintStyle: secondaryTextStyle(size: 14),
+              suffixText: 'FCFA',
+              suffixStyle: secondaryTextStyle(size: 13),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: primaryColor, width: 1.5),
+              ),
+            ),
+          ),
+          20.height,
+          AppButton(
+            text: 'Confirmer',
+            color: primaryColor,
+            textColor: Colors.white,
+            width: double.infinity,
+            height: 50,
+            shapeBorder:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onTap: onConfirm,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom sheet paiement (Wave / Orange Money grisé)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PaymentBottomSheet extends StatefulWidget {
+  final String title;
+  final String desc;
+  final String feeLabel;
+  final VoidCallback onPayWave;
+  final VoidCallback onPayOrange;
+
+  const _PaymentBottomSheet({
+    required this.title,
+    required this.desc,
+    required this.feeLabel,
+    required this.onPayWave,
+    required this.onPayOrange,
+  });
+
+  @override
+  State<_PaymentBottomSheet> createState() => _PaymentBottomSheetState();
+}
+
+class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
+  String? _selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final isWave   = _selected == 'wave';
+    final isOrange = _selected == 'orange';
+    final canPay   = isWave || isOrange;
+
+    final btnColor = isWave
+        ? const Color(0xFF1BA1F1)
+        : isOrange
+            ? const Color(0xFFFF7900)
+            : Colors.grey.shade300;
+    final btnLabel = isOrange ? 'Payer avec Orange Money' : 'Payer avec Wave';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Poignée
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          20.height,
+
+          Text(widget.title, style: boldTextStyle(size: 18)),
+          16.height,
+
+          // Montant
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFC99700).withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFC99700).withValues(alpha: 0.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.desc, style: secondaryTextStyle(size: 12)),
+                8.height,
+                Text(widget.feeLabel,
+                    style: boldTextStyle(size: 20, color: const Color(0xFFC99700))),
+              ],
+            ),
+          ),
+          20.height,
+
+          Text('Mode de paiement', style: boldTextStyle(size: 14)),
+          12.height,
+
+          // Wave
+          _MethodTile(
+            label: 'Wave',
+            subtitle: 'Paiement mobile sécurisé',
+            logoAsset: 'assets/images/wave_logo.png',
+            color: const Color(0xFF1BA1F1),
+            selected: isWave,
+            enabled: true,
+            onTap: () => setState(() => _selected = 'wave'),
+          ),
+          10.height,
+
+          // Orange Money
+          _MethodTile(
+            label: 'Orange Money',
+            subtitle: 'Paiement Orange Money',
+            logoAsset: 'assets/images/orange_money.jpg',
+            color: const Color(0xFFFF7900),
+            selected: isOrange,
+            enabled: true,
+            onTap: () => setState(() => _selected = 'orange'),
+          ),
+          24.height,
+
+          AppButton(
+            text: btnLabel,
+            color: canPay ? btnColor : Colors.grey.shade300,
+            textColor: canPay ? Colors.white : Colors.grey,
+            width: double.infinity,
+            height: 50,
+            shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onTap: canPay
+                ? (isOrange ? widget.onPayOrange : widget.onPayWave)
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MethodTile extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final String? logoAsset;
+  final Color color;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  const _MethodTile({
+    required this.label,
+    required this.subtitle,
+    this.logoAsset,
+    required this.color,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.4,
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? color.withValues(alpha: 0.07) : context.cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? color : Colors.grey.withValues(alpha: 0.2),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: logoAsset != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.asset(logoAsset!, fit: BoxFit.cover),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              12.width,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: boldTextStyle(size: 14)),
+                    2.height,
+                    Text(subtitle, style: secondaryTextStyle(size: 11)),
+                  ],
+                ),
+              ),
+              if (selected)
+                Icon(Icons.check_circle_rounded, color: color, size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

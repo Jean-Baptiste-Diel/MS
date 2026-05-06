@@ -12,6 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
 import '../screens/booking/booking_detail_screen.dart';
+import '../screens/booking/mison_order_detail_screen.dart';
+import '../screens/call/mison_incoming_call_screen.dart';
 import '../screens/jobRequest/my_post_detail_screen.dart';
 import '../screens/service/service_detail_screen.dart';
 import '../screens/wallet/user_wallet_balance_screen.dart';
@@ -80,9 +82,34 @@ Future<bool> unsubscribeFirebaseTopic(int userId) async {
 Future<void> registerNotificationListeners() async {
   FirebaseMessaging.instance.setAutoInitEnabled(true).then((value) {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      log('[FCM onMessage] type=${message.data['type']} data=${message.data}');
+      // Appel entrant en foreground → ouvre l'écran directement
+      if (message.data['type'] == 'INCOMING_CALL') {
+        _openIncomingCall(message.data);
+        return;
+      }
+      // Résultat paiement → rafraîchir l'écran de détail
+      if (message.data['type'] == 'PAYMENT_SUCCEEDED' || message.data['type'] == 'PAYMENT_FAILED') {
+        final succeeded = message.data['type'] == 'PAYMENT_SUCCEEDED';
+        toast(succeeded ? 'Paiement confirmé !' : 'Échec du paiement');
+        LiveStream().emit(LIVESTREAM_ORDER_PAYMENT_UPDATE, message.data['order_id']?.toString() ?? '');
+        return;
+      }
       if (message.notification != null && message.notification!.title.validate().isNotEmpty && message.notification!.body.validate().isNotEmpty) {
         showNotification(currentTimeStamp(), message.notification!.title.validate(), parseHtmlString(message.notification!.body.validate()), message);
       }
+      // Badge + refresh commandes artisan — isolé du flux principal
+      Future.microtask(() {
+        try {
+          if (appStore.userType == USER_TYPE_PROVIDER) {
+            final newCount = artisanNotifBadge.value + 1;
+            artisanNotifBadge.value = newCount;
+            setValue(ARTISAN_NOTIF_BADGE_KEY, newCount);
+            LiveStream().emit(LIVESTREAM_ARTISAN_HOME_REFRESH, true);
+            LiveStream().emit(LIVESTREAM_ARTISAN_ORDERS_REFRESH, true);
+          }
+        } catch (_) {}
+      });
     }, onError: (e) {
       log("setAutoInitEnabled error $e");
     });
@@ -107,10 +134,41 @@ Future<void> registerNotificationListeners() async {
   });
 }
 
+void _openIncomingCall(Map<String, dynamic> data) {
+  final orderId = data['order_id']?.toString() ?? '';
+  final channel = data['channel']?.toString() ?? '';
+  if (orderId.isEmpty) return;
+  navigatorKey.currentState?.push(
+    MaterialPageRoute(
+      builder: (_) => MisonIncomingCallScreen(orderId: orderId, channel: channel),
+    ),
+  );
+}
+
 void handleNotificationClick(RemoteMessage message) {
   if (message.data['url'] != null && message.data['url'] is String) {
     commonLaunchUrl(message.data['url'], launchMode: LaunchMode.externalApplication);
   }
+
+  // Appel entrant (background/terminé → tap sur notif)
+  if (message.data['type'] == 'INCOMING_CALL') {
+    _openIncomingCall(message.data);
+    return;
+  }
+
+  // Notifications Mison order
+  if (message.data.containsKey('mison_order_id')) {
+    final orderId = message.data['mison_order_id']?.toString() ?? '';
+    if (orderId.isNotEmpty) {
+      navigatorKey.currentState!.push(
+        MaterialPageRoute(
+          builder: (_) => MisonOrderDetailScreen(orderId: orderId),
+        ),
+      );
+    }
+    return;
+  }
+
   if (message.data.containsKey('is_chat')) {
     LiveStream().emit(LIVESTREAM_FIREBASE, 3);
   } else if (message.data.containsKey('additional_data')) {

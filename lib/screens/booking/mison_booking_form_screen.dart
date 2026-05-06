@@ -132,7 +132,6 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         zone: zoneCont.text,
         serviceDate: _getServiceDateISO(),
         isImmediate: isImmediateService,
-        paymentMethod: '',
         latitude: zoneLat,
         longitude: zoneLon,
         artisanId: widget.artisanId,

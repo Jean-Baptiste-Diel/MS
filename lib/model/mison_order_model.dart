@@ -43,11 +43,13 @@ class MisonOrder {
   String? description;
   String? serviceDate; // ISO8601
   String? serviceAddress;
-  String? status; // PENDING, ASSIGNED, ACCEPTED, REJECTED, IN_PROGRESS, COMPLETED, CANCELLED
+  String? status; // PENDING, ASSIGNED, ACCEPTED, AWAITING_TRAVEL_PAYMENT, IN_PROGRESS, AWAITING_REALIZATION_PAYMENT, COMPLETED, CANCELLED, REJECTED
   String? paymentStatus; // PENDING, PAID, REFUNDED
   String? latitude;
   String? longitude;
   double? distanceKm;
+  String? travelFee;       // e.g. "3000.00"
+  String? realizationFee;  // e.g. "25000.00"
   int? clientRating;
   String? clientReview;
   String? createdAt;
@@ -66,6 +68,8 @@ class MisonOrder {
     this.latitude,
     this.longitude,
     this.distanceKm,
+    this.travelFee,
+    this.realizationFee,
     this.clientRating,
     this.clientReview,
     this.createdAt,
@@ -94,6 +98,8 @@ class MisonOrder {
       distanceKm: json['distance_km'] != null
           ? double.tryParse(json['distance_km'].toString())
           : null,
+      travelFee: json['travel_fee']?.toString(),
+      realizationFee: json['realization_fee']?.toString(),
       clientRating: json['client_rating'] != null
           ? int.tryParse(json['client_rating'].toString())
           : null,
@@ -117,6 +123,8 @@ class MisonOrder {
       'latitude': latitude,
       'longitude': longitude,
       'distance_km': distanceKm,
+      'travel_fee': travelFee,
+      'realization_fee': realizationFee,
       'client_rating': clientRating,
       'client_review': clientReview,
       'created_at': createdAt,
@@ -128,13 +136,26 @@ class MisonOrder {
   bool get isPending => status == 'PENDING';
   bool get isAssigned => status == 'ASSIGNED';
   bool get isAccepted => status == 'ACCEPTED';
-  bool get isRejected => status == 'REJECTED';
+  bool get isAwaitingTravelPayment => status == 'AWAITING_TRAVEL_PAYMENT';
   bool get isInProgress => status == 'IN_PROGRESS';
+  bool get isAwaitingRealizationPayment => status == 'AWAITING_REALIZATION_PAYMENT';
   bool get isCompleted => status == 'COMPLETED';
   bool get isCancelled => status == 'CANCELLED';
+  bool get isRejected => status == 'REJECTED';
+
+  bool get isAwaitingAnyPayment => isAwaitingTravelPayment || isAwaitingRealizationPayment;
+
+  /// Montant à payer selon le statut courant
+  String? get currentFeeAmount =>
+      isAwaitingTravelPayment ? travelFee : isAwaitingRealizationPayment ? realizationFee : null;
 
   /// Can rate: only completed orders without rating
   bool get canRate => isCompleted && clientRating == null;
+
+  /// Can call: artisan accepted and order is active
+  bool get canCall =>
+      artisan != null &&
+      (isAccepted || isAwaitingTravelPayment || isInProgress || isAwaitingRealizationPayment);
 }
 
 class MisonClient {
@@ -219,10 +240,12 @@ class MisonArtisanInfo {
   });
 
   factory MisonArtisanInfo.fromJson(Map<String, dynamic> json) {
+    // assigned_artisan peut avoir un sous-objet user contenant first_name/last_name
+    final user = json['user'] as Map<String, dynamic>?;
     return MisonArtisanInfo(
       id: json['id']?.toString(),
-      firstName: json['first_name']?.toString(),
-      lastName: json['last_name']?.toString(),
+      firstName: (user ?? json)['first_name']?.toString(),
+      lastName: (user ?? json)['last_name']?.toString(),
       service: json['service'] != null
           ? MisonServiceInfo.fromJson(json['service'] as Map<String, dynamic>)
           : null,
@@ -236,7 +259,7 @@ class MisonArtisanInfo {
       totalReviews: json['total_reviews'] != null
           ? int.tryParse(json['total_reviews'].toString())
           : null,
-      profilePictureUrl: json['profile_picture_url']?.toString(),
+      profilePictureUrl: (json['profile_picture_url'] ?? user?['profile_picture_url'])?.toString(),
     );
   }
 
@@ -256,6 +279,25 @@ class MisonArtisanInfo {
 
   String get fullName => '${firstName ?? ''} ${lastName ?? ''}'.trim();
   num get rating => num.tryParse(averageRating ?? '0') ?? 0;
+}
+
+/// Response for POST /api/orders/{id}/call-token
+class MisonCallTokenResponse {
+  String? appId;
+  String? channel;
+  String? token;
+  int? uid;
+
+  MisonCallTokenResponse({this.appId, this.channel, this.token, this.uid});
+
+  factory MisonCallTokenResponse.fromJson(Map<String, dynamic> json) {
+    return MisonCallTokenResponse(
+      appId: json['app_id']?.toString(),
+      channel: json['channel']?.toString(),
+      token: json['token']?.toString(),
+      uid: json['uid'] != null ? int.tryParse(json['uid'].toString()) : null,
+    );
+  }
 }
 
 /// Request model for creating an order
@@ -435,13 +477,19 @@ class MisonArtisanDecisionRequest {
 class MisonActionResponse {
   String? message;
   Map<String, dynamic>? data;
+  String? waveLaunchUrl;
+  String? checkoutId;
+  String? deeplink;
 
-  MisonActionResponse({this.message, this.data});
+  MisonActionResponse({this.message, this.data, this.waveLaunchUrl, this.checkoutId, this.deeplink});
 
   factory MisonActionResponse.fromJson(Map<String, dynamic> json) {
     return MisonActionResponse(
       message: json['message']?.toString(),
       data: json['data'] as Map<String, dynamic>?,
+      waveLaunchUrl: json['wave_launch_url']?.toString(),
+      checkoutId: json['checkout_id']?.toString(),
+      deeplink: json['deeplink']?.toString(),
     );
   }
 }

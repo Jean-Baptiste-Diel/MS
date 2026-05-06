@@ -347,3 +347,11 @@ const HANDYMAN = 'handyman';
 const BOOKING_STATUS = 'booking_status';
 const PAYMENT_TYPE = 'payment_type';
 const PAYMENT_STATUS = 'payment_status';
+
+// Badge notifications artisan (persisté en SharedPrefs)
+const ARTISAN_NOTIF_BADGE_KEY = 'artisan_notif_badge_count';
+
+// LiveStream keys — rafraîchir les listes de commandes artisan
+const LIVESTREAM_ARTISAN_HOME_REFRESH   = 'artisan_home_refresh';
+const LIVESTREAM_ARTISAN_ORDERS_REFRESH = 'artisan_orders_refresh';
+const LIVESTREAM_ORDER_PAYMENT_UPDATE   = 'order_payment_update';

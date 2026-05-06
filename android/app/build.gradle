@@ -30,7 +30,7 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.iqonic.servicebooking"
+    namespace "com.mison.serviceuser"
     compileSdkVersion 36
     
     ndkVersion = "29.0.13599879"
@@ -50,7 +50,7 @@ android {
     }
 
     defaultConfig {
-        applicationId 'com.iqonic.servicebooking'
+        applicationId 'com.mison.serviceuser'
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
