@@ -64,6 +64,9 @@ RolesAndPermissionStore rolesAndPermissionStore = RolesAndPermissionStore();
 
 //region Global Variables
 BaseLanguage language = LanguageEn();
+
+/// Badge notifications non-lues pour l'artisan. Persisté en SharedPrefs.
+final ValueNotifier<int> artisanNotifBadge = ValueNotifier<int>(0);
 //endregion
 
 //region Services

@@ -1,36 +1,26 @@
 {
   "project_info": {
-    "project_number": "YOUR_PROJECT_NUMBER",
-    "project_id": "YOUR_PROJECT_ID",
-    "storage_bucket": "YOUR_STORAGE_BUCKET"
+    "project_number": "740769005408",
+    "project_id": "mison-project",
+    "storage_bucket": "mison-project.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "YOUR_GOOGLE_APP_ID",
+        "mobilesdk_app_id": "1:740769005408:android:6e70dc25d8280c211ce805",
         "android_client_info": {
-          "package_name": "com.iqonic.servicebooking"
+          "package_name": "com.mison.serviceuser"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "YOUR_ANDROID_CLIENT_ID",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "YOUR_API_KEY"
+          "current_key": "AIzaSyDsYY6HLk3tBdCo5MAD_asopzJL4vFMHbk"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "YOUR_ANDROID_CLIENT_ID",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }

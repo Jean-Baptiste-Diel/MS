@@ -54,6 +54,8 @@ class CachedImageWidget extends StatelessWidget {
       ).cornerRadiusWithClipRRect(radius ?? (circle ? (height / 2) : 0));
     } else if (url.validate().startsWith('http')) {
       return CachedNetworkImage(
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
         placeholder: (_, __) {
           return Stack(
             children: [

@@ -1,12 +1,11 @@
-import 'dart:convert';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
+import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
 import 'package:booking_system_flutter/screens/booking/mison_service_selection_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
 
 /// Composant qui affiche les services Mison depuis l'API
@@ -30,42 +29,15 @@ class _MisonServicesDashboardComponentState extends State<MisonServicesDashboard
   }
 
   Future<void> _fetchServices() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
+    setState(() { _isLoading = true; _error = null; });
     try {
-      final headers = <String, String>{'Content-Type': 'application/json'};
-      if (appStore.token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer ${appStore.token}';
-      }
-
-      final uri = Uri.parse('https://api.mison.app/api/services');
-      log('Fetching services from: $uri');
-      final response = await http.get(uri, headers: headers);
-      log('Response status: ${response.statusCode}');
-      log('Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> body = json.decode(response.body);
-        final servicesResponse = MisonServicesResponse.fromJson(body);
-        setState(() {
-          _services = servicesResponse.data ?? [];
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _error = 'Erreur ${response.statusCode}';
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      log('Error fetching services: $e');
+      final response = await getMisonServices();
       setState(() {
-        _error = e.toString();
+        _services = response.data ?? [];
         _isLoading = false;
       });
+    } catch (e) {
+      setState(() { _error = e.toString(); _isLoading = false; });
     }
   }
 

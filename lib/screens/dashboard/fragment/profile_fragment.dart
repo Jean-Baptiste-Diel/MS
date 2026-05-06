@@ -4,6 +4,7 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/user_data_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/auth/change_password_screen.dart';
+import 'package:booking_system_flutter/screens/auth/artisan_edit_profile_screen.dart';
 import 'package:booking_system_flutter/screens/auth/edit_profile_screen.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
@@ -359,7 +360,11 @@ class ProfileFragmentState extends State<ProfileFragment> {
                           subtitle: 'Modifier vos informations personnelles',
                           icon: ic_profile2,
                           onTap: () {
-                            EditProfileScreen().launch(context);
+                            if (appStore.userType == USER_TYPE_PROVIDER) {
+                              const ArtisanEditProfileScreen().launch(context);
+                            } else {
+                              EditProfileScreen().launch(context);
+                            }
                           },
                         ),
                         _menuItem(

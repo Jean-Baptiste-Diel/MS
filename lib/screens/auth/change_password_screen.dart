@@ -1,7 +1,6 @@
 import 'package:booking_system_flutter/component/base_scaffold_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
-import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
@@ -57,14 +56,16 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
       };
       appStore.setLoading(true);
 
-      await changeUserPassword(request).then((res) async {
-        toast(res.message.validate());
+      try {
+        final res = await changeUserPassword(request);
         await setValue(USER_PASSWORD, newPasswordCont.text);
-        DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
-      }).catchError((e) {
+        appStore.setLoading(false);
+        toast(res.message.validate());
+        finish(context);
+      } catch (e) {
+        appStore.setLoading(false);
         toast(e.toString(), print: true);
-      });
-      appStore.setLoading(false);
+      }
     }
   }
 
