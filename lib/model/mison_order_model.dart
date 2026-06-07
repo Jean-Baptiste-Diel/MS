@@ -156,6 +156,9 @@ class MisonOrder {
   bool get canCall =>
       artisan != null &&
       (isAccepted || isAwaitingTravelPayment || isInProgress || isAwaitingRealizationPayment);
+
+  /// Can track artisan location: intervention en cours
+  bool get canTrack => artisan != null && isInProgress;
 }
 
 class MisonClient {

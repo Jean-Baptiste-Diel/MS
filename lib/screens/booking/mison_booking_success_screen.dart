@@ -41,27 +41,27 @@ class MisonBookingSuccessScreen extends StatelessWidget {
 
   Color _statusColor(String? s) {
     switch (s) {
-      case 'PENDING':    return pending;
-      case 'ASSIGNED':   return assigned_booking;
-      case 'ACCEPTED':   return accept;
-      case 'IN_PROGRESS':return in_progress;
-      case 'COMPLETED':  return completed;
-      case 'CANCELLED':  return cancelled;
-      case 'REJECTED':   return rejected;
-      default:           return defaultStatus;
+      case 'PENDING':                      return pending;
+      case 'ACCEPTED':                     return accept;
+      case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
+      case 'IN_PROGRESS':                  return in_progress;
+      case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
+      case 'COMPLETED':                    return completed;
+      case 'CANCELLED':                    return cancelled;
+      default:                             return defaultStatus;
     }
   }
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':    return 'En attente';
-      case 'ASSIGNED':   return 'Artisan assigné';
-      case 'ACCEPTED':   return 'Accepté';
-      case 'IN_PROGRESS':return 'En cours';
-      case 'COMPLETED':  return 'Terminé';
-      case 'CANCELLED':  return 'Annulé';
-      case 'REJECTED':   return 'Refusé';
-      default:           return s ?? '—';
+      case 'PENDING':                      return 'Recherche d\'artisan';
+      case 'ACCEPTED':                     return 'Artisan trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'IN_PROGRESS':                  return 'Intervention en cours';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'COMPLETED':                    return 'Prestation terminée';
+      case 'CANCELLED':                    return 'Commande annulée';
+      default:                             return s ?? '—';
     }
   }
 

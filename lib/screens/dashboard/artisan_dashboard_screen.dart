@@ -615,26 +615,26 @@ class _RecentOrderTile extends StatelessWidget {
 
   Color _statusColor(String? s) {
     switch (s) {
-      case 'ASSIGNED':                     return assigned_booking;
+      case 'PENDING':                      return pending;
       case 'ACCEPTED':                     return accept;
       case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
       case 'IN_PROGRESS':                  return in_progress;
       case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
       case 'COMPLETED':                    return completed;
-      case 'REJECTED':                     return rejected;
+      case 'CANCELLED':                    return cancelled;
       default:                             return defaultStatus;
     }
   }
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'ASSIGNED':                     return 'Assignée';
-      case 'ACCEPTED':                     return 'Acceptée';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'Frais déplacement';
-      case 'IN_PROGRESS':                  return 'En cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'Frais réalisation';
-      case 'COMPLETED':                    return 'Terminée';
-      case 'REJECTED':                     return 'Refusée';
+      case 'PENDING':                      return 'Recherche d\'artisan';
+      case 'ACCEPTED':                     return 'Artisan trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'IN_PROGRESS':                  return 'Intervention en cours';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'COMPLETED':                    return 'Prestation terminée';
+      case 'CANCELLED':                    return 'Commande annulée';
       default:                             return s ?? '';
     }
   }
@@ -1065,26 +1065,26 @@ class _ArtisanOrderCard extends StatelessWidget {
 
   Color _statusColor(String? s) {
     switch (s) {
-      case 'ASSIGNED':                     return assigned_booking;
+      case 'PENDING':                      return pending;
       case 'ACCEPTED':                     return accept;
       case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
       case 'IN_PROGRESS':                  return in_progress;
       case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
       case 'COMPLETED':                    return completed;
-      case 'REJECTED':                     return rejected;
+      case 'CANCELLED':                    return cancelled;
       default:                             return defaultStatus;
     }
   }
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'ASSIGNED':                     return 'Assignée';
-      case 'ACCEPTED':                     return 'Acceptée';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'Frais déplacement';
-      case 'IN_PROGRESS':                  return 'En cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'Frais réalisation';
-      case 'COMPLETED':                    return 'Terminée';
-      case 'REJECTED':                     return 'Refusée';
+      case 'PENDING':                      return 'Recherche d\'artisan';
+      case 'ACCEPTED':                     return 'Artisan trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'IN_PROGRESS':                  return 'Intervention en cours';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'COMPLETED':                    return 'Prestation terminée';
+      case 'CANCELLED':                    return 'Commande annulée';
       default:                             return s ?? '';
     }
   }

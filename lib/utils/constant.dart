@@ -355,3 +355,4 @@ const ARTISAN_NOTIF_BADGE_KEY = 'artisan_notif_badge_count';
 const LIVESTREAM_ARTISAN_HOME_REFRESH   = 'artisan_home_refresh';
 const LIVESTREAM_ARTISAN_ORDERS_REFRESH = 'artisan_orders_refresh';
 const LIVESTREAM_ORDER_PAYMENT_UPDATE   = 'order_payment_update';
+const LIVESTREAM_ORDERS_LIST_REFRESH    = 'orders_list_refresh';

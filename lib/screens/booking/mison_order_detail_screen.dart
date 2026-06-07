@@ -1,13 +1,16 @@
+import 'dart:async';
+
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
-import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
@@ -15,6 +18,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../component/empty_error_state_widget.dart';
 import '../call/mison_call_screen.dart';
+import '../map/mison_tracking_screen.dart';
 
 class MisonOrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -27,6 +31,7 @@ class MisonOrderDetailScreen extends StatefulWidget {
 
 class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
   late Future<MisonOrderDetailResponse> future;
+  Timer? _locationTimer;
 
   @override
   void initState() {
@@ -42,11 +47,52 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
 
   @override
   void dispose() {
+    _locationTimer?.cancel();
     LiveStream().dispose(LIVESTREAM_ORDER_PAYMENT_UPDATE);
     super.dispose();
   }
 
   void init() => future = getMisonOrderDetail(widget.orderId);
+
+  // ── Tracking GPS artisan → Firestore ────────────────────────────────────────
+
+  Future<void> _startTracking(String orderId) async {
+    if (_locationTimer != null) return;
+
+    // Vérifie/demande la permission GPS avant de démarrer
+    LocationPermission perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.deniedForever || perm == LocationPermission.denied) {
+      log('[Tracking] Permission GPS refusée, tracking impossible');
+      return;
+    }
+
+    _locationTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        );
+        await FirebaseFirestore.instance
+            .collection('artisan_locations')
+            .doc(orderId)
+            .set({
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        log('[Tracking] Position envoyée: ${pos.latitude}, ${pos.longitude}');
+      } catch (e) {
+        log('[Tracking] Erreur: $e');
+      }
+    });
+  }
+
+  void _stopTracking() {
+    _locationTimer?.cancel();
+    _locationTimer = null;
+  }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,29 +111,25 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
   Color _statusColor(String? s) {
     switch (s) {
       case 'PENDING':                      return pending;
-      case 'ASSIGNED':                     return assigned_booking;
       case 'ACCEPTED':                     return accept;
       case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
       case 'IN_PROGRESS':                  return in_progress;
       case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
       case 'COMPLETED':                    return completed;
       case 'CANCELLED':                    return cancelled;
-      case 'REJECTED':                     return rejected;
       default:                             return defaultStatus;
     }
   }
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':                      return 'En attente';
-      case 'ASSIGNED':                     return 'Artisan assigné';
-      case 'ACCEPTED':                     return 'Accepté';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'Frais de déplacement';
-      case 'IN_PROGRESS':                  return 'En cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'Frais de réalisation';
-      case 'COMPLETED':                    return 'Terminé';
-      case 'CANCELLED':                    return 'Annulé';
-      case 'REJECTED':                     return 'Refusé';
+      case 'PENDING':                      return 'Recherche d\'artisan';
+      case 'ACCEPTED':                     return 'Artisan trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'IN_PROGRESS':                  return 'Intervention en cours';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'COMPLETED':                    return 'Prestation terminée';
+      case 'CANCELLED':                    return 'Commande annulée';
       default:                             return s ?? 'Inconnu';
     }
   }
@@ -95,14 +137,12 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
   IconData _statusIcon(String? s) {
     switch (s) {
       case 'PENDING':                      return Icons.hourglass_empty_rounded;
-      case 'ASSIGNED':                     return Icons.person_add_rounded;
       case 'ACCEPTED':                     return Icons.check_circle_rounded;
       case 'AWAITING_TRAVEL_PAYMENT':      return Icons.directions_car_rounded;
       case 'IN_PROGRESS':                  return Icons.construction_rounded;
       case 'AWAITING_REALIZATION_PAYMENT': return Icons.payments_rounded;
       case 'COMPLETED':                    return Icons.verified_rounded;
       case 'CANCELLED':                    return Icons.cancel_rounded;
-      case 'REJECTED':                     return Icons.block_rounded;
       default:                             return Icons.info_rounded;
     }
   }
@@ -174,55 +214,6 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
     );
   }
 
-  void _showRatingDialog(MisonOrder order) {
-    int rating = 5;
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: radius(16)),
-          title: Text('Noter la prestation', style: boldTextStyle()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (i) => GestureDetector(
-                  onTap: () => setS(() => rating = i + 1),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(i < rating ? Icons.star_rounded : Icons.star_outline_rounded, color: ratingBarColor, size: 36),
-                  ),
-                )),
-              ),
-              12.height,
-              AppTextField(
-                controller: ctrl,
-                textFieldType: TextFieldType.MULTILINE,
-                minLines: 3, maxLines: 5,
-                decoration: inputDecoration(context).copyWith(hintText: 'Votre avis...', filled: true, fillColor: context.cardColor),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: primaryTextStyle(color: Colors.grey))),
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                try {
-                  await rateMisonOrder(order.id ?? '', rating, ctrl.text);
-                  toast('Merci pour votre avis !');
-                  init(); setState(() {});
-                } catch (e) { toast(e.toString()); }
-              },
-              child: Text('Envoyer', style: boldTextStyle(color: primaryColor)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _showPaymentModal(MisonOrder order) {
     final isTravel = order.isAwaitingTravelPayment;
@@ -331,6 +322,14 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
               if (order == null) {
                 return const Center(child: NoDataWidget(title: 'Commande introuvable'));
               }
+              // Artisan : démarrer / arrêter le tracking selon le statut
+              if (appStore.userType == USER_TYPE_PROVIDER) {
+                if (order.canTrack) {
+                  _startTracking(order.id!);
+                } else {
+                  _stopTracking();
+                }
+              }
               return _OrderDetailBody(
                 order: order,
                 distanceKm: widget.distanceKm,
@@ -350,8 +349,15 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
                 ),
                 onCancel: () => _confirm(title: 'Annuler la commande', subtitle: 'Êtes-vous sûr de vouloir annuler ?', type: DialogType.DELETE, onConfirm: () => _cancelOrder(order.id!)),
                 onPay: () => _showPaymentModal(order),
-                onRate: () => _showRatingDialog(order),
+                onRated: () { init(); setState(() {}); },
                 onCall: () => _startCall(order),
+                onTrack: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => MisonTrackingScreen(
+                    orderId: order.id!,
+                    serviceAddress: order.serviceAddress ?? '',
+                    artisanName: order.artisan?.fullName ?? 'Artisan',
+                  ),
+                )),
               );
             },
           ),
@@ -379,8 +385,9 @@ class _OrderDetailBody extends StatelessWidget {
   final VoidCallback onSetRealizationFee;
   final VoidCallback onCancel;
   final VoidCallback onPay;
-  final VoidCallback onRate;
+  final VoidCallback onRated;
   final VoidCallback onCall;
+  final VoidCallback onTrack;
 
   const _OrderDetailBody({
     required this.order,
@@ -395,8 +402,9 @@ class _OrderDetailBody extends StatelessWidget {
     required this.onSetRealizationFee,
     required this.onCancel,
     required this.onPay,
-    required this.onRate,
+    required this.onRated,
     required this.onCall,
+    required this.onTrack,
   });
 
   bool get _isArtisan => appStore.userType == USER_TYPE_PROVIDER;
@@ -486,6 +494,12 @@ class _OrderDetailBody extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
+                // ── Client : Noter — en haut quand prestation terminée ───────
+                if (_isClient && order.canRate) ...[
+                  _RatingBoomChip(order: order, onRated: onRated),
+                  20.height,
+                ],
+
                 // ── Artisan card — visible par le client uniquement ──────────
                 if (_isClient && order.artisan != null) ...[
                   _ArtisanHeroCard(artisan: order.artisan!, statusColor: sColor, statusLabel: statusLabel(order.status)),
@@ -516,6 +530,46 @@ class _OrderDetailBody extends StatelessWidget {
                   16.height,
                 ],
 
+
+                // ── Suivre en direct — client quand artisan en déplacement ────
+                if (_isClient && order.canTrack) ...[
+                  GestureDetector(
+                    onTap: onTrack,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: primaryColor.withValues(alpha: 0.12),
+                            ),
+                            child: Icon(Icons.location_on_rounded, color: primaryColor, size: 20),
+                          ),
+                          12.width,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Suivre en direct', style: boldTextStyle(size: 14, color: primaryColor)),
+                                Text('Voir l\'artisan sur la carte', style: secondaryTextStyle(size: 11)),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded, color: primaryColor),
+                        ],
+                      ),
+                    ),
+                  ),
+                  16.height,
+                ],
 
                 // ── Frais de déplacement — bouton primaire client ─────────────
                 if (_showPayButton) ...[
@@ -601,21 +655,8 @@ class _OrderDetailBody extends StatelessWidget {
                   ]),
                 ],
 
-                // ── Statut paiement ─────────────────────────────────────────
-                if (order.paymentStatus != null) ...[
-                  16.height,
-                  _InfoCard(children: [
-                    _InfoRow(
-                      icon: Icons.payments_outlined,
-                      label: 'Paiement',
-                      value: _paymentLabel(order.paymentStatus),
-                      valueColor: _paymentColor(order.paymentStatus),
-                    ),
-                  ]),
-                ],
-
                 // ── Client : Annuler ────────────────────────────────────────
-                if (_isClient && (order.isPending || order.isAssigned)) ...[
+                if (_isClient && order.isPending) ...[
                   20.height,
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
@@ -626,26 +667,6 @@ class _OrderDetailBody extends StatelessWidget {
                     ),
                     onPressed: onCancel,
                     child: Text('Annuler la commande', style: boldTextStyle(color: rejected, size: 15)),
-                  ),
-                ],
-
-                // ── Client : Noter ──────────────────────────────────────────
-                if (_isClient && order.canRate) ...[
-                  16.height,
-                  AppButton(
-                    width: double.infinity,
-                    color: ratingBarColor,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    onTap: onRate,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.star_rounded, color: Colors.white, size: 20),
-                        8.width,
-                        Text('Noter cette prestation', style: boldTextStyle(color: Colors.white, size: 15)),
-                      ],
-                    ),
                   ),
                 ],
 
@@ -719,21 +740,6 @@ class _OrderDetailBody extends StatelessWidget {
     );  // end Stack
   }
 
-  String _paymentLabel(String? s) {
-    switch (s?.toUpperCase()) {
-      case 'PAID':     return 'Payé';
-      case 'REFUNDED': return 'Remboursé';
-      default:         return 'En attente';
-    }
-  }
-
-  Color _paymentColor(String? s) {
-    switch (s?.toUpperCase()) {
-      case 'PAID':     return completed;
-      case 'REFUNDED': return Colors.orange;
-      default:         return rejected;
-    }
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -926,9 +932,7 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  final Color? valueColor;
-
-  const _InfoRow({required this.icon, required this.label, required this.value, this.valueColor});
+  const _InfoRow({required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -952,7 +956,7 @@ class _InfoRow extends StatelessWidget {
               children: [
                 Text(label, style: secondaryTextStyle(size: 12)),
                 4.height,
-                Text(value, style: boldTextStyle(size: 14, color: valueColor), maxLines: 3, overflow: TextOverflow.ellipsis),
+                Text(value, style: boldTextStyle(size: 14), maxLines: 3, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -1240,6 +1244,202 @@ class _MethodTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rating boom chip — s'ouvre inline au tap, sans modal
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RatingBoomChip extends StatefulWidget {
+  final MisonOrder order;
+  final VoidCallback onRated;
+
+  const _RatingBoomChip({required this.order, required this.onRated});
+
+  @override
+  State<_RatingBoomChip> createState() => _RatingBoomChipState();
+}
+
+class _RatingBoomChipState extends State<_RatingBoomChip> {
+  bool _expanded = false;
+  int _rating = 5;
+  final _ctrl = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+    try {
+      await rateMisonOrder(widget.order.id ?? '', _rating, _ctrl.text);
+      toast('Merci pour votre avis !');
+      widget.onRated();
+    } catch (e) {
+      toast(e.toString());
+      setState(() => _submitting = false);
+    }
+  }
+
+  String _ratingLabel(int r) {
+    switch (r) {
+      case 1: return 'Très décevant';
+      case 2: return 'Décevant';
+      case 3: return 'Correct';
+      case 4: return 'Bien';
+      case 5: return 'Excellent !';
+      default: return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ratingBarColor.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(color: ratingBarColor.withValues(alpha: 0.08), blurRadius: 14, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── En-tête toujours visible ───────────────────────────────────────
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: ratingBarColor.withValues(alpha: 0.12),
+                    ),
+                    child: Icon(Icons.star_rounded, color: ratingBarColor, size: 20),
+                  ),
+                  12.width,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Donner votre avis', style: boldTextStyle(size: 14)),
+                        4.height,
+                        Text('Comment s\'est passée la prestation ?', style: secondaryTextStyle(size: 11)),
+                      ],
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Icon(Icons.keyboard_arrow_down_rounded, color: ratingBarColor, size: 24),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Contenu dépliable ──────────────────────────────────────────────
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              child: Column(
+                children: [
+                  Divider(color: ratingBarColor.withValues(alpha: 0.15), height: 1),
+                  20.height,
+
+                  // Étoiles interactives
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (i) => GestureDetector(
+                      onTap: () => setState(() => _rating = i + 1),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          child: Icon(
+                            i < _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                            key: ValueKey('$i-${i < _rating}'),
+                            color: i < _rating ? ratingBarColor : Colors.grey.shade300,
+                            size: 44,
+                          ),
+                        ),
+                      ),
+                    )),
+                  ),
+                  8.height,
+                  Text(
+                    _ratingLabel(_rating),
+                    style: boldTextStyle(size: 13, color: ratingBarColor),
+                  ),
+                  16.height,
+
+                  // Champ avis
+                  TextField(
+                    controller: _ctrl,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Partagez votre expérience (optionnel)',
+                      hintStyle: secondaryTextStyle(size: 12),
+                      filled: true,
+                      fillColor: context.scaffoldBackgroundColor,
+                      contentPadding: const EdgeInsets.all(14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: ratingBarColor, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  16.height,
+
+                  // Bouton envoyer
+                  AppButton(
+                    width: double.infinity,
+                    color: ratingBarColor,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onTap: _submitting ? null : _submit,
+                    child: _submitting
+                        ? const SizedBox(
+                            height: 20, width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                              8.width,
+                              Text('Envoyer mon avis', style: boldTextStyle(color: Colors.white, size: 14)),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -58,6 +58,22 @@
                 <data android:scheme="https" />
             </intent-filter>
 
+            <!-- App Links — callback paiement Wave (HTTPS) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="mison.app" android:pathPrefix="/payment" />
+            </intent-filter>
+
+            <!-- Custom scheme — callback paiement Orange Money + fallback -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mison" />
+            </intent-filter>
+
             <!-- Deep link for referral -->
         </activity>
         <!--<activity android:name="com.braintreepayments.api.BraintreeBrowserSwitchActivity" android:exported="false" android:launchMode="singleTask" tools:ignore="AppLinkUrlError">

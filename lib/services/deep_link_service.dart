@@ -1,8 +1,10 @@
 import 'package:app_links/app_links.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
+import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../utils/configs.dart';
@@ -68,6 +70,25 @@ class DeepLinkService {
   void _handleDeepLink(Uri uri) {
     log('Deep link received: $uri');
 
+    // ── Callbacks paiement ────────────────────────────────────────────────────
+    // mison://payment/success?order_id=xxx  (uri.host == 'payment')
+    if (uri.scheme == 'mison' && uri.host == 'payment') {
+      log('[DeepLink] Payment scheme matched — host=${uri.host} segments=${uri.pathSegments} params=${uri.queryParameters}');
+      final success = uri.pathSegments.isNotEmpty && uri.pathSegments.first == 'success';
+      _handlePaymentCallback(success: success, orderId: uri.queryParameters['order_id'] ?? '');
+      return;
+    }
+    // https://mison.app/payment/success?order_id=xxx
+    if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host == 'mison.app' &&
+        uri.pathSegments.contains('payment')) {
+      log('[DeepLink] Payment https matched — segments=${uri.pathSegments} params=${uri.queryParameters}');
+      final success = uri.pathSegments.last == 'success';
+      _handlePaymentCallback(success: success, orderId: uri.queryParameters['order_id'] ?? '');
+      return;
+    }
+    log('[DeepLink] No payment match — scheme=${uri.scheme} host=${uri.host} segments=${uri.pathSegments}');
+
     String? referralCode;
 
     // 1. App scheme: handyman://app/referral?code=XXXX
@@ -118,6 +139,28 @@ class DeepLinkService {
     } else {
       log('No referral code found in deep link');
     }
+  }
+
+  void _handlePaymentCallback({required bool success, required String orderId}) {
+    log('[DeepLink] _handlePaymentCallback success=$success orderId=$orderId');
+    toast(success ? 'Paiement confirmé !' : 'Paiement annulé');
+
+    if (orderId.isNotEmpty) {
+      // Rafraîchit le détail commande déjà ouvert
+      LiveStream().emit(LIVESTREAM_ORDER_PAYMENT_UPDATE, orderId);
+      // Rafraîchit la liste globale des commandes
+      LiveStream().emit(LIVESTREAM_ORDERS_LIST_REFRESH, true);
+    }
+
+    // Navigue vers le détail commande avec un délai pour laisser le navigator se stabiliser
+    Future.delayed(const Duration(milliseconds: 600), () {
+      log('[DeepLink] Navigating to order $orderId — navigatorKey=${navigatorKey.currentState}');
+      if (orderId.isNotEmpty) {
+        navigatorKey.currentState?.push(MaterialPageRoute(
+          builder: (_) => MisonOrderDetailScreen(orderId: orderId),
+        ));
+      }
+    });
   }
 
   /// Navigate based on referral code and auth state

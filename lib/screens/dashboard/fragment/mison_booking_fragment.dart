@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../../component/empty_error_state_widget.dart';
+import '../../../utils/constant.dart';
 
 class MisonBookingFragment extends StatelessWidget {
   const MisonBookingFragment({Key? key}) : super(key: key);
@@ -63,12 +64,11 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
 
   final List<Map<String, String>> _filters = const [
     {'value': '', 'label': 'Tous'},
-    {'value': 'PENDING', 'label': 'En attente'},
-    {'value': 'ASSIGNED', 'label': 'Assigné'},
-    {'value': 'ACCEPTED', 'label': 'Accepté'},
-    {'value': 'AWAITING_TRAVEL_PAYMENT', 'label': 'Frais déplacement'},
-    {'value': 'IN_PROGRESS', 'label': 'En cours'},
-    {'value': 'AWAITING_REALIZATION_PAYMENT', 'label': 'Frais réalisation'},
+    {'value': 'PENDING', 'label': 'Recherche artisan'},
+    {'value': 'ACCEPTED', 'label': 'Artisan trouvé'},
+    {'value': 'AWAITING_TRAVEL_PAYMENT', 'label': 'Paiement déplacement'},
+    {'value': 'IN_PROGRESS', 'label': 'En intervention'},
+    {'value': 'AWAITING_REALIZATION_PAYMENT', 'label': 'Paiement prestation'},
     {'value': 'COMPLETED', 'label': 'Terminé'},
     {'value': 'CANCELLED', 'label': 'Annulé'},
   ];
@@ -80,6 +80,15 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
   void initState() {
     super.initState();
     _load();
+    LiveStream().on(LIVESTREAM_ORDERS_LIST_REFRESH, (_) {
+      if (mounted) setState(() => _load());
+    });
+  }
+
+  @override
+  void dispose() {
+    LiveStream().dispose(LIVESTREAM_ORDERS_LIST_REFRESH);
+    super.dispose();
   }
 
   void _load() {
@@ -247,51 +256,30 @@ class MisonOrderItemComponent extends StatelessWidget {
   Color _statusColor(String? s) {
     switch (s) {
       case 'PENDING':                      return pending;
-      case 'ASSIGNED':                     return assigned_booking;
       case 'ACCEPTED':                     return accept;
       case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
       case 'IN_PROGRESS':                  return in_progress;
       case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
       case 'COMPLETED':                    return completed;
       case 'CANCELLED':                    return cancelled;
-      case 'REJECTED':                     return rejected;
       default:                             return defaultStatus;
     }
   }
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':                      return 'En attente';
-      case 'ASSIGNED':                     return 'Assigné';
-      case 'ACCEPTED':                     return 'Accepté';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'Frais de déplacement';
-      case 'IN_PROGRESS':                  return 'En cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'Frais de réalisation';
-      case 'COMPLETED':                    return 'Terminé';
-      case 'CANCELLED':                    return 'Annulé';
-      case 'REJECTED':                     return 'Refusé';
+      case 'PENDING':                      return 'Recherche d\'artisan';
+      case 'ACCEPTED':                     return 'Artisan trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'IN_PROGRESS':                  return 'Intervention en cours';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'COMPLETED':                    return 'Prestation terminée';
+      case 'CANCELLED':                    return 'Commande annulée';
       default:                             return s ?? 'Inconnu';
     }
   }
 
-  Color _paymentColor(String? s) {
-    switch (s?.toUpperCase()) {
-      case 'PAID':     return completed;
-      case 'REFUNDED': return Colors.orange;
-      default:         return rejected;
-    }
-  }
-
-  String _paymentLabel(String? s) {
-    switch (s?.toUpperCase()) {
-      case 'PAID':     return 'Payé';
-      case 'REFUNDED': return 'Remboursé';
-      default:         return 'En attente';
-    }
-  }
-
-  bool get _canCancel =>
-      order.status == 'PENDING' || order.status == 'ASSIGNED';
+  bool get _canCancel => order.status == 'PENDING';
 
   @override
   Widget build(BuildContext context) {
@@ -418,24 +406,9 @@ class MisonOrderItemComponent extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Statut commande:',
-                        style: secondaryTextStyle(size: 13)),
+                    Text('Statut:', style: secondaryTextStyle(size: 13)),
                     Text(_statusLabel(order.status),
-                        style: boldTextStyle(
-                            size: 13,
-                            color: _statusColor(order.status))),
-                  ],
-                ),
-                10.height,
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Statut paiement:',
-                        style: secondaryTextStyle(size: 13)),
-                    Text(_paymentLabel(order.paymentStatus),
-                        style: boldTextStyle(
-                            size: 13,
-                            color: _paymentColor(order.paymentStatus))),
+                        style: boldTextStyle(size: 13, color: _statusColor(order.status))),
                   ],
                 ),
               ],
