@@ -393,7 +393,7 @@ class MisonOrderItemComponent extends StatelessWidget {
             ),
           ),
 
-          // Statuts
+          // Statuts + notation
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -402,6 +402,7 @@ class MisonOrderItemComponent extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -411,6 +412,36 @@ class MisonOrderItemComponent extends StatelessWidget {
                         style: boldTextStyle(size: 13, color: _statusColor(order.status))),
                   ],
                 ),
+                if (order.clientRating != null) ...[
+                  10.height,
+                  Divider(height: 1, color: Colors.grey.withValues(alpha: 0.15)),
+                  10.height,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: List.generate(5, (i) => Icon(
+                          i < order.clientRating! ? Icons.star_rounded : Icons.star_outline_rounded,
+                          color: ratingBarColor,
+                          size: 18,
+                        )),
+                      ),
+                      if (order.clientReview != null && order.clientReview!.isNotEmpty)
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 10),
+                            child: Text(
+                              order.clientReview!,
+                              style: secondaryTextStyle(size: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
