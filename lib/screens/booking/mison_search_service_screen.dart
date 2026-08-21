@@ -1,5 +1,7 @@
+import 'package:booking_system_flutter/component/app_empty_state.dart';
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
@@ -9,7 +11,9 @@ import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 class MisonSearchServiceScreen extends StatefulWidget {
-  const MisonSearchServiceScreen({Key? key}) : super(key: key);
+  final bool showBackButton;
+
+  const MisonSearchServiceScreen({Key? key, this.showBackButton = true}) : super(key: key);
 
   @override
   State<MisonSearchServiceScreen> createState() => _MisonSearchServiceScreenState();
@@ -72,7 +76,7 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.scaffoldBackgroundColor,
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         'Rechercher un service',
         textColor: Colors.white,
@@ -81,10 +85,11 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
           statusBarIconBrightness: Brightness.light,
           statusBarColor: primaryColor,
         ),
-        showBack: true,
-        backWidget: BackWidget(),
+        showBack: widget.showBackButton,
+        backWidget: widget.showBackButton ? BackWidget() : null,
       ),
-      body: Column(
+      body: DotGridBackground(
+        child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
@@ -115,14 +120,13 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
             const Expanded(child: Center(child: CircularProgressIndicator()))
           else if (_filtered.isEmpty)
             Expanded(
-              child: Center(
-                child: Text(
-                  _searchCont.text.isEmpty
-                      ? 'Aucun service disponible'
-                      : 'Aucun résultat pour "${_searchCont.text}"',
-                  style: secondaryTextStyle(),
-                  textAlign: TextAlign.center,
-                ),
+              child: AppEmptyState(
+                type: _searchCont.text.isEmpty
+                    ? AppEmptyStateType.empty
+                    : AppEmptyStateType.search,
+                title: _searchCont.text.isEmpty
+                    ? 'Aucun service disponible'
+                    : 'Aucun résultat pour "${_searchCont.text}"',
               ),
             )
           else
@@ -138,6 +142,7 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
               ),
             ),
         ],
+        ),
       ),
     );
   }
@@ -156,51 +161,45 @@ class _ServiceResultTile extends StatelessWidget {
           color: context.cardColor,
           borderRadius: radius(12),
         ),
+        clipBehavior: Clip.antiAlias,
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                bottomLeft: Radius.circular(12),
-              ),
-              child: CachedImageWidget(
-                url: service.imageUrl ?? '',
-                height: 80,
-                width: 80,
-                fit: BoxFit.cover,
-                circle: false,
-              ),
+            CachedImageWidget(
+              url: service.imageUrl ?? '',
+              height: 128,
+              width: 128,
+              fit: BoxFit.cover,
+              circle: false,
             ),
             16.width,
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    service.name ?? '',
-                    style: boldTextStyle(size: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (service.description != null && service.description!.isNotEmpty) ...[
-                    4.height,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      service.description!,
-                      style: secondaryTextStyle(size: 12),
-                      maxLines: 2,
+                      service.name ?? '',
+                      style: boldTextStyle(size: 16),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (service.description != null && service.description!.isNotEmpty) ...[
+                      4.height,
+                      Text(
+                        service.description!,
+                        style: secondaryTextStyle(size: 14),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
-                  8.height,
-                  Text(
-                    'À partir de ${service.minPriceValue.toStringAsFixed(0)} FCFA',
-                    style: boldTextStyle(color: primaryColor, size: 13),
-                  ),
-                  8.height,
-                ],
+                ),
               ),
             ),
-            16.width,
+            12.width,
             Icon(Icons.chevron_right, color: primaryColor),
             8.width,
           ],

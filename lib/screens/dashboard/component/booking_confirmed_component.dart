@@ -47,7 +47,7 @@ class _PendingBookingComponentState extends State<PendingBookingComponent> {
                     decoration: boxDecorationRoundedWithShadow(defaultRadius.toInt(), backgroundColor: Colors.white.withValues(alpha:0.6)),
                   ),
                   8.width,
-                  Marquee(child: Text(language.bookingConfirmedMsg, style: primaryTextStyle(color: Colors.white, size: LABEL_TEXT_SIZE, fontStyle: FontStyle.italic))).expand(),
+                  Marquee(child: Text(language.bookingConfirmedMsg, style: primaryTextStyle(color: Colors.white, size: LABEL_TEXT_SIZE))).expand(),
                 ],
               ).expand(),
               SizedBox(

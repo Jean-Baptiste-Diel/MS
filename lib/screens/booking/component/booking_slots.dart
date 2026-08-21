@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BookingSlotsComponent extends StatefulWidget {
   final ServiceDetailResponse? data;
@@ -97,7 +98,7 @@ class _BookingSlotsComponentState extends State<BookingSlotsComponent> {
     }
 
     if (isUpdate) {
-      if (widget.data!.serviceDetail!.bookingSlot.validate() == widget.bookingData!.bookingSlot.validate()) return toast(language.pleaseSelectDifferentSlotThenPrevious);
+      if (widget.data!.serviceDetail!.bookingSlot.validate() == widget.bookingData!.bookingSlot.validate()) return TopToast.show(message: language.pleaseSelectDifferentSlotThenPrevious.validate());
 
       showConfirmDialogCustom(
         context,
@@ -118,7 +119,7 @@ class _BookingSlotsComponentState extends State<BookingSlotsComponent> {
         finish(context, true);
         widget.onApplyClick?.call();
       } else {
-        toast(language.pleaseSelectTheSlotsFirst, length: Toast.LENGTH_LONG);
+        TopToast.show(message: language.pleaseSelectTheSlotsFirst);
       }
     }
   }
@@ -139,7 +140,7 @@ class _BookingSlotsComponentState extends State<BookingSlotsComponent> {
       widget.bookingData!.date = formatDate(selectedHorizontalDate.toString());
       widget.bookingData!.bookingSlot = widget.data!.serviceDetail!.bookingSlot;
 
-      toast(language.lblDateTimeUpdated);
+      TopToast.show(message: language.lblDateTimeUpdated.validate());
       LiveStream().emit(LIVESTREAM_UPDATE_BOOKING_LIST);
       finish(context);
     }).catchError((e) {

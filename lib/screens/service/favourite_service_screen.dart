@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/component/back_widget.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/service_data_model.dart';
@@ -42,6 +43,7 @@ class _FavouriteServiceScreenState extends State<FavouriteServiceScreen> {
 
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         language.lblFavorite,
         color: context.primaryColor,
@@ -49,7 +51,8 @@ class _FavouriteServiceScreenState extends State<FavouriteServiceScreen> {
         backWidget: BackWidget(),
         textSize: APP_BAR_TEXT_SIZE,
       ),
-      body: Stack(
+      body: DotGridBackground(
+        child: Stack(
         children: [
           FutureBuilder<List<ServiceData>>(
             future: future,
@@ -132,6 +135,7 @@ class _FavouriteServiceScreenState extends State<FavouriteServiceScreen> {
           ),
           Observer(builder: (context) => LoaderWidget().visible(appStore.isLoading)),
         ],
+        ),
       ),
     );
   }

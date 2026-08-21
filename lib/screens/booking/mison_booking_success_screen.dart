@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
@@ -54,11 +55,11 @@ class MisonBookingSuccessScreen extends StatelessWidget {
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':                      return 'Recherche d\'artisan';
-      case 'ACCEPTED':                     return 'Artisan trouvé';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'PENDING':                      return 'Recherche d\'ouvrier';
+      case 'ACCEPTED':                     return 'Ouvrier trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente de paiement';
       case 'IN_PROGRESS':                  return 'Intervention en cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement de la prestation';
       case 'COMPLETED':                    return 'Prestation terminée';
       case 'CANCELLED':                    return 'Commande annulée';
       default:                             return s ?? '—';
@@ -73,9 +74,9 @@ class MisonBookingSuccessScreen extends StatelessWidget {
         if (!didPop) DashboardScreen().launch(context, isNewTask: true);
       },
       child: Scaffold(
-        backgroundColor: context.scaffoldBackgroundColor,
+        backgroundColor: const Color(0xFFF1F2F4),
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: const Color(0xFFF1F2F4),
           elevation: 0,
           automaticallyImplyLeading: false,
           systemOverlayStyle: SystemUiOverlayStyle(
@@ -84,7 +85,8 @@ class MisonBookingSuccessScreen extends StatelessWidget {
             statusBarColor: Colors.transparent,
           ),
         ),
-        body: SafeArea(
+        body: DotGridBackground(
+          child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Column(
@@ -107,7 +109,7 @@ class MisonBookingSuccessScreen extends StatelessWidget {
                     textAlign: TextAlign.center),
                 10.height,
                 Text(
-                  'Votre demande a bien été enregistrée.\nUn artisan vous sera assigné prochainement.',
+                  'Votre demande a bien été enregistrée.\nUn ouvrier vous sera assigné prochainement.',
                   style: secondaryTextStyle(size: 14),
                   textAlign: TextAlign.center,
                 ),
@@ -163,7 +165,7 @@ class MisonBookingSuccessScreen extends StatelessWidget {
                             child: Text(
                               _statusLabel(order.status),
                               style: boldTextStyle(
-                                  size: 12,
+                                  size: 14,
                                   color: _statusColor(order.status)),
                             ),
                           ),
@@ -191,8 +193,8 @@ class MisonBookingSuccessScreen extends StatelessWidget {
                       12.width,
                       Expanded(
                         child: Text(
-                          'Vous recevrez une notification dès qu\'un artisan accepte votre demande.',
-                          style: secondaryTextStyle(size: 13),
+                          'Vous recevrez une notification dès qu\'un ouvrier accepte votre demande.',
+                          style: secondaryTextStyle(size: 15),
                         ),
                       ),
                     ],
@@ -235,6 +237,7 @@ class MisonBookingSuccessScreen extends StatelessWidget {
               ],
             ),
           ),
+          ),
         ),
       ),
     );
@@ -264,7 +267,7 @@ class _Row extends StatelessWidget {
         Expanded(
           child: Text(
             value,
-            style: boldTextStyle(size: 13),
+            style: boldTextStyle(size: 15),
             textAlign: TextAlign.end,
           ),
         ),

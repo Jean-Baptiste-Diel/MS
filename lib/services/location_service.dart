@@ -3,6 +3,7 @@ import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 Future<Position> getUserLocationPosition() async {
   bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -33,7 +34,7 @@ Future<Position> getUserLocationPosition() async {
         throw '${language.lblEnableLocation}';
       }
     }).catchError((e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
       throw e;
     });
   });

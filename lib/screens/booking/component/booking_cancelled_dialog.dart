@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 import '../../../utils/images.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BookingCancelledDialog extends StatefulWidget {
   final BookingDetailResponse status;
@@ -50,7 +51,7 @@ class _BookingCancelledDialogState extends State<BookingCancelledDialog> {
                       width: double.infinity,
                       padding: EdgeInsets.all(12),
                       decoration: boxDecorationDefault(color: appStore.isDarkMode? context.dividerColor :primaryLightColor, borderRadius: BorderRadius.circular(4)),
-                      child: Text(language.noteCheckYourBooking, style: boldTextStyle(size: 12,color:appStore.isDarkMode?white: primaryColor,fontStyle: FontStyle.italic)),
+                      child: Text(language.noteCheckYourBooking, style: boldTextStyle(size: 12,color:appStore.isDarkMode?white: primaryColor)),
                     ),
                     24.height,
                     AppButton(
@@ -92,10 +93,10 @@ class _BookingCancelledDialogState extends State<BookingCancelledDialog> {
     appStore.setLoading(true);
 
     await updateBooking(request).then((res) async {
-      toast(res.message!);
+      TopToast.show(message: res.message!);
       finish(context, true);
     }).catchError((e) {
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
 
     appStore.setLoading(false);

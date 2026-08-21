@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/component/back_widget.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/category_model.dart';
@@ -58,6 +59,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         language.category,
         textColor: Colors.white,
@@ -67,7 +69,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
         showBack: Navigator.canPop(context),
         backWidget: BackWidget(),
       ),
-      body: Stack(
+      body: DotGridBackground(
+        child: Stack(
         children: [
           SnapHelperWidget<List<CategoryData>>(
             initialData: cachedCategoryList,
@@ -143,6 +146,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
           ),
           Observer(builder: (BuildContext context) => LoaderWidget().visible(appStore.isLoading.validate())),
         ],
+        ),
       ),
     );
   }

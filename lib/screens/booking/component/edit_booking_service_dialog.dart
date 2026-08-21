@@ -12,6 +12,7 @@ import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class EditBookingServiceDialog extends StatefulWidget {
   final BookingData data;
@@ -54,7 +55,7 @@ class _EditBookingServiceDialogState extends State<EditBookingServiceDialog> {
 
   void selectDateAndTime(BuildContext context) async {
     if (packageExpiryDate != null && DateTime.now().isAfter(packageExpiryDate!)) {
-      return toast(language.packageIsExpired);
+      return TopToast.show(message: language.packageIsExpired.validate());
     }
 
     await showDatePicker(
@@ -88,7 +89,7 @@ class _EditBookingServiceDialogState extends State<EditBookingServiceDialog> {
             dateTimeCont.text = "${formatDate(selectedDate.toString())} ${pickedTime!.format(context).toString()}";
           }
         }).catchError((e) {
-          toast(e.toString());
+          TopToast.show(message: e.toString(), type: TopToastType.error);
         });
       }
     });
@@ -98,7 +99,7 @@ class _EditBookingServiceDialogState extends State<EditBookingServiceDialog> {
     if (prevDateTimeCont.text == dateTimeCont.text) {
       finish(context);
     } else if (dateTimeCont.text.isEmpty) {
-      toast(language.lblSelectDate);
+      TopToast.show(message: language.lblSelectDate.validate());
     } else {
       appStore.setLoading(true);
       finalDate = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, pickedTime!.hour, pickedTime!.minute);
@@ -113,7 +114,7 @@ class _EditBookingServiceDialogState extends State<EditBookingServiceDialog> {
 
       await updateBooking(request).then((value) {
         widget.data.date = finalDate.toString();
-        toast(language.lblDateTimeUpdated);
+        TopToast.show(message: language.lblDateTimeUpdated.validate());
         finish(context);
       }).catchError((e) {
         log(e.toString());

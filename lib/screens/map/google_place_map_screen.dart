@@ -61,7 +61,7 @@ class _GooglePlaceMapScreenState extends State<GooglePlaceMapScreen> {
             ),
             8.height,
             Text('Ou sélectionnez directement sur la carte',
-                style: secondaryTextStyle(size: 12)),
+                style: secondaryTextStyle(size: 14)),
             12.height,
             AppButton(
               child: Text('Ouvrir la carte',

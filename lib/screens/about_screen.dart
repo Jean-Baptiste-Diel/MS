@@ -10,6 +10,7 @@ import 'package:nb_utils/nb_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/app_configuration.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class AboutScreen extends StatefulWidget {
   @override
@@ -66,7 +67,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   ),
                 ).onTap(
                   () {
-                    toast(appConfigurationStore.helplineNumber);
+                    TopToast.show(message: appConfigurationStore.helplineNumber.validate());
                     launchCall(appConfigurationStore.helplineNumber);
                   },
                   hoverColor: Colors.transparent,

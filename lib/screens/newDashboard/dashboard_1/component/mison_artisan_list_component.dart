@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_artisan_detail_screen.dart';
@@ -65,7 +66,7 @@ class _MisonArtisanListComponentState extends State<MisonArtisanListComponent> {
                 children: [
                   Text('Nos prestataires', style: boldTextStyle(size: 17)),
                   2.height,
-                  Text('Choisissez votre expert', style: secondaryTextStyle(size: 12)),
+                  Text('Choisissez votre expert', style: secondaryTextStyle(size: 14)),
                 ],
               ),
               GestureDetector(
@@ -75,8 +76,15 @@ class _MisonArtisanListComponentState extends State<MisonArtisanListComponent> {
                   decoration: BoxDecoration(
                     color: primaryColor.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withValues(alpha: 0.18),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
-                  child: Text('Voir tout', style: boldTextStyle(color: primaryColor, size: 12)),
+                  child: Text('Voir tout', style: boldTextStyle(color: primaryColor, size: 14)),
                 ),
               ),
             ],
@@ -135,7 +143,7 @@ class ArtisanCard extends StatelessWidget {
                 color: primaryColor.withValues(alpha: 0.07),
                 border: Border.all(color: primaryColor.withValues(alpha: 0.18), width: 2),
                 image: artisan.profilePictureUrl != null
-                    ? DecorationImage(image: NetworkImage(artisan.profilePictureUrl!), fit: BoxFit.cover)
+                    ? DecorationImage(image: CachedNetworkImageProvider(artisan.profilePictureUrl!), fit: BoxFit.cover)
                     : null,
               ),
               child: artisan.profilePictureUrl == null
@@ -152,7 +160,7 @@ class ArtisanCard extends StatelessWidget {
             // Nom
             Text(
               artisan.fullName,
-              style: boldTextStyle(size: 13),
+              style: boldTextStyle(size: 15),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -183,7 +191,7 @@ class ArtisanCard extends StatelessWidget {
                   Icon(Icons.star_rounded, size: 13, color: ratingBarColor),
                   2.width,
                   Text(artisan.rating.toStringAsFixed(1),
-                      style: boldTextStyle(size: 11, color: ratingBarColor)),
+                      style: boldTextStyle(size: 13, color: ratingBarColor)),
                   if (artisan.experienceYears != null) ...[
                     6.width,
                     Container(width: 3, height: 3,
@@ -194,7 +202,7 @@ class ArtisanCard extends StatelessWidget {
                   ],
                 ],
                 if (artisan.experienceYears != null)
-                  Text('${artisan.experienceYears} ans', style: secondaryTextStyle(size: 11)),
+                  Text('${artisan.experienceYears} ans', style: secondaryTextStyle(size: 13)),
               ],
             ),
           ],

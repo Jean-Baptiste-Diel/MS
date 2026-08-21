@@ -9,6 +9,7 @@ import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import 'chat_gpt_loder.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class AddReviewDialog extends StatefulWidget {
   final RatingData? customerReview;
@@ -63,22 +64,22 @@ class _AddReviewDialogState extends State<AddReviewDialog> {
 
       if (widget.handymanId == null) {
         await updateReview(req).then((value) {
-          toast(value.message);
+          TopToast.show(message: value.message.validate());
           if (widget.isCustomerRating.validate(value: false)) {
             finish(context, req);
           } else {
             finish(context, true);
           }
         }).catchError((e) {
-          toast(e.toString());
+          TopToast.show(message: e.toString(), type: TopToastType.error);
           finish(context, false);
         });
       } else {
         await handymanRating(req).then((value) {
           finish(context, true);
-          toast(value.message);
+          TopToast.show(message: value.message.validate());
         }).catchError((e) {
-          toast(e.toString());
+          TopToast.show(message: e.toString(), type: TopToastType.error);
           finish(context, false);
         });
       }
@@ -103,17 +104,17 @@ class _AddReviewDialogState extends State<AddReviewDialog> {
     if (widget.handymanId == null) {
       await updateReview(req).then((value) {
         finish(context, true);
-        toast(value.message);
+        TopToast.show(message: value.message.validate());
       }).catchError((e) {
-        toast(e.toString());
+        TopToast.show(message: e.toString(), type: TopToastType.error);
         finish(context, false);
       });
     } else {
       await handymanRating(req).then((value) {
         finish(context, true);
-        toast(value.message);
+        TopToast.show(message: value.message.validate());
       }).catchError((e) {
-        toast(e.toString());
+        TopToast.show(message: e.toString(), type: TopToastType.error);
         finish(context, false);
       });
     }
@@ -217,10 +218,10 @@ class _AddReviewDialogState extends State<AddReviewDialog> {
                                   appStore.setLoading(true);
 
                                   await deleteHandymanReview(id: widget.customerReview!.id.validate().toInt()).then((value) {
-                                    toast(value.message);
+                                    TopToast.show(message: value.message.validate());
                                     finish(context, true);
                                   }).catchError((e) {
-                                    toast(e.toString());
+                                    TopToast.show(message: e.toString(), type: TopToastType.error);
                                   });
 
                                   setState(() {});
@@ -240,7 +241,7 @@ class _AddReviewDialogState extends State<AddReviewDialog> {
                         color: context.primaryColor,
                         onTap: () {
                           if (selectedRating == 0) {
-                            toast(language.lblSelectRating);
+                            TopToast.show(message: language.lblSelectRating.validate());
                           } else {
                             submit();
                           }

@@ -84,6 +84,7 @@ class ProviderInfoScreenState extends State<ProviderInfoScreen> {
       child: SafeArea(
         top: false,
         child: Scaffold(
+          backgroundColor: Colors.transparent,
           body: SnapHelperWidget<ProviderInfoResponse>(
             future: future,
             initialData: cachedProviderList.firstWhere((element) => element?.$1 == widget.providerId.validate(), orElse: () => null)?.$2,

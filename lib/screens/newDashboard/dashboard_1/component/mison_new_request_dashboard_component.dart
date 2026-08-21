@@ -1,4 +1,4 @@
-import 'package:booking_system_flutter/screens/booking/mison_service_selection_screen.dart';
+import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -47,13 +47,13 @@ class MisonNewRequestDashboardComponent extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Besoin d\'un artisan ?',
+                      'Besoin d\'un ouvrier ?',
                       style: boldTextStyle(color: Colors.white, size: 16),
                     ),
                     4.height,
                     Text(
                       'Postez votre demande et trouvez le meilleur professionnel',
-                      style: secondaryTextStyle(color: Colors.white.withOpacity(0.8), size: 12),
+                      style: secondaryTextStyle(color: Colors.white.withOpacity(0.8), size: 15),
                     ),
                   ],
                 ),
@@ -76,13 +76,13 @@ class MisonNewRequestDashboardComponent extends StatelessWidget {
             shapeBorder: RoundedRectangleBorder(borderRadius: radius(12)),
             onTap: () async {
               if (appStore.isLoggedIn) {
-                const MisonServiceSelectionScreen().launch(context);
+                const MisonSearchServiceScreen().launch(context);
               } else {
                 setStatusBarColor(Colors.white, statusBarIconBrightness: Brightness.dark);
                 bool? res = await const SignInScreen(isFromDashboard: true).launch(context);
 
                 if (res ?? false) {
-                  const MisonServiceSelectionScreen().launch(context);
+                  const MisonSearchServiceScreen().launch(context);
                 }
               }
             },

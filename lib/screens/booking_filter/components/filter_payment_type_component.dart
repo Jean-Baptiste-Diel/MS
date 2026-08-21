@@ -72,7 +72,7 @@ class _PaymentTypeFilterState extends State<PaymentTypeFilter> {
                             : res.isSelected
                                 ? context.primaryColor
                                 : Colors.black,
-                        size: 12),
+                        size: 14),
                   ),
                 ],
               ),

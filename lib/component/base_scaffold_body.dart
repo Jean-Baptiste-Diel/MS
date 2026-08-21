@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:flutter/material.dart';
@@ -12,15 +13,17 @@ class Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: context.width(),
-      height: context.height(),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          child,
-          if (showLoader) Observer(builder: (_) => LoaderWidget().center().visible(appStore.isLoading)),
-        ],
+    return DotGridBackground(
+      child: SizedBox(
+        width: context.width(),
+        height: context.height(),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            child,
+            if (showLoader) Observer(builder: (_) => LoaderWidget().center().visible(appStore.isLoading)),
+          ],
+        ),
       ),
     );
   }

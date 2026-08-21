@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/nominatim_address_field.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
@@ -17,6 +18,7 @@ import 'package:flutter_vector_icons/flutter_vector_icons.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ArtisanEditProfileScreen extends StatefulWidget {
   const ArtisanEditProfileScreen({Key? key}) : super(key: key);
@@ -173,12 +175,12 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
         final photo = body['profile_picture_url']?.toString() ?? body['profile_picture']?.toString() ?? '';
         if (photo.isNotEmpty) await appStore.setUserProfile(photo);
 
-        toast(language.success);
+        TopToast.show(message: language.success.validate(), type: TopToastType.success);
         finish(context);
       }
     } catch (e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     }
   }
 
@@ -215,20 +217,21 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
 
     if (response.statusCode == 401 && !retry) {
       log('401 reçu — tentative de refresh token…');
-      await reGenerateToken();
-      return _patchProfile(retry: true);
+      final refreshed = await refreshToken();
+      if (refreshed) return _patchProfile(retry: true);
+      return null;
     }
 
     if (response.statusCode == 200) return _parseBody(response.body);
 
-    toast('Erreur ${response.statusCode}');
+    TopToast.show(message: 'Erreur ${response.statusCode}');
     return null;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.scaffoldBackgroundColor,
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         'Modifier mon profil',
         textColor: Colors.white,
@@ -237,7 +240,8 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
         showBack: true,
         backWidget: BackWidget(),
       ),
-      body: Stack(
+      body: DotGridBackground(
+        child: Stack(
         children: [
           SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -316,7 +320,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                             builder: (_, __, ___) => Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('+${selectedCountry.phoneCode}', style: primaryTextStyle(size: 13)),
+                                Text('+${selectedCountry.phoneCode}', style: primaryTextStyle(size: 16)),
                                 const Icon(Icons.arrow_drop_down, size: 20),
                               ],
                             ),
@@ -361,14 +365,14 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                   16.height,
 
                   // Adresse
-                  Text('Adresse', style: secondaryTextStyle(size: 12)),
+                  Text('Adresse', style: secondaryTextStyle(size: 16)),
                   8.height,
                   Container(
                     decoration: BoxDecoration(color: context.cardColor, borderRadius: BorderRadius.circular(12)),
                     child: NominatimAddressField(
                       controller: addressCont,
                       hintText: 'Votre adresse...',
-                      countryCodes: const ['sn'],
+                      countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
                       onSelected: (s) => setState(() { addressLat = s.lat; addressLon = s.lon; }),
                     ),
                   ),
@@ -379,7 +383,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                         Icon(Icons.gps_fixed_rounded, size: 12, color: Colors.green.shade600),
                         4.width,
                         Text('${addressLat!.toStringAsFixed(4)}, ${addressLon!.toStringAsFixed(4)}',
-                            style: secondaryTextStyle(size: 11, color: Colors.green.shade600)),
+                            style: secondaryTextStyle(size: 13, color: Colors.green.shade600)),
                       ],
                     ),
                   ],
@@ -402,6 +406,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
           if (appStore.isLoading)
             const Positioned.fill(child: AbsorbPointer(child: Center(child: CircularProgressIndicator()))),
         ],
+        ),
       ),
     );
   }

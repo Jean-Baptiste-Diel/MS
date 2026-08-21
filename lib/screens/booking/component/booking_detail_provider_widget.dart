@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../model/booking_data_model.dart';
 import '../../../utils/model_keys.dart';
 import '../../chat/user_chat_screen.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BookingDetailProviderWidget extends StatefulWidget {
   final UserData providerData;
@@ -218,7 +219,7 @@ class BookingDetailProviderWidgetState extends State<BookingDetailProviderWidget
                   elevation: 0,
                   color: context.scaffoldBackgroundColor,
                   onTap: () async {
-                    toast(language.pleaseWaitWhileWeLoadChatDetails);
+                    TopToast.show(message: language.pleaseWaitWhileWeLoadChatDetails.validate());
                     UserData? user = await userService.getUserNull(email: widget.providerData.email.validate());
                     if (user != null) {
                       Fluttertoast.cancel();
@@ -228,7 +229,7 @@ class BookingDetailProviderWidgetState extends State<BookingDetailProviderWidget
                       UserChatScreen(receiverUser: user, isChattingAllow: isChattingAllow).launch(context);
                     } else {
                       Fluttertoast.cancel();
-                      toast("${widget.providerData.firstName} ${language.isNotAvailableForChat}");
+                      TopToast.show(message: "${widget.providerData.firstName} ${language.isNotAvailableForChat}");
                     }
                   },
                 ).expand(),

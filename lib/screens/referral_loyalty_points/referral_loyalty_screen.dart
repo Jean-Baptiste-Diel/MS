@@ -111,7 +111,7 @@ class _ReferralAndLoyaltyScreenState extends State<ReferralAndLoyaltyScreen> {
               label: Text(
                 label,
                 style: boldTextStyle(
-                  size: 12,
+                  size: 14,
                   color: isSelected
                       ? primaryColor
                       : appStore.isDarkMode

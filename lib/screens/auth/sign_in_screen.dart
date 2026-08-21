@@ -5,11 +5,8 @@ import 'package:booking_system_flutter/screens/auth/otp_login_screen.dart';
 import 'package:booking_system_flutter/screens/auth/profile_selection_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
-import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
-import 'package:booking_system_flutter/utils/images.dart';
-import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -18,6 +15,7 @@ import 'package:pin_code_fields/pin_code_fields.dart';
 
 import '../../network/rest_apis.dart';
 import '../../network/network_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class SignInScreen extends StatefulWidget {
   final bool? isFromDashboard;
@@ -50,6 +48,8 @@ class _SignInScreenState extends State<SignInScreen> {
 
   FocusNode emailFocus = FocusNode();
   FocusNode passwordFocus = FocusNode();
+  FocusNode forgotNewPasswordFocus = FocusNode();
+  FocusNode forgotConfirmPasswordFocus = FocusNode();
 
   bool isRemember = true;
   bool isForgotPasswordMode = false;
@@ -128,7 +128,7 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       identifier = _normalizeIdentifier(emailCont.text);
     } catch (e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
       return;
     }
 
@@ -158,7 +158,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (msg == kPendingApprovalError) {
         _showPendingApprovalSheet();
       } else {
-        toast(msg);
+        TopToast.show(message: msg);
       }
     }
   }
@@ -194,7 +194,7 @@ class _SignInScreenState extends State<SignInScreen> {
             Text('Compte en attente', style: boldTextStyle(size: 18)),
             12.height,
             Text(
-              'Votre compte artisan est en cours de vérification par notre équipe.\n\nVous recevrez une notification dès que votre compte sera approuvé.',
+              'Votre compte ouvrier est en cours de vérification par notre équipe.\n\nVous recevrez une notification dès que votre compte sera approuvé.',
               style: secondaryTextStyle(size: 14),
               textAlign: TextAlign.center,
             ),
@@ -251,7 +251,7 @@ class _SignInScreenState extends State<SignInScreen> {
       }).catchError((e) {
         appStore.setLoading(false);
         log(e.toString());
-        toast(e.toString());
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     }
   }
@@ -293,7 +293,7 @@ class _SignInScreenState extends State<SignInScreen> {
         });
       }).catchError((e) {
         appStore.setLoading(false);
-        toast(e.toString());
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     }
   }
@@ -307,7 +307,7 @@ class _SignInScreenState extends State<SignInScreen> {
   void onLoginSuccessRedirection() {
     afterBuildCreated(() {
       appStore.setLoading(false);
-      toast("Your Account signed in successfully.");
+      TopToast.show(message: "Your Account signed in successfully.", type: TopToastType.success);
       if (widget.isFromServiceBooking.validate() ||
           widget.isFromDashboard.validate() ||
           widget.returnExpected.validate()) {
@@ -367,26 +367,26 @@ class _SignInScreenState extends State<SignInScreen> {
         forgotEmail = email;
         showForgotOtpStep = true;
       });
-      toast(res.message.validate());
+      TopToast.show(message: res.message.validate());
     } catch (e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     }
   }
 
   Future<void> _resetForgotPassword() async {
     hideKeyboard(context);
     if (forgotOtpCont.text.trim().length != OTP_TEXT_FIELD_LENGTH) {
-      toast(language.pleaseEnterValidOTP);
+      TopToast.show(message: language.pleaseEnterValidOTP.validate());
       return;
     }
     if (!forgotResetFormKey.currentState!.validate()) return;
     if (forgotNewPasswordCont.text != forgotConfirmPasswordCont.text) {
-      toast(language.passwordNotMatch);
+      TopToast.show(message: language.passwordNotMatch.validate());
       return;
     }
     if (!_isForgotPasswordStrong) {
-      toast('Le mot de passe ne respecte pas les critères');
+      TopToast.show(message: 'Le mot de passe ne respecte pas les critères');
       return;
     }
 
@@ -398,7 +398,7 @@ class _SignInScreenState extends State<SignInScreen> {
         'new_password': forgotNewPasswordCont.text.trim(),
       });
       appStore.setLoading(false);
-      toast(res.message.validate());
+      TopToast.show(message: res.message.validate());
       if (!mounted) return;
       _recreateForgotControllers(initialEmail: forgotEmail);
       setState(() {
@@ -408,7 +408,7 @@ class _SignInScreenState extends State<SignInScreen> {
       emailCont.text = forgotEmail;
     } catch (e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     }
   }
 
@@ -418,12 +418,12 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       final res = await forgotPassword({'email': forgotEmail});
       appStore.setLoading(false);
-      toast(res.message.validate().isNotEmpty
+      TopToast.show(message: res.message.validate().isNotEmpty
           ? res.message.validate()
-          : language.otpSentSuccessfully);
+          : language.otpSentSuccessfully, type: TopToastType.success);
     } catch (e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     }
   }
 
@@ -449,95 +449,246 @@ class _SignInScreenState extends State<SignInScreen> {
 //endregion
 
 //region Widgets
-  Widget _buildTopWidget() {
-    return Container(
-      child: Column(
-        children: [
-          Text("Bienvenu sur Mison", style: boldTextStyle(size: 24)).center(),
-          16.height,
-          Text("Content de vous revoir",
-                  style: primaryTextStyle(size: 16),
-                  textAlign: TextAlign.center)
-              .center()
-              .paddingSymmetric(horizontal: 32),
-          32.height,
-        ],
+
+  InputDecoration _fieldDecoration({required String label, String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.white,
+      labelStyle: TextStyle(color: appTextSecondaryColor, fontSize: 16),
+      hintStyle: TextStyle(color: appTextSecondaryColor.withValues(alpha: 0.6), fontSize: 16),
+      errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 13),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: primaryColor, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.redAccent),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.redAccent),
       ),
     );
   }
 
-  Widget _buildForgotTopWidget() {
-    final String title = showForgotOtpStep
-        ? 'Réinitialiser le mot de passe'
-        : 'Mot de passe oublié';
-    final String subtitle = showForgotOtpStep
-        ? 'Saisissez le code reçu puis votre nouveau mot de passe.'
-        : 'Entrez votre email pour recevoir un code OTP.';
-
+  Widget _buildTopWidget() {
     return Column(
       children: [
-        Text(title, style: boldTextStyle(size: 24)).center(),
-        12.height,
-        Text(
-          subtitle,
-          style: primaryTextStyle(size: 14),
-          textAlign: TextAlign.center,
-        ).center().paddingSymmetric(horizontal: 20),
-        24.height,
-      ],
-    );
-  }
-
-  Widget _buildForgotPasswordRule({
-    required String label,
-    required bool isValid,
-  }) {
-    final bool hasInput = forgotNewPasswordCont.text.isNotEmpty;
-    final Color inactiveColor =
-        hasInput ? Colors.red : textSecondaryColorGlobal;
-
-    return Row(
-      children: [
-        Icon(
-          isValid ? Icons.check_circle : Icons.radio_button_unchecked,
-          size: 14,
-          color: isValid ? Colors.green : inactiveColor,
-        ),
-        6.width,
-        Text(
-          label,
-          style: secondaryTextStyle(
-            size: 12,
-            color: isValid ? Colors.green : inactiveColor,
+        // Logo badge
+        Container(
+          width: 68,
+          height: 68,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [primaryColor, primaryColor.withValues(alpha: 0.6)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: 0.35),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
+          child: const Icon(Icons.home_work_rounded, color: Colors.white, size: 34),
         ),
+        22.height,
+        // Brand name
+        RichText(
+          text: TextSpan(children: [
+            TextSpan(
+              text: 'Mi',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w900,
+                color: appTextPrimaryColor,
+                letterSpacing: -1,
+              ),
+            ),
+            TextSpan(
+              text: 'son',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w900,
+                color: primaryColor,
+                letterSpacing: -1,
+              ),
+            ),
+          ]),
+        ),
+        10.height,
+        // Tagline
+        Text(
+          'Les meilleurs ouvriers, à portée de main.',
+          style: secondaryTextStyle(size: 15).copyWith(
+            color: appTextSecondaryColor,
+            letterSpacing: 0.3,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        36.height,
       ],
     );
   }
 
-  Widget _buildForgotPasswordRules() {
+  // ── Forgot password helpers ───────────────────────────────────────────────
+
+  int get _forgotPasswordStrength {
+    int s = 0;
+    if (_forgotHasMin12Chars) s++;
+    if (_forgotHasDigit) s++;
+    if (_forgotHasUppercase) s++;
+    if (_forgotHasSpecialChar) s++;
+    return s;
+  }
+
+  Color _forgotStrengthColor(int s) {
+    switch (s) {
+      case 1: return Colors.redAccent;
+      case 2: return Colors.orange;
+      case 3: return Colors.amber;
+      case 4: return const Color(0xFF4CAF50);
+      default: return Colors.transparent;
+    }
+  }
+
+  Widget _buildForgotStrengthBar() {
+    final s = _forgotPasswordStrength;
+    final color = _forgotStrengthColor(s);
+    final label = ['', 'Très faible', 'Faible', 'Moyen', 'Fort'][s];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildForgotPasswordRule(
-          label: '12 caractères minimum',
-          isValid: _forgotHasMin12Chars,
+        Row(children: [
+          for (int i = 0; i < 4; i++)
+            Expanded(
+              child: Container(
+                margin: EdgeInsets.only(right: i < 3 ? 4 : 0),
+                height: 3,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
+                  color: i < s ? color : Colors.black.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+        ]),
+        if (s > 0) ...[
+          5.height,
+          Text(label,
+              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w500)),
+        ],
+      ],
+    );
+  }
+
+  Widget _forgotGradientButton({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        height: 54,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: primaryColor,
+          boxShadow: [
+            BoxShadow(
+                color: primaryColor.withValues(alpha: 0.38),
+                blurRadius: 18,
+                offset: const Offset(0, 7))
+          ],
         ),
-        4.height,
-        _buildForgotPasswordRule(
-          label: '1 caractère spécial',
-          isValid: _forgotHasSpecialChar,
+        child: Center(
+          child: Text(label,
+              style: const TextStyle(
+                  color: Colors.black, fontSize: 15, fontWeight: FontWeight.w700)),
         ),
-        4.height,
-        _buildForgotPasswordRule(
-          label: '1 chiffre',
-          isValid: _forgotHasDigit,
+      ),
+    );
+  }
+
+  // ── Forgot password widgets ───────────────────────────────────────────────
+
+  Widget _buildForgotTopWidget() {
+    final int step = showForgotOtpStep ? 1 : 0;
+
+    return Column(
+      children: [
+        // Step indicator
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (int i = 0; i < 2; i++) ...[
+              if (i > 0) 6.width,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                width: step == i ? 28 : 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  color: step == i
+                      ? primaryColor
+                      : Colors.black.withValues(alpha: 0.12),
+                ),
+              ),
+            ],
+          ],
         ),
-        4.height,
-        _buildForgotPasswordRule(
-          label: '1 lettre majuscule',
-          isValid: _forgotHasUppercase,
+        20.height,
+        // Lock icon with glow
+        Container(
+          width: 64, height: 64,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: primaryColor.withValues(alpha: 0.12),
+            border: Border.all(color: primaryColor.withValues(alpha: 0.35), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                  color: primaryColor.withValues(alpha: 0.22),
+                  blurRadius: 22,
+                  spreadRadius: 2)
+            ],
+          ),
+          child: Icon(
+            showForgotOtpStep ? Icons.lock_reset_rounded : Icons.lock_outline_rounded,
+            color: primaryColor,
+            size: 28,
+          ),
         ),
+        18.height,
+        Text(
+          showForgotOtpStep ? 'Nouveau mot de passe' : 'Mot de passe oublié',
+          style: TextStyle(
+              color: appTextPrimaryColor, fontSize: 22, fontWeight: FontWeight.w800),
+        ).center(),
+        8.height,
+        Text(
+          showForgotOtpStep
+              ? 'Saisissez le code reçu puis définissez votre nouveau mot de passe.'
+              : 'Entrez votre adresse email pour recevoir un code de vérification.',
+          style: TextStyle(
+              color: appTextSecondaryColor, fontSize: 13, height: 1.5),
+          textAlign: TextAlign.center,
+        ).paddingSymmetric(horizontal: 12),
+        24.height,
       ],
     );
   }
@@ -549,37 +700,45 @@ class _SignInScreenState extends State<SignInScreen> {
       child: Column(
         children: [
           AppTextField(
-            textFieldType: TextFieldType.NAME,
+            textFieldType: TextFieldType.EMAIL_ENHANCED,
             controller: forgotEmailCont,
             errorThisFieldRequired: language.requiredText,
             keyboardType: TextInputType.emailAddress,
-            decoration: inputDecoration(
-              context,
-              labelText: language.hintEmailTxt,
-              hintText: language.hintEmailAddressTxt,
+            decoration: _fieldDecoration(
+              label: 'Adresse email',
+              hint: 'exemple@email.com',
             ),
-            suffix: ic_message.iconImage(size: 10).paddingAll(14),
+            suffix: Icon(Icons.alternate_email_rounded, size: 18,
+                    color: appTextSecondaryColor)
+                .paddingAll(14),
             isValidationRequired: true,
             validator: (val) {
-              if (val == null || val.trim().isEmpty)
-                return language.requiredText;
+              if (val == null || val.trim().isEmpty) return language.requiredText;
               return null;
             },
           ),
-          20.height,
-          AppButton(
-            text: language.btnSendOtp,
-            color: primaryColor,
-            textColor: Colors.white,
-            width: context.width() - context.navigationBarHeight,
-            onTap: _sendForgotOtp,
-          ),
-          12.height,
+          22.height,
+          _forgotGradientButton(label: language.btnSendOtp, onTap: _sendForgotOtp),
+          16.height,
           TextButton(
             onPressed: _backFromForgotFlow,
-            child: Text(
-              'Retour à la connexion',
-              style: boldTextStyle(color: primaryColor),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.arrow_back_ios_new_rounded,
+                    size: 14, color: appTextSecondaryColor),
+                6.width,
+                Text('Retour à la connexion',
+                    style: TextStyle(
+                        color: appTextSecondaryColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500)),
+              ],
             ),
           ),
         ],
@@ -592,115 +751,189 @@ class _SignInScreenState extends State<SignInScreen> {
       key: forgotResetFormKey,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Email destination chip
+          if (forgotEmail.isNotEmpty)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: primaryColor.withValues(alpha: 0.08),
+                  border: Border.all(
+                      color: primaryColor.withValues(alpha: 0.3), width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.mail_outline_rounded,
+                        size: 14, color: primaryColor),
+                    6.width,
+                    Text(
+                      forgotEmail.length > 28
+                          ? '${forgotEmail.substring(0, 25)}...'
+                          : forgotEmail,
+                      style: TextStyle(
+                          color: primaryColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (forgotEmail.isNotEmpty) 18.height,
+
+          // OTP boxes
           PinCodeTextField(
             appContext: context,
             length: OTP_TEXT_FIELD_LENGTH,
             controller: forgotOtpCont,
             autoDisposeControllers: false,
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            textStyle: boldTextStyle(size: 20),
+            textStyle: TextStyle(
+                color: appTextPrimaryColor, fontSize: 22, fontWeight: FontWeight.w700),
             cursorColor: primaryColor,
             pinTheme: PinTheme(
               shape: PinCodeFieldShape.box,
-              borderRadius: BorderRadius.circular(12),
-              fieldHeight: 55,
-              fieldWidth: 50,
-              activeFillColor: context.cardColor,
-              inactiveFillColor: context.cardColor,
-              selectedFillColor: context.cardColor,
+              borderRadius: BorderRadius.circular(14),
+              fieldHeight: 58,
+              fieldWidth: 52,
+              activeFillColor: Colors.white,
+              inactiveFillColor: Colors.white,
+              selectedFillColor: Colors.white,
               activeColor: primaryColor,
               inactiveColor: borderColor,
               selectedColor: primaryColor,
             ),
             enableActiveFill: true,
-            onChanged: (value) {},
+            onChanged: (_) {},
           ),
+
+          // Resend link
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: _resendForgotOtp,
-              child: Text(
-                'Renvoyer le code',
-                style: boldTextStyle(color: primaryColor),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
+              child: Text('Renvoyer le code',
+                  style: TextStyle(
+                      color: primaryColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
             ),
           ),
-          8.height,
+          16.height,
+
+          // New password
           AppTextField(
             textFieldType: TextFieldType.PASSWORD,
             controller: forgotNewPasswordCont,
+            focus: forgotNewPasswordFocus,
+            nextFocus: forgotConfirmPasswordFocus,
             errorThisFieldRequired: language.requiredText,
-            decoration: inputDecoration(context,
-                labelText: language.hintNewPasswordTxt),
-            onChanged: (_) {
-              setState(() {});
-            },
+            obscureText: true,
+            suffixPasswordVisibleWidget: Icon(Icons.visibility_outlined,
+                    size: 18, color: appTextSecondaryColor)
+                .paddingAll(14),
+            suffixPasswordInvisibleWidget: Icon(Icons.visibility_off_outlined,
+                    size: 18, color: appTextSecondaryColor)
+                .paddingAll(14),
+            decoration: _fieldDecoration(label: language.hintNewPasswordTxt),
+            onChanged: (_) => setState(() {}),
             isValidationRequired: true,
             validator: (val) {
-              if (val == null || val.trim().isEmpty) {
-                return language.requiredText;
-              }
-              if (!_isForgotPasswordStrong) {
+              if (val == null || val.trim().isEmpty) return language.requiredText;
+              if (!_isForgotPasswordStrong)
                 return 'Le mot de passe ne respecte pas les critères';
-              }
               return null;
             },
           ),
-          8.height,
-          _buildForgotPasswordRules(),
-          16.height,
+          if (forgotNewPasswordCont.text.isNotEmpty) ...[
+            10.height,
+            _buildForgotStrengthBar(),
+          ],
+          14.height,
+
+          // Confirm password
           AppTextField(
             textFieldType: TextFieldType.PASSWORD,
             controller: forgotConfirmPasswordCont,
+            focus: forgotConfirmPasswordFocus,
             errorThisFieldRequired: language.requiredText,
-            decoration: inputDecoration(
-              context,
-              labelText: language.hintReenterPasswordTxt,
-            ),
-            onChanged: (_) {
-              setState(() {});
-            },
+            obscureText: true,
+            suffixPasswordVisibleWidget: Icon(Icons.visibility_outlined,
+                    size: 18, color: appTextSecondaryColor)
+                .paddingAll(14),
+            suffixPasswordInvisibleWidget: Icon(Icons.visibility_off_outlined,
+                    size: 18, color: appTextSecondaryColor)
+                .paddingAll(14),
+            decoration: _fieldDecoration(label: 'Confirmer le mot de passe'),
+            onChanged: (_) => setState(() {}),
             isValidationRequired: true,
             validator: (val) {
-              if (val == null || val.trim().isEmpty)
-                return language.requiredText;
-              if (val != forgotNewPasswordCont.text)
-                return language.passwordNotMatch;
+              if (val == null || val.trim().isEmpty) return language.requiredText;
+              if (val != forgotNewPasswordCont.text) return language.passwordNotMatch;
               return null;
             },
           ),
-          20.height,
-          AppButton(
-            text: language.resetPassword,
-            color: primaryColor,
-            textColor: Colors.white,
-            width: context.width() - context.navigationBarHeight,
-            onTap: _resetForgotPassword,
-          ),
-          12.height,
+          22.height,
+
+          _forgotGradientButton(
+              label: language.resetPassword, onTap: _resetForgotPassword),
+          14.height,
+
+          // Navigation links
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               TextButton(
                 onPressed: _backFromForgotFlow,
-                child: Text(
-                  'Retour',
-                  style: boldTextStyle(color: primaryColor),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_back_ios_new_rounded,
+                        size: 11, color: appTextSecondaryColor),
+                    5.width,
+                    Text('Retour',
+                        style: TextStyle(
+                            color: appTextSecondaryColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500)),
+                  ],
                 ),
               ),
+              Container(
+                  width: 1, height: 14,
+                  color: borderColor,
+                  margin: const EdgeInsets.symmetric(horizontal: 8)),
               TextButton(
-                onPressed: () {
-                  setState(() {
-                    isForgotPasswordMode = false;
-                    showForgotOtpStep = false;
-                  });
-                },
-                child: Text(
-                  'Connexion',
-                  style: boldTextStyle(color: primaryColor),
+                onPressed: () => setState(() {
+                  isForgotPasswordMode = false;
+                  showForgotOtpStep = false;
+                }),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
+                child: Text('Connexion',
+                    style: TextStyle(
+                        color: primaryColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -712,7 +945,7 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget _buildRememberWidget() {
     return Column(
       children: [
-        8.height,
+        10.height,
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -721,8 +954,8 @@ class _SignInScreenState extends State<SignInScreen> {
               checkedColor: context.primaryColor,
               isChecked: isRemember,
               text: language.rememberMe,
-              textStyle: secondaryTextStyle(),
-              size: 20,
+              textStyle: secondaryTextStyle(size: 15),
+              size: 18,
               onTap: (value) async {
                 await setValue(IS_REMEMBERED, isRemember);
                 isRemember = !isRemember;
@@ -730,45 +963,61 @@ class _SignInScreenState extends State<SignInScreen> {
               },
             ),
             TextButton(
-              onPressed: () {
-                _openForgotPasswordFlow();
-              },
+              onPressed: _openForgotPasswordFlow,
               child: Text(
                 language.forgotPassword,
-                style: boldTextStyle(
-                    color: primaryColor, fontStyle: FontStyle.italic),
-                textAlign: TextAlign.right,
+                style: secondaryTextStyle(size: 15, color: primaryColor),
               ),
             ).flexible(),
           ],
         ),
-        24.height,
-        AppButton(
-          text: language.signIn,
-          color: primaryColor,
-          textColor: Colors.white,
-          width: context.width() - context.navigationBarHeight,
-          onTap: () {
-            _handleLogin();
-          },
+        22.height,
+        // Sign In button
+        GestureDetector(
+          onTap: _handleLogin,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 17),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [primaryColor, primaryColor.withValues(alpha: 0.75)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor.withValues(alpha: 0.40),
+                  blurRadius: 22,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Text(
+              language.signIn,
+              textAlign: TextAlign.center,
+              style: boldTextStyle(color: Colors.white, size: 15),
+            ),
+          ),
         ),
-        16.height,
+        20.height,
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(language.doNotHaveAccount, style: secondaryTextStyle()),
+            Text(language.doNotHaveAccount, style: secondaryTextStyle(size: 15, color: appTextSecondaryColor)),
             TextButton(
               onPressed: () {
                 hideKeyboard(context);
-
                 ProfileSelectionScreen().launch(context);
               },
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               child: Text(
                 language.signUp,
-                style: boldTextStyle(
-                  color: primaryColor,
-                  decoration: TextDecoration.underline,
-                ),
+                style: boldTextStyle(size: 15, color: primaryColor),
               ),
             ),
           ],
@@ -795,104 +1044,78 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
+  Widget _socialButton({
+    required Widget icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            icon,
+            12.width,
+            Text(label, style: boldTextStyle(size: 15, color: appTextPrimaryColor)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSocialWidget() {
     if (appConfigurationStore.socialLoginStatus) {
+      final hasSocial = appConfigurationStore.googleLoginStatus ||
+          appConfigurationStore.otpLoginStatus ||
+          (isIOS && appConfigurationStore.appleLoginStatus);
+      if (!hasSocial) return const Offstage();
+
       return Column(
         children: [
-          20.height,
-          if ((appConfigurationStore.googleLoginStatus ||
-                  appConfigurationStore.otpLoginStatus) ||
-              (isIOS && appConfigurationStore.appleLoginStatus))
-            Row(
-              children: [
-                Divider(color: context.dividerColor, thickness: 2).expand(),
-                16.width,
-                Text(language.lblOrContinueWith, style: secondaryTextStyle()),
-                16.width,
-                Divider(color: context.dividerColor, thickness: 2).expand(),
-              ],
-            ),
           24.height,
-          if (appConfigurationStore.googleLoginStatus)
-            AppButton(
-              text: '',
-              color: context.cardColor,
-              padding: const EdgeInsets.all(8),
-              textStyle: boldTextStyle(),
-              width: context.width() - context.navigationBarHeight,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: boxDecorationWithRoundedCorners(
-                      backgroundColor: primaryColor.withValues(alpha: 0.1),
-                      boxShape: BoxShape.circle,
-                    ),
-                    child: const GoogleLogoWidget(size: 16),
-                  ),
-                  Text(language.lblSignInWithGoogle,
-                          style: boldTextStyle(size: 12),
-                          textAlign: TextAlign.center)
-                      .expand(),
-                ],
-              ),
+          Row(
+            children: [
+              Divider(color: borderColor, thickness: 1).expand(),
+              16.width,
+              Text(language.lblOrContinueWith,
+                  style: secondaryTextStyle(size: 14, color: appTextSecondaryColor)),
+              16.width,
+              Divider(color: borderColor, thickness: 1).expand(),
+            ],
+          ),
+          20.height,
+          if (appConfigurationStore.googleLoginStatus) ...[
+            _socialButton(
+              icon: const GoogleLogoWidget(size: 18),
+              label: language.lblSignInWithGoogle,
               onTap: googleSignIn,
             ),
-          if (appConfigurationStore.googleLoginStatus) 16.height,
-          if (appConfigurationStore.otpLoginStatus)
-            AppButton(
-              text: '',
-              color: context.cardColor,
-              padding: const EdgeInsets.all(8),
-              textStyle: boldTextStyle(),
-              width: context.width() - context.navigationBarHeight,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: boxDecorationWithRoundedCorners(
-                      backgroundColor: primaryColor.withValues(alpha: 0.1),
-                      boxShape: BoxShape.circle,
-                    ),
-                    child: ic_calling
-                        .iconImage(size: 18, color: primaryColor)
-                        .paddingAll(4),
-                  ),
-                  Text(language.lblSignInWithOTP,
-                          style: boldTextStyle(size: 12),
-                          textAlign: TextAlign.center)
-                      .expand(),
-                ],
-              ),
+            12.height,
+          ],
+          if (appConfigurationStore.otpLoginStatus) ...[
+            _socialButton(
+              icon: Icon(Icons.phone_rounded, size: 18, color: primaryColor),
+              label: language.lblSignInWithOTP,
               onTap: otpSignIn,
             ),
-          if (appConfigurationStore.otpLoginStatus) 16.height,
-          if (isIOS)
-            if (appConfigurationStore.appleLoginStatus)
-              AppButton(
-                text: '',
-                color: context.cardColor,
-                padding: const EdgeInsets.all(8),
-                textStyle: boldTextStyle(),
-                width: context.width() - context.navigationBarHeight,
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: boxDecorationWithRoundedCorners(
-                        backgroundColor: primaryColor.withValues(alpha: 0.1),
-                        boxShape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.apple),
-                    ),
-                    Text(language.lblSignInWithApple,
-                            style: boldTextStyle(size: 12),
-                            textAlign: TextAlign.center)
-                        .expand(),
-                  ],
-                ),
-                onTap: appleSign,
-              ),
+            12.height,
+          ],
+          if (isIOS && appConfigurationStore.appleLoginStatus) ...[
+            _socialButton(
+              icon: const Icon(Icons.apple, size: 20, color: appTextPrimaryColor),
+              label: language.lblSignInWithApple,
+              onTap: appleSign,
+            ),
+            12.height,
+          ],
         ],
       );
     } else {
@@ -917,6 +1140,8 @@ class _SignInScreenState extends State<SignInScreen> {
     _safeDisposeController(forgotConfirmPasswordCont);
     emailFocus.dispose();
     passwordFocus.dispose();
+    forgotNewPasswordFocus.dispose();
+    forgotConfirmPasswordFocus.dispose();
 
     if (widget.isFromServiceBooking.validate()) {
       setStatusBarColor(Colors.transparent,
@@ -949,7 +1174,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   child: IconButton(
                     onPressed: _backFromForgotFlow,
-                    icon: Icon(Icons.arrow_back, color: context.iconColor),
+                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.black, size: 24),
                   ),
                 )
               : (Navigator.of(context).canPop()
@@ -959,7 +1184,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         color: Theme.of(context).scaffoldBackgroundColor,
                         shape: BoxShape.circle,
                       ),
-                      child: BackWidget(iconColor: context.iconColor))
+                      child: BackWidget(iconColor: Colors.black))
                   : null),
           actions: [
             if (!isForgotPasswordMode &&
@@ -977,7 +1202,29 @@ class _SignInScreenState extends State<SignInScreen> {
                   appStore.isDarkMode ? Brightness.light : Brightness.dark,
               statusBarColor: context.scaffoldBackgroundColor),
         ),
-        body: Body(
+        body: Stack(
+          children: [
+            // Subtle radial glow — top right
+            Positioned(
+              top: -80,
+              right: -80,
+              child: IgnorePointer(
+                child: Container(
+                  width: 280,
+                  height: 280,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        primaryColor.withValues(alpha: 0.18),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Body(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Observer(builder: (context) {
@@ -1014,13 +1261,11 @@ class _SignInScreenState extends State<SignInScreen> {
                             nextFocus: passwordFocus,
                             errorThisFieldRequired: language.requiredText,
                             keyboardType: TextInputType.text,
-                            decoration: inputDecoration(
-                              context,
-                              labelText: 'Identifiant',
-                              hintText: 'Entrez votre numéro ou email',
+                            decoration: _fieldDecoration(
+                              label: 'Identifiant',
+                              hint: 'Numéro ou email',
                             ),
-                            suffix:
-                                ic_message.iconImage(size: 10).paddingAll(14),
+                            suffix: Icon(Icons.alternate_email_rounded, size: 18, color: appTextSecondaryColor).paddingAll(14),
                             autoFillHints: [AutofillHints.username],
                             isValidationRequired: true,
                             validator: (val) {
@@ -1040,18 +1285,17 @@ class _SignInScreenState extends State<SignInScreen> {
                               return null;
                             },
                           ),
-                          16.height,
+                          14.height,
                           AppTextField(
                             textFieldType: TextFieldType.PASSWORD,
                             controller: passwordCont,
                             focus: passwordFocus,
                             obscureText: true,
                             suffixPasswordVisibleWidget:
-                                ic_show.iconImage(size: 10).paddingAll(14),
+                                Icon(Icons.visibility_outlined, size: 18, color: appTextSecondaryColor).paddingAll(14),
                             suffixPasswordInvisibleWidget:
-                                ic_hide.iconImage(size: 10).paddingAll(14),
-                            decoration: inputDecoration(context,
-                                labelText: language.hintPasswordTxt),
+                                Icon(Icons.visibility_off_outlined, size: 18, color: appTextSecondaryColor).paddingAll(14),
+                            decoration: _fieldDecoration(label: language.hintPasswordTxt),
                             autoFillHints: [AutofillHints.password],
                             isValidationRequired: true,
                             validator: (val) {
@@ -1075,6 +1319,8 @@ class _SignInScreenState extends State<SignInScreen> {
               );
             }),
           ),
+        ),
+          ],
         ),
       ),
     );

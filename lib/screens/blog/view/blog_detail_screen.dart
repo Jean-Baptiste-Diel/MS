@@ -75,7 +75,7 @@ class _BlogDetailScreenState extends State<BlogDetailScreen> {
                           if (data.blogDetail!.publishDate.validate().isNotEmpty)
                             Text(
                               "${data.blogDetail!.publishDate.validate()}",
-                              style: secondaryTextStyle(size: 10),
+                              style: secondaryTextStyle(size: 12),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             )

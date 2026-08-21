@@ -16,6 +16,7 @@ import '../../utils/constant.dart';
 import '../../utils/images.dart';
 import '../../utils/model_keys.dart';
 import 'help_desk_repository.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class AddHelpDeskScreen extends StatefulWidget {
   final Function(bool) callback;
@@ -68,7 +69,7 @@ class _AddHelpDeskScreenState extends State<AddHelpDeskScreen> {
       saveHelpDeskMultiPart(value: req, imageFile: imageFiles.where((element) => !element.path.contains('http')).toList()).then((value) {
         widget.callback.call(true);
       }).catchError((e) {
-        toast(e.toString());
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     }
   }

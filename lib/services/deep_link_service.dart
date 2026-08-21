@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../utils/configs.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class DeepLinkService {
   static final DeepLinkService _instance = DeepLinkService._internal();
@@ -143,7 +144,7 @@ class DeepLinkService {
 
   void _handlePaymentCallback({required bool success, required String orderId}) {
     log('[DeepLink] _handlePaymentCallback success=$success orderId=$orderId');
-    toast(success ? 'Paiement confirmé !' : 'Paiement annulé');
+    TopToast.show(message: success ? 'Paiement confirmé !' : 'Paiement annulé', type: TopToastType.success);
 
     if (orderId.isNotEmpty) {
       // Rafraîchit le détail commande déjà ouvert
@@ -185,10 +186,10 @@ class DeepLinkService {
 
     if (appStore.isLoggedIn) {
       DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
-      toast('Referral code received: $referralCode');
+      TopToast.show(message: 'Referral code received: $referralCode');
     } else {
       SignInScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
-      toast('Referral code received: $referralCode. Use it during sign up!');
+      TopToast.show(message: 'Referral code received: $referralCode. Use it during sign up!');
     }
   }
 

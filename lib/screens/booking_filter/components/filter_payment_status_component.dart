@@ -66,7 +66,7 @@ class _PaymentStatusFilterState extends State<PaymentStatusFilter> {
                             : res.isSelected
                                 ? context.primaryColor
                                 : Colors.black,
-                        size: 12),
+                        size: 14),
                   ),
                 ],
               ),

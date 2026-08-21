@@ -111,14 +111,14 @@ class _PackageComponentState extends State<PackageComponent> {
                                       price: data.originalPrice,
                                       color: lineTextColor,
                                       hourlyTextColor: Colors.white,
-                                      size: 12,
+                                      size: 14,
                                       isBoldText: true,
                                       isLineThroughEnabled: true,
                                     ),
                                   10.width,
                                   Text(
                                     '${(((data.originalPrice - data.price.validate()) / data.originalPrice) * 100).toStringAsFixed(1)}% off', // Todo translate
-                                    style: const TextStyle(fontSize: 12, color: defaultActivityStatus, fontWeight: FontWeight.bold),
+                                    style: const TextStyle(fontSize: 14, color: defaultActivityStatus, fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
@@ -133,7 +133,7 @@ class _PackageComponentState extends State<PackageComponent> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       "${data.serviceList!.length.toString().padLeft(2, '0')} service included", //Todo Language
-                      style: const TextStyle(color: lineTextColor, fontWeight: FontWeight.bold, fontSize: 12),
+                      style: const TextStyle(color: lineTextColor, fontWeight: FontWeight.bold, fontSize: 14),
                     ).paddingOnly(left: 75),
                   ),
                   16.height,
@@ -154,7 +154,7 @@ class _PackageComponentState extends State<PackageComponent> {
                       '${language.endOn}: ${formatDate(data.endDate.validate())}',
                       style: boldTextStyle(
                         color: _isDateClose(data.endDate.validate()) ? cancelled : defaultActivityStatus, // Set color conditionally
-                        size: 12,
+                        size: 14,
                       ),
                     ).paddingTop(2),
                 ],

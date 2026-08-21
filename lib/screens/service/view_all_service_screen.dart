@@ -174,7 +174,7 @@ class _ViewAllServiceScreenState extends State<ViewAllServiceScreen> {
                                       width: CATEGORY_ICON_SIZE,
                                       decoration: BoxDecoration(color: context.cardColor, shape: BoxShape.circle, border: Border.all(color: grey)),
                                       alignment: Alignment.center,
-                                      child: Text(data.name.validate(), style: boldTextStyle(size: 12)),
+                                      child: Text(data.name.validate(), style: boldTextStyle(size: 14)),
                                     )
                                   : index != 0
                                       ? data.categoryImage.validate().endsWith('.svg')
@@ -208,8 +208,8 @@ class _ViewAllServiceScreenState extends State<ViewAllServiceScreen> {
                                       : const Offstage(),
                             ),
                             4.height,
-                            if (index == 0) Text(language.lblViewAll, style: boldTextStyle(size: 12), textAlign: TextAlign.center, maxLines: 1),
-                            if (index != 0) Marquee(child: Text('${data.name.validate()}', style: boldTextStyle(size: 12), textAlign: TextAlign.center, maxLines: 1)),
+                            if (index == 0) Text(language.lblViewAll, style: boldTextStyle(size: 14), textAlign: TextAlign.center, maxLines: 1),
+                            if (index != 0) Marquee(child: Text('${data.name.validate()}', style: boldTextStyle(size: 14), textAlign: TextAlign.center, maxLines: 1)),
                           ],
                         ),
                       ),

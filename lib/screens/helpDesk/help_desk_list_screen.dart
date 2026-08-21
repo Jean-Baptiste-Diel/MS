@@ -122,7 +122,7 @@ class _HelpDeskListScreenState extends State<HelpDeskListScreen> {
                             label: Text(
                               filterStatus.name,
                               style: boldTextStyle(
-                                size: 12,
+                                size: 14,
                                 color: selectedTab.status == filterStatus.status
                                     ? primaryColor
                                     : appStore.isDarkMode

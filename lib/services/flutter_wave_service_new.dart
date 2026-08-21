@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
 import 'package:uuid/uuid.dart';
 import '../model/payment_gateway_response.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class FlutterWaveServiceNew {
   final Customer customer = Customer(
@@ -65,16 +66,16 @@ class FlutterWaveServiceNew {
             'transaction_id': response.transactionId!,
           });
         } else {
-          toast(language.transactionFailed);
+          TopToast.show(message: language.transactionFailed.validate());
         }
       } else {
         appStore.setLoading(false);
-        toast(language.lblTransactionCancelled);
+        TopToast.show(message: language.lblTransactionCancelled.validate());
       }
     } catch (e) {
       appStore.setLoading(false);
       log("FlutterWave Checkout Error: $e");
-      toast("Payment failed: ${e.toString()}");
+      TopToast.show(message: "Payment failed: ${e.toString()}", type: TopToastType.error);
     }
   }
 

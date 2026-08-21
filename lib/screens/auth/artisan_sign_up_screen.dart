@@ -3,10 +3,12 @@ import 'dart:typed_data';
 
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/auth/otp_verification_screen.dart';
+import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/services/location_service.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
@@ -22,6 +24,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ArtisanSignUpScreen extends StatefulWidget {
   const ArtisanSignUpScreen({Key? key}) : super(key: key);
@@ -55,6 +58,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   FocusNode mobileFocus = FocusNode();
   FocusNode passwordFocus = FocusNode();
   FocusNode bioFocus = FocusNode();
+  FocusNode experienceFocus = FocusNode();
 
   XFile? profileImageFile;
   Uint8List? profileImageBytes;
@@ -105,6 +109,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     professionCont.dispose();
     bioCont.dispose();
     experienceCont.dispose();
+    bioFocus.dispose();
+    experienceFocus.dispose();
     addressCont.dispose();
     _pageController.dispose();
     _progressAnimationController.dispose();
@@ -137,7 +143,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           addressLon = position.longitude;
           isLoadingLocation = false;
         });
-        toast('Localisation détectée automatiquement');
+        TopToast.show(message: 'Localisation détectée automatiquement');
       }
     } catch (e) {
       log('Erreur localisation: $e');
@@ -459,14 +465,14 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         professionProofFileName: professionProofFile?.name,
       ).then((response) async {
         appStore.setLoading(false);
-        toast(response.message.validate());
+        TopToast.show(message: response.message.validate());
         OTPVerificationScreen(
           email: emailCont.text.trim(),
           isFromSignUp: true,
         ).launch(context);
       }).catchError((e) {
         appStore.setLoading(false);
-        toast(e.toString());
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else {
       isFirstTimeValidation = false;
@@ -776,6 +782,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                   controller: mobileCont,
                   focusNode: mobileFocus,
                   keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => FocusScope.of(context).unfocus(),
                   style: primaryTextStyle(),
                   decoration: const InputDecoration(
                     hintText: 'Numéro de téléphone *',
@@ -871,6 +879,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           focusNode: bioFocus,
           maxLines: 5,
           minLines: 4,
+          textInputAction: TextInputAction.next,
+          onSubmitted: (_) => experienceFocus.requestFocus(),
           style: primaryTextStyle(),
           keyboardType: TextInputType.multiline,
           decoration: _dec('Expérience, compétences, spécialités...',).copyWith(
@@ -889,7 +899,10 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         8.height,
         TextField(
           controller: experienceCont,
+          focusNode: experienceFocus,
           keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => FocusScope.of(context).unfocus(),
           style: primaryTextStyle(),
           decoration: _dec("ex: 3").copyWith(
             labelText: null,
@@ -1380,22 +1393,28 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   Widget _buildFooterWidget() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      child: RichText(
-        textAlign: TextAlign.center,
-        text: TextSpan(
-          style: secondaryTextStyle(),
-          children: [
-            TextSpan(text: '${language.alreadyHaveAccountTxt} '),
-            TextSpan(
-              text: language.signIn,
-              style: boldTextStyle(color: primaryColor, size: 14),
-              recognizer: TapGestureRecognizer()
-                ..onTap = () {
-                  HapticFeedback.selectionClick();
-                  finish(context);
-                },
+      child: Center(
+        child: GestureDetector(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            SignInScreen().launch(context);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: RichText(
+              textAlign: TextAlign.center,
+              text: TextSpan(
+                style: secondaryTextStyle(size: 16),
+                children: [
+                  TextSpan(text: '${language.alreadyHaveAccountTxt} '),
+                  TextSpan(
+                    text: language.signIn,
+                    style: boldTextStyle(color: primaryColor, size: 16),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1425,7 +1444,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                 ),
               ],
             ),
-            child: BackWidget(iconColor: context.iconColor),
+            child: BackWidget(iconColor: Colors.black),
           ),
           scrolledUnderElevation: 0,
           systemOverlayStyle: SystemUiOverlayStyle(
@@ -1434,7 +1453,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             statusBarColor: Colors.transparent,
           ),
         ),
-        body: Stack(
+        body: DotGridBackground(
+          child: Stack(
           children: [
             Form(
               key: formKey,
@@ -1502,6 +1522,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                   : const SizedBox.shrink(),
             ),
           ],
+          ),
         ),
       ),
     );

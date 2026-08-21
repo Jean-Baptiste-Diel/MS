@@ -18,6 +18,7 @@ import 'components/help_desk_activity_component.dart';
 import 'help_desk_repository.dart';
 import 'model/help_desk_detail_response.dart';
 import 'model/help_desk_response.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class HelpDeskDetailScreen extends StatefulWidget {
   final HelpDeskListData helpDeskData;
@@ -75,14 +76,14 @@ class _HelpDeskDetailScreenState extends State<HelpDeskDetailScreen> {
   void helpDeskClosed({required num id, required String status}) {
     helpDeskClosedAPI(helpDeskId: id.validate()).then((value) {
       appStore.setLoading(false);
-      toast(value.message.validate());
+      TopToast.show(message: value.message.validate());
       LiveStream().emit(LIVESTREAM_UPDATE_HELP_DESK_LIST, OPEN);
       showBtnOption = CLOSED;
       init();
       setState(() {});
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -102,7 +103,7 @@ class _HelpDeskDetailScreenState extends State<HelpDeskDetailScreen> {
         init();
         setState(() {});
       }).catchError((e) {
-        toast(e.toString());
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     }
   }
@@ -218,7 +219,7 @@ class _HelpDeskDetailScreenState extends State<HelpDeskDetailScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(language.reply, style: boldTextStyle(size: 12)),
+                                    Text(language.reply, style: boldTextStyle(size: 14)),
                                     8.height,
                                     Container(
                                       padding: const EdgeInsets.all(16),
@@ -252,7 +253,7 @@ class _HelpDeskDetailScreenState extends State<HelpDeskDetailScreen> {
                                             },
                                           ),
                                           4.height,
-                                          Text(language.hintDescription, style: boldTextStyle(size: 12)),
+                                          Text(language.hintDescription, style: boldTextStyle(size: 14)),
                                           4.height,
                                           AppTextField(
                                             textFieldType: TextFieldType.MULTILINE,
@@ -357,7 +358,7 @@ class _HelpDeskDetailScreenState extends State<HelpDeskDetailScreen> {
               if (showBtnOption != CLOSED && widget.helpDeskData.status != CLOSED)
                 Text(
                   '*${language.youCanMarkThis}',
-                  style: secondaryTextStyle(size: 12, fontStyle: FontStyle.italic),
+                  style: secondaryTextStyle(size: 14),
                 ).paddingTop(20),
             ],
           ),

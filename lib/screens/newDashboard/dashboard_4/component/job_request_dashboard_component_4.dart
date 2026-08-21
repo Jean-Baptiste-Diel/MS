@@ -26,13 +26,13 @@ class JobRequestDashboardComponent4 extends StatelessWidget {
             children: [
               Text(
                 language.canTFindYourServices,
-                style: boldTextStyle(size: 14, color: white),
+                style: boldTextStyle(size: 16, color: white),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
               Text(
                 language.postYourRequestAnd,
-                style: boldTextStyle(color: white, size: 12),
+                style: boldTextStyle(color: white, size: 14),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),

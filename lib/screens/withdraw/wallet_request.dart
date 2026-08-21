@@ -20,6 +20,7 @@ import '../../../utils/colors.dart';
 import '../../../utils/common.dart';
 import '../../component/success_dialog.dart';
 import '../bankDetails/view/add_bank.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class WithdrawRequest extends StatefulWidget {
   num availableBalance = 0;
@@ -109,7 +110,7 @@ class _WithdrawRequestState extends State<WithdrawRequest> {
         ),
       );
     }).catchError((e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     }).whenComplete(() {
       appStore.setLoading(false);
     });

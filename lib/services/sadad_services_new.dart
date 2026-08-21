@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../model/payment_gateway_response.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class SadadServicesNew {
   late PaymentSetting paymentSetting;
@@ -45,11 +46,11 @@ class SadadServicesNew {
         //
       }).catchError((e) {
         appStore.setLoading(false);
-        toast(e.toString());
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -80,11 +81,11 @@ class SadadServicesNew {
           'transaction_id': res,
         });
       } else {
-        toast(language.transactionFailed, print: true);
+        TopToast.show(message: language.transactionFailed.validate(), type: TopToastType.error);
       }
     }).catchError((e) {
       appStore.setLoading(false);
-      toast('Error: $e', print: true);
+      TopToast.show(message: 'Error: $e', type: TopToastType.error);
     });
   }
 }

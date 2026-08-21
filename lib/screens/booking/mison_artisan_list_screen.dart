@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/component/app_empty_state.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_artisan_list_component.dart';
@@ -60,7 +62,7 @@ class _MisonArtisanListScreenState extends State<MisonArtisanListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.scaffoldBackgroundColor,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: primaryColor,
         elevation: 0,
@@ -70,7 +72,8 @@ class _MisonArtisanListScreenState extends State<MisonArtisanListScreen> {
         ),
         title: Text('Prestataires', style: boldTextStyle(color: Colors.white, size: 18)),
       ),
-      body: Column(
+      body: DotGridBackground(
+        child: Column(
         children: [
           // ── Barre de recherche ───────────────────────────────────────────
           Container(
@@ -83,10 +86,10 @@ class _MisonArtisanListScreenState extends State<MisonArtisanListScreen> {
               ),
               child: TextField(
                 controller: _searchCtrl,
-                style: primaryTextStyle(size: 14),
+                style: primaryTextStyle(size: 16),
                 decoration: InputDecoration(
                   hintText: 'Recherchez un prestataire ou un service...',
-                  hintStyle: secondaryTextStyle(size: 13),
+                  hintStyle: secondaryTextStyle(size: 15),
                   prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.withValues(alpha: 0.7)),
                   suffixIcon: _searchCtrl.text.isNotEmpty
                       ? IconButton(
@@ -106,35 +109,16 @@ class _MisonArtisanListScreenState extends State<MisonArtisanListScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _hasError
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('Erreur de chargement', style: secondaryTextStyle()),
-                            12.height,
-                            TextButton(
-                              onPressed: _load,
-                              child: Text('Réessayer', style: boldTextStyle(color: primaryColor)),
-                            ),
-                          ],
-                        ),
+                    ? AppEmptyState(
+                        type: AppEmptyStateType.error,
+                        onRetry: _load,
                       )
                     : _filtered.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.withValues(alpha: 0.4)),
-                                12.height,
-                                Text(
-                                  _searchCtrl.text.isEmpty
-                                      ? 'Aucun prestataire disponible'
-                                      : 'Aucun résultat pour "${_searchCtrl.text}"',
-                                  style: secondaryTextStyle(),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
+                        ? AppEmptyState(
+                            type: AppEmptyStateType.search,
+                            title: _searchCtrl.text.isEmpty
+                                ? 'Aucun prestataire disponible'
+                                : 'Aucun résultat pour "${_searchCtrl.text}"',
                           )
                         : RefreshIndicator(
                             color: primaryColor,
@@ -156,6 +140,7 @@ class _MisonArtisanListScreenState extends State<MisonArtisanListScreen> {
                           ),
           ),
         ],
+        ),
       ),
     );
   }

@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../component/empty_error_state_widget.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class NotificationScreen extends StatefulWidget {
   @override
@@ -111,10 +112,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
                             callback: () {},
                           ).launch(context);
                         } else {
-                          toast("Post job data not found.");
+                          TopToast.show(message: "Post job data not found.");
                         }
                       }).catchError((e) {
-                        toast(e.toString());
+                        TopToast.show(message: e.toString(), type: TopToastType.error);
                       });
                   }
                   else {

@@ -30,6 +30,7 @@ import '../../services/stripe_service_new.dart';
 import '../../utils/configs.dart';
 import '../../utils/model_keys.dart';
 import '../dashboard/dashboard_screen.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class PaymentScreen extends StatefulWidget {
   final BookingDetailResponse bookings;
@@ -98,7 +99,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       stripeServiceNew.stripePay().catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_RAZOR) {
       RazorPayServiceNew razorPayServiceNew = RazorPayServiceNew(
@@ -114,7 +115,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       );
       razorPayServiceNew.razorPayCheckout().catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_FLUTTER_WAVE) {
       FlutterWaveServiceNew flutterWaveServiceNew = FlutterWaveServiceNew();
@@ -134,12 +135,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
       List<String> supportedCurrencies = ["XOF", "XAF", "CDF", "GNF", "USD"];
 
       if (!supportedCurrencies.contains(appConfigurationStore.currencyCode)) {
-        toast(language.cinetPayNotSupportedMessage);
+        TopToast.show(message: language.cinetPayNotSupportedMessage.validate());
         return;
       } else if (totalAmount < 100) {
-        return toast('${language.totalAmountShouldBeMoreThan} ${100.toPriceFormat()}');
+        return TopToast.show(message: '${language.totalAmountShouldBeMoreThan} ${100.toPriceFormat()}');
       } else if (totalAmount > 1500000) {
-        return toast('${language.totalAmountShouldBeLessThan} ${1500000.toPriceFormat()}');
+        return TopToast.show(message: '${language.totalAmountShouldBeLessThan} ${1500000.toPriceFormat()}');
       }
 
       CinetPayServicesNew cinetPayServices = CinetPayServicesNew(
@@ -156,7 +157,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       cinetPayServices.payWithCinetPay(context: context).catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_SADAD_PAYMENT) {
       SadadServicesNew sadadServices = SadadServicesNew(
@@ -174,7 +175,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       sadadServices.payWithSadad(context).catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_PAYPAL) {
       PayPalService.paypalCheckOut(
@@ -238,7 +239,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       appStore.setLoading(false);
       paystackServices.checkout().catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_MIDTRANS) {
       MidtransService midtransService = MidtransService();
@@ -264,7 +265,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       appStore.setLoading(false);
       midtransService.midtransPaymentCheckout().catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_PHONEPE) {
       PhonePeServices peServices = PhonePeServices(
@@ -287,13 +288,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
             );
           } else if (status == 'payment_error') {
             appStore.setLoading(false);
-            toast("Payment Failed");
+            TopToast.show(message: "Payment Failed");
           } else if (status == 'payment_pending') {
             appStore.setLoading(false);
-            toast("Payment Pending");
+            TopToast.show(message: "Payment Pending");
           } else {
             appStore.setLoading(false);
-            toast("Payment status: $status");
+            TopToast.show(message: "Payment status: $status");
           }
         },
       );
@@ -302,7 +303,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       peServices.phonePeCheckout(context, isV2: isV2).catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_FROM_WALLET) {
       savePay(
@@ -348,7 +349,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       appStore.setLoading(false);
       push(DashboardScreen(redirectToBooking: true), isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
     }).catchError((e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
       appStore.setLoading(false);
     });
   }
@@ -427,7 +428,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           AppButton(
                             onTap: () async {
                               if (currentPaymentMethod == null) {
-                                return toast(language.chooseAnyOnePayment);
+                                return TopToast.show(message: language.chooseAnyOnePayment.validate());
                               }
 
                               if (currentPaymentMethod!.type == PAYMENT_METHOD_COD || currentPaymentMethod!.type == PAYMENT_METHOD_FROM_WALLET) {
@@ -449,7 +450,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                       },
                                     );
                                   } else {
-                                    toast(language.insufficientBalanceMessage);
+                                    TopToast.show(message: language.insufficientBalanceMessage.validate());
 
                                     if (appConfigurationStore.onlinePaymentStatus) {
                                       showConfirmDialogCustom(
@@ -488,7 +489,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               } else {
                                 _handleClick().catchError((e) {
                                   appStore.setLoading(false);
-                                  toast(e.toString());
+                                  TopToast.show(message: e.toString(), type: TopToastType.error);
                                 });
                               }
                             },

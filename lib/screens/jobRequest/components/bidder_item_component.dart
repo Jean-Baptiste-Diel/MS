@@ -11,6 +11,7 @@ import 'package:nb_utils/nb_utils.dart';
 
 import '../../../component/disabled_rating_bar_widget.dart';
 import '../../../component/price_widget.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BidderItemComponent extends StatefulWidget {
   final BidderData data;
@@ -64,7 +65,7 @@ class _BidderItemComponentState extends State<BidderItemComponent> {
 
         await savePostJob(request).then((value) {
           appStore.setLoading(false);
-          toast(value.message.validate());
+          TopToast.show(message: value.message.validate());
 
           finish(context);
           LiveStream().emit(LIVESTREAM_UPDATE_BIDER);
@@ -116,7 +117,7 @@ class _BidderItemComponentState extends State<BidderItemComponent> {
               if (widget.data.provider!.designation.validate().isNotEmpty)
                 Marquee(
                   directionMarguee: DirectionMarguee.oneDirection,
-                  child: Text(widget.data.provider!.designation.validate(), style: primaryTextStyle(size: 12)),
+                  child: Text(widget.data.provider!.designation.validate(), style: primaryTextStyle(size: 14)),
                 ),
               4.height,
               DisabledRatingBarWidget(
@@ -149,7 +150,7 @@ class _BidderItemComponentState extends State<BidderItemComponent> {
                 children: [
                   const Icon(Icons.check, color: white, size: 16),
                   4.width,
-                  Text(language.accept, style: boldTextStyle(color: white, size: 12)),
+                  Text(language.accept, style: boldTextStyle(color: white, size: 14)),
                 ],
               ),
               color: context.primaryColor,

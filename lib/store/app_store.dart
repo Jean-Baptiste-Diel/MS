@@ -317,8 +317,8 @@ abstract class _AppStore with Store {
         systemNavigationBarIconBrightness: Brightness.dark,
       ));
     } else {
-      textPrimaryColorGlobal = textPrimaryColor;
-      textSecondaryColorGlobal = textSecondaryColor;
+      textPrimaryColorGlobal = appTextPrimaryColor;
+      textSecondaryColorGlobal = appTextSecondaryColor;
       defaultLoaderBgColorGlobal = Colors.white;
       appButtonBackgroundColorGlobal = Colors.white;
       shadowColorGlobal = Colors.black12;

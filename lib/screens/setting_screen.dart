@@ -1,5 +1,4 @@
 import 'package:booking_system_flutter/component/base_scaffold_widget.dart';
-import 'package:booking_system_flutter/component/theme_selection_dialog.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/language_screen.dart';
 import 'package:booking_system_flutter/utils/common.dart';
@@ -32,20 +31,6 @@ class _SettingScreenState extends State<SettingScreen> {
               LanguagesScreen().launch(context).then((value) {
                 setState(() {});
               });
-            },
-          ),
-          SettingItemWidget(
-            leading: ic_dark_mode.iconImage(size: 22),
-            title: language.appTheme,
-            paddingAfterLeading: 12,
-            trailing: trailing,
-            titleTextStyle: primaryTextStyle(),
-            onTap: () async {
-              await showInDialog(
-                context,
-                builder: (context) => ThemeSelectionDaiLog(),
-                contentPadding: EdgeInsets.zero,
-              );
             },
           ),
         ],

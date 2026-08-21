@@ -24,7 +24,7 @@ class FeatureServicesDashboardComponent1 extends StatelessWidget {
         ViewAllLabel(
           label: language.featuredServices,
           list: serviceList,
-          trailingTextStyle: boldTextStyle(color: primaryColor, size: 12),
+          trailingTextStyle: boldTextStyle(color: primaryColor, size: 14),
           onTap: () {
             ViewAllServiceScreen(isFeatured: "1").launch(context);
           },

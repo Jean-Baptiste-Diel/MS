@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../model/payment_gateway_response.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class CinetPayServicesNew {
   late PaymentSetting paymentSetting;
@@ -60,9 +61,9 @@ class CinetPayServicesNew {
         log(response);
 
         if (data['status'] == "REFUSED") {
-          toast(language.yourPaymentFailedPleaseTryAgain);
+          TopToast.show(message: language.yourPaymentFailedPleaseTryAgain.validate());
         } else if (data['status'] == "ACCEPTED") {
-          toast(language.yourPaymentHasBeenMadeSuccessfully);
+          TopToast.show(message: language.yourPaymentHasBeenMadeSuccessfully.validate(), type: TopToastType.success);
           appStore.setLoading(false);
           onComplete.call({
             'transaction_id': transactionId,

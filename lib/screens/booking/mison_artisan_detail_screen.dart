@@ -1,10 +1,13 @@
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class MisonArtisanDetailScreen extends StatelessWidget {
   final MisonArtisanInfo artisan;
@@ -21,7 +24,7 @@ class MisonArtisanDetailScreen extends StatelessWidget {
 
   void _book(BuildContext context) {
     if (artisan.service?.id == null) {
-      toast('Aucun service disponible pour ce prestataire');
+      TopToast.show(message: 'Aucun service disponible pour ce prestataire');
       return;
     }
     MisonBookingFormScreen(
@@ -33,8 +36,9 @@ class MisonArtisanDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.scaffoldBackgroundColor,
-      body: CustomScrollView(
+      backgroundColor: Colors.transparent,
+      body: DotGridBackground(
+        child: CustomScrollView(
         slivers: [
           // ── Header ────────────────────────────────────────────────────────
           SliverAppBar(
@@ -105,7 +109,7 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                                 width: 2),
                             image: artisan.profilePictureUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(artisan.profilePictureUrl!),
+                                    image: CachedNetworkImageProvider(artisan.profilePictureUrl!),
                                     fit: BoxFit.cover)
                                 : null,
                           ),
@@ -129,7 +133,7 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                                   4.width,
                                   Text(artisan.service!.name!,
                                       style: primaryTextStyle(
-                                          size: 13, color: primaryColor)),
+                                          size: 15, color: primaryColor)),
                                 ]),
                               ],
                               if (artisan.averageRating != null) ...[
@@ -141,7 +145,7 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                                   Text(
                                     '${artisan.rating.toStringAsFixed(1)} (${artisan.totalReviews ?? 0} avis)',
                                     style: boldTextStyle(
-                                        size: 13, color: ratingBarColor),
+                                        size: 15, color: ratingBarColor),
                                   ),
                                 ]),
                               ],
@@ -226,6 +230,7 @@ class MisonArtisanDetailScreen extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -288,10 +293,10 @@ class _InfoRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: secondaryTextStyle(size: 12)),
+                Text(label, style: secondaryTextStyle(size: 14)),
                 4.height,
                 Text(value,
-                    style: boldTextStyle(size: 14, color: valueColor),
+                    style: boldTextStyle(size: 16, color: valueColor),
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis),
               ],

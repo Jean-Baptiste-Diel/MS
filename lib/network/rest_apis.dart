@@ -54,6 +54,7 @@ import '../model/mison_service_model.dart';
 import '../screens/referral_loyalty_points/model/loyalty_history_model.dart';
 import '../utils/app_configuration.dart';
 import '../utils/firebase_messaging_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 //region Auth Api
 /// Inscription d'un nouvel utilisateur (client) via l'API Mison
@@ -133,11 +134,11 @@ Future<BaseResponseModel> createUser(
   return completer.future;
 }
 
-/// Inscription d'un artisan via l'API Mison
+/// Inscription d'un ouvrier via l'API Mison
 /// POST /api/auth/register/artisan (multipart/form-data)
 /// Champs requis: email, password, phone, first_name, last_name
 /// Champs optionnels: profile_picture (File ou bytes), profession, experience_years, hourly_rate, daily_rate, bio, address, city
-/// Retourne un message, l'artisan doit vérifier son compte avec l'OTP
+/// Retourne un message, l'ouvrier doit vérifier son compte avec l'OTP
 Future<BaseResponseModel> createArtisan(
   Map request, {
   File? profilePicture,
@@ -180,7 +181,7 @@ Future<BaseResponseModel> createArtisan(
     return completer.future;
   }
 
-  // Profile picture (selfie) obligatoire pour artisan
+  // Profile picture (selfie) obligatoire pour ouvrier
   bool hasProfilePicture =
       (profilePicture != null && profilePicture.existsSync()) ||
           (profilePictureBytes != null && profilePictureBytes.isNotEmpty);
@@ -257,7 +258,7 @@ Future<BaseResponseModel> createArtisan(
         completer.complete(BaseResponseModel.fromJson(jsonDecode(response)));
       } else {
         completer.complete(
-            BaseResponseModel(message: 'Inscription artisan réussie'));
+            BaseResponseModel(message: 'Inscription ouvrier réussie'));
       }
     },
     onError: (error) {
@@ -359,8 +360,14 @@ Future<void> saveUserData(UserData data,
   /// Subscribe Firebase Topic
   subscribeToFirebaseTopic();
 
+  /// Token PushKit iOS — indispensable pour sonner app fermée
+  syncVoipToken();
+
   /// Envoyer le FCM token au backend Mison
   FirebaseMessaging.instance.getToken().then((token) {
+    log('════════════════════════════════════════════');
+    log('FCM TOKEN: $token');
+    log('════════════════════════════════════════════');
     if (token != null) saveFcmTokenToBackend(token);
   }).catchError((e) { log('FCM getToken error: $e'); return null; });
 
@@ -468,12 +475,12 @@ Future<void> logout(BuildContext context) async {
                       cachedWalletHistoryList!.clear();
 
                     appStore.setLoading(false);
-                    toast("Your Account has logged out successfully");
+                    TopToast.show(message: "Your Account has logged out successfully", type: TopToastType.success);
                     SignInScreen().launch(context,
                         isNewTask: true,
                         pageRouteAnimation: PageRouteAnimation.Fade);
                   } else {
-                    toast(errorInternetNotAvailable);
+                    TopToast.show(message: errorInternetNotAvailable, type: TopToastType.error);
                   }
                 },
               ).expand(),
@@ -687,14 +694,14 @@ Future<BaseResponseModel> walletTopUp(Map req) async {
 
     await appStore.setUserWalletAmount();
 
-    toast(language.yourWalletIsUpdated);
+    TopToast.show(message: language.yourWalletIsUpdated.validate());
     appStore.setLoading(false);
 
     return res;
   } catch (e) {
     log(e);
     appStore.setLoading(false);
-    toast(e.toString());
+    TopToast.show(message: e.toString(), type: TopToastType.error);
     throw e;
   }
 }
@@ -707,7 +714,7 @@ Future<ServiceDetailResponse> getServiceDetails({
   bool fromBooking = false,
 }) async {
   if (fromBooking) {
-    toast(language.pleaseWait);
+    TopToast.show(message: language.pleaseWait.validate());
   }
   String params = '';
   if (appStore.isCurrentLocation &&
@@ -1893,7 +1900,7 @@ Future<MisonActionResponse> artisanDecisionMisonOrder(String orderId, String dec
 /// POST /api/orders/{id}/rate - Noter une commande complétée
 /// @param orderId - UUID de la commande
 /// @param rating - Note de 1 à 5
-/// @param review - Commentaire de la notation
+/// @param review - Commentaire libre, facultatif (peut être vide)
 Future<MisonActionResponse> rateMisonOrder(String orderId, int rating, String review) async {
   try {
     final request = MisonRateOrderRequest(rating: rating, review: review);
@@ -1981,21 +1988,7 @@ Future<MisonArtisanListResponse> getMisonArtisans() async {
   }
 }
 
-/// POST /api/orders/{id}/set-fee - Artisan définit les frais de déplacement (ACCEPTED → AWAITING_TRAVEL_PAYMENT)
-Future<MisonActionResponse> setTravelFee(String orderId, num amount) async {
-  try {
-    final response = await buildHttpResponse(
-      'orders/$orderId/set-fee',
-      method: HttpMethodType.POST,
-      request: {'travel_fee': amount},
-    );
-    return MisonActionResponse.fromJson(await handleResponse(response));
-  } catch (e) {
-    throw e;
-  }
-}
-
-/// POST /api/orders/{id}/set-realization-fee - Artisan définit les frais de réalisation (IN_PROGRESS → AWAITING_REALIZATION_PAYMENT)
+/// POST /api/orders/{id}/set-realization-fee - Le prestataire définit les frais de prestation (IN_PROGRESS → AWAITING_REALIZATION_PAYMENT)
 Future<MisonActionResponse> setRealizationFee(String orderId, num amount) async {
   try {
     final response = await buildHttpResponse(
@@ -2042,15 +2035,44 @@ Future<MisonActionResponse> paymentCheckoutOrange(String orderId) async {
 }
 
 /// POST /api/orders/{id}/call-token - Initie ou rejoint un appel VoIP Agora
-Future<MisonCallTokenResponse> getCallToken(String orderId) async {
+/// [notify] : false quand on rejoint un appel entrant — évite de refaire
+/// sonner l'appelant.
+Future<MisonCallTokenResponse> getCallToken(String orderId, {bool notify = true}) async {
   try {
     final response = await buildHttpResponse(
       'orders/$orderId/call-token',
       method: HttpMethodType.POST,
+      request: {'notify': notify},
     );
     return MisonCallTokenResponse.fromJson(await handleResponse(response));
   } catch (e) {
     throw e;
+  }
+}
+
+/// Renvoie le token FCM courant au backend.
+/// Appelé au démarrage : un token régénéré (réinstallation, restauration,
+/// mise à jour système) rend l'ancien inutilisable côté serveur.
+Future<void> refreshPushTokens() async {
+  try {
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token != null && token.isNotEmpty) await saveFcmTokenToBackend(token);
+  } catch (e) {
+    log('refreshPushTokens error: $e');
+  }
+}
+
+/// POST /api/auth/voip-token - Token PushKit iOS
+/// Nécessaire pour recevoir un appel quand l'app est fermée sur iOS.
+Future<void> saveVoipTokenToBackend(String voipToken) async {
+  try {
+    await buildHttpResponse(
+      'auth/voip-token',
+      method: HttpMethodType.POST,
+      request: {'voip_token': voipToken},
+    );
+  } catch (e) {
+    log('saveVoipToken error: $e');
   }
 }
 

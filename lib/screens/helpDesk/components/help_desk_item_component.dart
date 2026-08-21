@@ -83,7 +83,7 @@ class _HelpDeskItemComponentState extends State<HelpDeskItemComponent> {
                         children: [
                           Text(
                             language.closedOn,
-                            style: boldTextStyle(size: 12, color: Colors.green),
+                            style: boldTextStyle(size: 14, color: Colors.green),
                           ).expand(),
                           Text(
                             formatBookingDate(widget.helpDeskData.updatedAt.validate(), format: DATE_FORMAT_10),
@@ -102,7 +102,7 @@ class _HelpDeskItemComponentState extends State<HelpDeskItemComponent> {
                   style: const ButtonStyle(padding: WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 2, horizontal: 0))),
                   child: Text(
                     language.viewDetail,
-                    style: boldTextStyle(color: primaryColor, size: 12),
+                    style: boldTextStyle(color: primaryColor, size: 14),
                   ),
                 ).withHeight(25),
               ],
@@ -117,7 +117,7 @@ class _HelpDeskItemComponentState extends State<HelpDeskItemComponent> {
                 ),
                 child: Text(
                   widget.helpDeskData.status.validate().toHelpDeskStatus(),
-                  style: boldTextStyle(color: Colors.white, size: 12),
+                  style: boldTextStyle(color: Colors.white, size: 14),
                 ),
               ),
             ),

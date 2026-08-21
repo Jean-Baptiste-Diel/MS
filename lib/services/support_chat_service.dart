@@ -145,6 +145,37 @@ class SupportChatService {
     }
   }
 
+  /// Crée ou récupère le chat privé client ↔ ouvrier d'une commande
+  Future<String> createOrGetOrderConversation(String orderId) async {
+    final response = await http.post(
+      Uri.parse('$_CONVERSATIONS_ENDPOINT/order'),
+      headers: {
+        HttpHeaders.authorizationHeader: 'Bearer ${appStore.token}',
+        HttpHeaders.contentTypeHeader: 'application/json',
+        HttpHeaders.acceptHeader: 'application/json',
+      },
+      body: jsonEncode({'order_id': orderId}),
+    );
+
+    log('OrderChat: status=${response.statusCode} body=${response.body}');
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final body = jsonDecode(response.body);
+      _conversationId = body['id']?.toString() ?? '';
+      if (_conversationId!.isEmpty) throw 'Conversation ID introuvable dans la réponse';
+      return _conversationId!;
+    }
+
+    String detail = '';
+    try {
+      final body = jsonDecode(response.body);
+      detail = body['detail'] ?? body['message'] ?? body['error'] ?? '';
+    } catch (_) {
+      detail = response.body;
+    }
+    throw 'Erreur ${response.statusCode}${detail.isNotEmpty ? " : $detail" : ""}';
+  }
+
   /// Connecte (ou reconnecte) le WebSocket
   Future<void> connect(String conversationId) async {
     _conversationId = conversationId;
@@ -179,8 +210,8 @@ class SupportChatService {
   Future<bool> reconnect() async {
     if (_conversationId == null || _disposed) return false;
     try {
-      // Rafraîchir le token avant de reconnecter (gère access + refresh token)
-      await reGenerateToken();
+      final refreshed = await refreshToken();
+      if (!refreshed) return false;
       await connect(_conversationId!);
       return true;
     } catch (e) {

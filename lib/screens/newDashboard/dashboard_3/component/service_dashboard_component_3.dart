@@ -139,7 +139,7 @@ class _ServiceDashboardComponent3State extends State<ServiceDashboardComponent3>
                   directionMarguee: DirectionMarguee.oneDirection,
                   child: Text(
                     "${widget.serviceData.subCategoryName.validate().isNotEmpty ? widget.serviceData.subCategoryName.validate() : widget.serviceData.categoryName.validate()}".toUpperCase(),
-                    style: boldTextStyle(color: appStore.isDarkMode ? textSecondaryColorGlobal : primaryColor, size: 12),
+                    style: boldTextStyle(color: appStore.isDarkMode ? textSecondaryColorGlobal : primaryColor, size: 14),
                   ),
                 ).paddingSymmetric(horizontal: 16),
                 16.height,
@@ -192,7 +192,7 @@ class _ServiceDashboardComponent3State extends State<ServiceDashboardComponent3>
                           children: [
                             Image.asset(ic_star_fill, height: 15, color: getRatingBarColor(widget.serviceData.totalRating.validate().toInt())),
                             4.width,
-                            Text("${widget.serviceData.totalRating.validate().toStringAsFixed(1)}", style: boldTextStyle(size: 12)),
+                            Text("${widget.serviceData.totalRating.validate().toStringAsFixed(1)}", style: boldTextStyle(size: 14)),
                           ],
                         ),
                       ),
@@ -206,7 +206,7 @@ class _ServiceDashboardComponent3State extends State<ServiceDashboardComponent3>
                     if (widget.serviceData.providerName.validate().isNotEmpty)
                       Text(
                         widget.serviceData.providerName.validate(),
-                        style: secondaryTextStyle(size: 12, color: appStore.isDarkMode ? Colors.white : appTextSecondaryColor),
+                        style: secondaryTextStyle(size: 15, color: appStore.isDarkMode ? Colors.white : appTextSecondaryColor),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ).expand(),

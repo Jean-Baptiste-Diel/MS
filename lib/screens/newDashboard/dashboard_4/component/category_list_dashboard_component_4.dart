@@ -23,7 +23,7 @@ class CategoryListDashboardComponent4 extends StatelessWidget {
         ViewAllLabel(
           label: listTiTle,
           list: categoryList,
-          trailingTextStyle: boldTextStyle(color: primaryColor, size: 12),
+          trailingTextStyle: boldTextStyle(color: primaryColor, size: 14),
           onTap: () {
             CategoryScreen().launch(context).then((value) {
               setStatusBarColor(Colors.transparent);

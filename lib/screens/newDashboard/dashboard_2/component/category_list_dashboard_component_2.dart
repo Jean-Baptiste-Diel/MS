@@ -41,7 +41,7 @@ class _CategoryListDashboardComponent2State extends State<CategoryListDashboardC
         ViewAllLabel(
           label: language.category,
           list: widget.categoryList!,
-          trailingTextStyle: boldTextStyle(color: primaryColor, size: 12),
+          trailingTextStyle: boldTextStyle(color: primaryColor, size: 14),
           onTap: () {
             CategoryScreen().launch(context).then((value) {
               setStatusBarColor(Colors.transparent);

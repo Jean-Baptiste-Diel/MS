@@ -106,7 +106,7 @@ class _ServiceDashboardComponent4State extends State<ServiceDashboardComponent4>
                   directionMarguee: DirectionMarguee.oneDirection,
                   child: Text(
                     "${widget.serviceData.subCategoryName.validate().isNotEmpty ? widget.serviceData.subCategoryName.validate() : widget.serviceData.categoryName.validate()}".toUpperCase(),
-                    style: boldTextStyle(color: appStore.isDarkMode ? white : primaryColor, size: 12),
+                    style: boldTextStyle(color: appStore.isDarkMode ? white : primaryColor, size: 14),
                   ).paddingSymmetric(horizontal: 8, vertical: 4),
                 ),
               ),
@@ -123,7 +123,7 @@ class _ServiceDashboardComponent4State extends State<ServiceDashboardComponent4>
               right: isRTL ? 16 : 0,
               child: Text(
                 widget.serviceData.name.validate(),
-                style: boldTextStyle(size: 14, color: Colors.white),
+                style: boldTextStyle(size: 16, color: Colors.white),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -139,7 +139,7 @@ class _ServiceDashboardComponent4State extends State<ServiceDashboardComponent4>
                   if (widget.serviceData.providerName.validate().isNotEmpty)
                     Text(
                       widget.serviceData.providerName.validate(),
-                      style: secondaryTextStyle(size: 12, color: Colors.white),
+                      style: secondaryTextStyle(size: 14, color: Colors.white),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ).expand()

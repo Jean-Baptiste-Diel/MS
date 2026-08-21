@@ -6,6 +6,7 @@ import 'package:nb_utils/nb_utils.dart';
 import '../model/payment_gateway_response.dart';
 import '../utils/common.dart';
 import '../utils/configs.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class PayStackService {
   late BuildContext ctx;
@@ -66,7 +67,7 @@ class PayStackService {
       log('Payment was successful. Ref: ${response.reference}');
     } else {
       loderOnOFF(false);
-      toast(response.message, print: true);
+      TopToast.show(message: response.message.validate(), type: TopToastType.error);
     }
   }
 }

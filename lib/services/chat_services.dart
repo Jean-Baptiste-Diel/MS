@@ -10,6 +10,7 @@ import 'package:booking_system_flutter/utils/extensions/string_extentions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 FirebaseFirestore fireStore = FirebaseFirestore.instance;
 CollectionReference? userRef;
@@ -65,7 +66,7 @@ class ChatServices extends BaseService {
     try {
       if (userRef != null) {
         await userRef.delete();
-        toast(language.clearChatMessage);
+        TopToast.show(message: language.clearChatMessage.validate());
         log("====================== Message Deleted ======================");
       }
     } catch (e) {
@@ -158,7 +159,7 @@ class ChatServices extends BaseService {
         String downloadURL = await storageRef.getDownloadURL();
         downloadUrls.add(downloadURL);
       } catch (e) {
-        toast(e.toString());
+        TopToast.show(message: e.toString(), type: TopToastType.error);
         log('Error uploading file $CHAT_FILES/${file.path.getFileName}: $e');
       }
     }

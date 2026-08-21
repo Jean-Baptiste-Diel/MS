@@ -9,6 +9,7 @@ import 'package:booking_system_flutter/utils/model_keys.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   @override
@@ -44,7 +45,7 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Future<void> changePassword() async {
     if (formKey.currentState!.validate()) {
       if (oldPasswordCont.text.trim() != getStringAsync(USER_PASSWORD)) {
-        return toast(language.provideValidCurrentPasswordMessage);
+        return TopToast.show(message: language.provideValidCurrentPasswordMessage.validate());
       }
 
       formKey.currentState!.save();
@@ -60,11 +61,11 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
         final res = await changeUserPassword(request);
         await setValue(USER_PASSWORD, newPasswordCont.text);
         appStore.setLoading(false);
-        toast(res.message.validate());
+        TopToast.show(message: res.message.validate());
         finish(context);
       } catch (e) {
         appStore.setLoading(false);
-        toast(e.toString(), print: true);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       }
     }
   }
@@ -80,7 +81,14 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(language.lblChangePwdTitle, style: secondaryTextStyle()),
+              SizedBox(
+                width: double.infinity,
+                child: Text(
+                  language.lblChangePwdTitle,
+                  textAlign: TextAlign.center,
+                  style: boldTextStyle(color: appTextPrimaryColor),
+                ),
+              ),
               24.height,
               AppTextField(
                 textFieldType: TextFieldType.PASSWORD,

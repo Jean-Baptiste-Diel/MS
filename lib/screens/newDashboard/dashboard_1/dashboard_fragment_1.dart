@@ -47,6 +47,7 @@ class _DashboardFragment1State extends State<DashboardFragment1> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           AnimatedScrollView(

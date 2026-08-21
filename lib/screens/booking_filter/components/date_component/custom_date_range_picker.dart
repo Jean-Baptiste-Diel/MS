@@ -81,9 +81,10 @@ class CustomDateRangePickerState extends State<CustomDateRangePicker>
                   borderRadius: const BorderRadius.all(Radius.circular(24.0)),
                   boxShadow: <BoxShadow>[
                     BoxShadow(
-                      color: Colors.grey.withValues(alpha:0.2),
-                      offset: const Offset(4, 4),
-                      blurRadius: 8.0,
+                      color: Colors.black.withValues(alpha: 0.18),
+                      offset: const Offset(0, 10),
+                      blurRadius: 24.0,
+                      spreadRadius: 2,
                     ),
                   ],
                 ),

@@ -7,6 +7,7 @@ import 'package:booking_system_flutter/utils/model_keys.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class InvoiceRequestDialogComponent extends StatefulWidget {
   final int? bookingId;
@@ -59,9 +60,9 @@ class _InvoiceRequestDialogComponentState extends State<InvoiceRequestDialogComp
         appStore.setLoading(false);
         finish(context, true);
 
-        toast(res.message.validate());
+        TopToast.show(message: res.message.validate());
       }).catchError((e) {
-        toast(e.toString(), print: true);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       }).whenComplete(() => appStore.setLoading(false));
     }
   }

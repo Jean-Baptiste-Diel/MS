@@ -6,6 +6,7 @@ import '../../main.dart';
 import '../model/payment_gateway_response.dart';
 import '../utils/common.dart';
 import '../utils/configs.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class PayPalService {
   static Future paypalCheckOut({
@@ -47,7 +48,7 @@ class PayPalService {
         log("onSuccess: $params");
         appStore.setLoading(false);
         if (params['message'] is String) {
-          toast(params['message']);
+          TopToast.show(message: params['message']);
         }
         onComplete.call({
           'transaction_id': params['data']['id'],
@@ -56,12 +57,12 @@ class PayPalService {
       onError: (error) {
         log("onError: $error");
         appStore.setLoading(false);
-        toast(error);
+        TopToast.show(message: error.toString(), type: TopToastType.error);
         finish(context);
       },
       onCancel: (params) {
         log("cancelled: $params");
-        toast(language.cancelled);
+        TopToast.show(message: language.cancelled.validate());
         appStore.setLoading(false);
       },
     ).launch(context).whenComplete(() => appStore.setLoading(false));

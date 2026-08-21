@@ -9,6 +9,7 @@ import '../model/payment_gateway_response.dart';
 import '../utils/colors.dart';
 import '../utils/common.dart';
 import '../utils/configs.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class RazorPayServiceNew {
   late PaymentSetting paymentSetting;
@@ -41,12 +42,12 @@ class RazorPayServiceNew {
 
   void handlePaymentError(PaymentFailureResponse response) {
     appStore.setLoading(false);
-    toast(language.yourPaymentFailedPleaseTryAgain, print: true);
+    TopToast.show(message: language.yourPaymentFailedPleaseTryAgain.validate(), type: TopToastType.error);
   }
 
   void handleExternalWallet(ExternalWalletResponse response) {
     appStore.setLoading(false);
-    toast("${language.externalWallet} " + response.walletName!);
+    TopToast.show(message: "${language.externalWallet} " + response.walletName!);
   }
 
   Future<void> razorPayCheckout() async {

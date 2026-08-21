@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/service_detail_response.dart';
 import 'package:booking_system_flutter/screens/service/component/service_faq_widget.dart';
@@ -15,19 +16,22 @@ class ServiceFaqAllScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         language.lblServiceFaq,
         color: context.scaffoldBackgroundColor,
         systemUiOverlayStyle: const SystemUiOverlayStyle(statusBarIconBrightness: Brightness.dark),
         textSize: APP_BAR_TEXT_SIZE,
       ),
-      body: AnimatedListView(
-        padding: const EdgeInsets.all(16),
-        shrinkWrap: true,
-        listAnimationType: ListAnimationType.FadeIn,
-        fadeInConfiguration: FadeInConfiguration(duration: 2.seconds),
-        itemCount: data.length,
-        itemBuilder: (_, index) => ServiceFaqWidget(serviceFaq: data[index]),
+      body: DotGridBackground(
+        child: AnimatedListView(
+          padding: const EdgeInsets.all(16),
+          shrinkWrap: true,
+          listAnimationType: ListAnimationType.FadeIn,
+          fadeInConfiguration: FadeInConfiguration(duration: 2.seconds),
+          itemCount: data.length,
+          itemBuilder: (_, index) => ServiceFaqWidget(serviceFaq: data[index]),
+        ),
       ),
     );
   }

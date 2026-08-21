@@ -29,6 +29,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../component/cached_image_widget.dart';
 import 'app_configuration.dart';
 import 'constant.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 Future<bool> get isIqonicProduct async => await getPackageName() == appPackageName;
 
@@ -52,7 +53,7 @@ bool get isRTL => RTL_LanguageS.contains(appStore.selectedLanguageCode);
 
 Future<void> commonLaunchUrl(String address, {LaunchMode launchMode = LaunchMode.inAppWebView}) async {
   await launchUrl(Uri.parse(address), mode: launchMode).catchError((e) {
-    toast('${language.invalidURL}: $address');
+    TopToast.show(message: '${language.invalidURL}: $address');
 
     throw e;
   });
@@ -150,6 +151,7 @@ InputDecoration inputDecoration(
     contentPadding: EdgeInsets.only(left: 12, bottom: 10, top: 10, right: 10),
     labelText: labelText,
     labelStyle: secondaryTextStyle(),
+    floatingLabelStyle: primaryTextStyle(size: 14, color: primaryColor),
     hintText: hintText,
     hintStyle: secondaryTextStyle(),
     alignLabelWithHint: true,
@@ -315,10 +317,10 @@ bool containsTime(String dateString) {
 Future<bool> addToWishList({required int serviceId}) async {
   Map req = {"id": "", "service_id": serviceId, "user_id": appStore.userId};
   return await addWishList(req).then((res) {
-    toast(language.serviceAddedToFavourite);
+    TopToast.show(message: language.serviceAddedToFavourite.validate());
     return true;
   }).catchError((error) {
-    toast(error.toString());
+    TopToast.show(message: error.toString(), type: TopToastType.error);
     return false;
   });
 }
@@ -327,10 +329,10 @@ Future<bool> removeToWishList({required int serviceId}) async {
   Map req = {"user_id": appStore.userId, 'service_id': serviceId};
 
   return await removeWishList(req).then((res) {
-    toast(language.serviceRemovedFromFavourite);
+    TopToast.show(message: language.serviceRemovedFromFavourite.validate());
     return true;
   }).catchError((error) {
-    toast(error.toString());
+    TopToast.show(message: error.toString(), type: TopToastType.error);
     return false;
   });
 }
@@ -358,15 +360,16 @@ void locationWiseService(BuildContext context, VoidCallback onTap) async {
         await getUserLocation().then((value) async {
           await appStore.setCurrentLocation(!appStore.isCurrentLocation);
         }).catchError((e) {
+          // TopToast.show(message: e.toString(), type: TopToastType.error);
+        }).whenComplete(() {
           appStore.setLoading(false);
-          // toast(e.toString(), print: true);
         });
 
         onTap.call();
       }
     }
   }).catchError((e) {
-    // toast(e.toString(), print: true);
+    // TopToast.show(message: e.toString(), type: TopToastType.error);
   });
 }
 
@@ -393,7 +396,7 @@ Future<List<File>> pickFiles({
             _filePath.add(File(file.path!));
           } else {
             // File size exceeds the limit
-            toast('File size should be less than $maxFileSizeMB MB');
+            TopToast.show(message: 'File size should be less than $maxFileSizeMB MB');
           }
         }
       } else {
@@ -406,7 +409,7 @@ Future<List<File>> pickFiles({
             _filePath.add(cacheFile);
           } else {
             // File size exceeds the limit
-            toast('File size should be less than $maxFileSizeMB MB');
+            TopToast.show(message: 'File size should be less than $maxFileSizeMB MB');
           }
         }
       }
@@ -517,7 +520,7 @@ void ifNotTester(VoidCallback callback) {
   if (appStore.userEmail != DEFAULT_EMAIL) {
     callback.call();
   } else {
-    toast(language.lblUnAuthorized);
+    TopToast.show(message: language.lblUnAuthorized.validate(), type: TopToastType.error);
   }
 }
 

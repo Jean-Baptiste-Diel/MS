@@ -11,27 +11,144 @@ import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
+import '../network/rest_apis.dart';
 import '../screens/booking/booking_detail_screen.dart';
 import '../screens/booking/mison_order_detail_screen.dart';
+import '../screens/call/mison_call_screen.dart';
 import '../screens/call/mison_incoming_call_screen.dart';
+import '../screens/chat/mison_order_chat_screen.dart';
 import '../screens/jobRequest/my_post_detail_screen.dart';
 import '../screens/service/service_detail_screen.dart';
 import '../screens/wallet/user_wallet_balance_screen.dart';
 import 'constant.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
+
+const _kChannelId = 'notification';
+const _kChannelName = 'Notifications';
+const _kCallChannelId = 'incoming_calls';
+const _kCallChannelName = 'Appels entrants';
+const _kCallNotifId = 9999;
+
+/// Notification plein-écran pour appel entrant (background / écran verrouillé).
+/// Sonne et affiche l'écran d'appel même quand l'app est en arrière-plan.
+Future<void> showIncomingCallNotification({
+  required String orderId,
+  required String channel,
+  required String callerName,
+}) async {
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    const android = AndroidInitializationSettings('@drawable/ic_stat_ic_notification');
+    const darwin = DarwinInitializationSettings(
+      requestSoundPermission: true,
+      requestBadgePermission: false,
+      requestAlertPermission: true,
+    );
+    await plugin.initialize(const InitializationSettings(android: android, iOS: darwin, macOS: darwin));
+
+    await plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(const AndroidNotificationChannel(
+          _kCallChannelId,
+          _kCallChannelName,
+          importance: Importance.max,
+          enableVibration: true,
+          playSound: true,
+          showBadge: true,
+        ));
+
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        _kCallChannelId,
+        _kCallChannelName,
+        importance: Importance.max,
+        priority: Priority.max,
+        fullScreenIntent: true,
+        autoCancel: false,
+        ongoing: true,
+        icon: '@drawable/ic_stat_ic_notification',
+        category: AndroidNotificationCategory.call,
+        actions: const [
+          AndroidNotificationAction('decline', 'Refuser',
+              cancelNotification: true, showsUserInterface: false),
+          AndroidNotificationAction('accept', 'Accepter',
+              cancelNotification: true, showsUserInterface: true),
+        ],
+      ),
+      iOS: const DarwinNotificationDetails(sound: 'default'),
+      macOS: const DarwinNotificationDetails(),
+    );
+
+    await plugin.show(
+      _kCallNotifId,
+      'Appel entrant',
+      callerName,
+      details,
+      payload: jsonEncode({'type': 'INCOMING_CALL', 'order_id': orderId, 'channel': channel}),
+    );
+  } catch (e) {
+    log('[showIncomingCallNotification] $e');
+  }
+}
+
+/// Annule la notification d'appel entrant (après acceptation ou refus).
+Future<void> cancelIncomingCallNotification() async {
+  try {
+    await FlutterLocalNotificationsPlugin().cancel(_kCallNotifId);
+  } catch (_) {}
+}
+
+/// Notification locale simple — sans RemoteMessage (utilisé pour le tracking artisan)
+Future<void> showSimpleLocalNotification({
+  required int id,
+  required String title,
+  required String body,
+}) async {
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    const android = AndroidInitializationSettings('@drawable/ic_stat_ic_notification');
+    const darwin = DarwinInitializationSettings(
+      requestSoundPermission: false,
+      requestBadgePermission: false,
+      requestAlertPermission: false,
+    );
+    await plugin.initialize(const InitializationSettings(android: android, iOS: darwin, macOS: darwin));
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        _kChannelId, _kChannelName,
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        icon: '@drawable/ic_stat_ic_notification',
+        autoCancel: true,
+      ),
+      iOS: DarwinNotificationDetails(),
+      macOS: DarwinNotificationDetails(),
+    );
+    await plugin.show(id, title, body, details);
+  } catch (_) {}
+}
+
+/// Crée le channel Android haute importance une seule fois au démarrage.
+Future<void> createNotificationChannel() async {
+  if (!Platform.isAndroid) return;
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(const AndroidNotificationChannel(
+        _kChannelId,
+        _kChannelName,
+        importance: Importance.max,
+        enableLights: true,
+        playSound: true,
+        showBadge: true,
+      ));
+}
 
 Future<void> initFirebaseMessaging() async {
-  await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, provisional: false, sound: true).then((value) async {
-    if (value.authorizationStatus == AuthorizationStatus.authorized) {
-      await registerNotificationListeners().catchError((e) {
-        log('Notification Listener REGISTRATION ERROR : ${e}');
-      });
-
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-      await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true).catchError((e) {
-        log('setForegroundNotificationPresentationOptions ERROR: ${e}');
-      });
-    }
+  await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, provisional: false, sound: true);
+  await registerNotificationListeners().catchError((e) {
+    log('Notification Listener REGISTRATION ERROR: $e');
   });
 }
 
@@ -49,6 +166,11 @@ Future<bool> subscribeToFirebaseTopic() async {
 
       log('Apn Token=========${apnsToken}');
     }
+
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    log('════════════════════════════════════════════');
+    log('FCM TOKEN: $fcmToken');
+    log('════════════════════════════════════════════');
 
     await FirebaseMessaging.instance.subscribeToTopic('user_${appStore.userId}').then((value) {
       result = true;
@@ -79,58 +201,96 @@ Future<bool> unsubscribeFirebaseTopic(int userId) async {
   return result;
 }
 
+/// Émet les événements LiveStream de rafraîchissement des listes de commandes.
+/// [badge] : incrémente aussi le badge artisan si true.
+/// Appeler depuis le thread principal (ou via Future.microtask).
+void emitOrderListRefresh({bool badge = true}) {
+  Future.microtask(() {
+    try {
+      if (appStore.userType == USER_TYPE_PROVIDER) {
+        if (badge) {
+          final n = artisanNotifBadge.value + 1;
+          artisanNotifBadge.value = n;
+          setValue(ARTISAN_NOTIF_BADGE_KEY, n);
+        }
+        LiveStream().emit(LIVESTREAM_ARTISAN_HOME_REFRESH, true);
+        LiveStream().emit(LIVESTREAM_ARTISAN_ORDERS_REFRESH, true);
+      } else {
+        LiveStream().emit(LIVESTREAM_UPDATE_BOOKING_LIST, true);
+        LiveStream().emit(LIVESTREAM_ORDERS_LIST_REFRESH, true);
+      }
+    } catch (_) {}
+  });
+}
+
+/// Handler top-level — appelé depuis main() avant runApp() via [registerForegroundMessageListener].
+void _handleForegroundMessage(RemoteMessage message) {
+  log('[FCM onMessage] ════ notification=${message.notification?.title} data=${message.data}');
+
+  if (message.data['type'] == 'INCOMING_CALL') {
+    final orderId = message.data['order_id']?.toString() ?? '';
+    if (!MisonCallScreen.isOutgoing(orderId)) _openIncomingCall(message.data);
+    return; // un appel entrant ne modifie pas les données de commande
+  }
+
+  // Message du chat de commande : la notification suffit, l'écran de chat
+  // reçoit le message par WebSocket s'il est ouvert.
+  if (message.data['type'] == 'ORDER_CHAT_MESSAGE') {
+    final notif = message.notification;
+    if (notif != null) {
+      showNotification(currentTimeStamp(), notif.title ?? '', parseHtmlString(notif.body ?? ''), message);
+    }
+    return;
+  }
+
+  // Rafraîchit les listes pour tout autre type de FCM lié aux commandes.
+  emitOrderListRefresh();
+
+  if (message.data['type'] == 'PAYMENT_SUCCEEDED' || message.data['type'] == 'PAYMENT_FAILED') {
+    final succeeded = message.data['type'] == 'PAYMENT_SUCCEEDED';
+    TopToast.show(message: succeeded ? 'Paiement confirmé !' : 'Échec du paiement');
+    LiveStream().emit(LIVESTREAM_ORDER_PAYMENT_UPDATE, message.data['order_id']?.toString() ?? '');
+    return;
+  }
+
+  final notif = message.notification;
+  if (notif != null) {
+    log('[FCM onMessage] → showNotification title="${notif.title}" body="${notif.body}"');
+    showNotification(currentTimeStamp(), notif.title ?? '', parseHtmlString(notif.body ?? ''), message);
+  } else {
+    log('[FCM onMessage] → notification field is null, skipping showNotification');
+  }
+}
+
+/// Enregistre le listener foreground UNE SEULE FOIS depuis main() avant runApp().
+void registerForegroundMessageListener() {
+  FirebaseMessaging.onMessage.listen(_handleForegroundMessage, onError: (e) {
+    log('[FCM onMessage] stream error: $e');
+  });
+
+  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+    log('[FCM] token refreshed → sending to backend');
+    saveFcmTokenToBackend(newToken);
+  });
+}
+
 Future<void> registerNotificationListeners() async {
-  FirebaseMessaging.instance.setAutoInitEnabled(true).then((value) {
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      log('[FCM onMessage] type=${message.data['type']} data=${message.data}');
-      // Appel entrant en foreground → ouvre l'écran directement
-      if (message.data['type'] == 'INCOMING_CALL') {
-        _openIncomingCall(message.data);
-        return;
-      }
-      // Résultat paiement → rafraîchir l'écran de détail
-      if (message.data['type'] == 'PAYMENT_SUCCEEDED' || message.data['type'] == 'PAYMENT_FAILED') {
-        final succeeded = message.data['type'] == 'PAYMENT_SUCCEEDED';
-        toast(succeeded ? 'Paiement confirmé !' : 'Échec du paiement');
-        LiveStream().emit(LIVESTREAM_ORDER_PAYMENT_UPDATE, message.data['order_id']?.toString() ?? '');
-        return;
-      }
-      if (message.notification != null && message.notification!.title.validate().isNotEmpty && message.notification!.body.validate().isNotEmpty) {
-        showNotification(currentTimeStamp(), message.notification!.title.validate(), parseHtmlString(message.notification!.body.validate()), message);
-      }
-      // Badge + refresh commandes artisan — isolé du flux principal
-      Future.microtask(() {
-        try {
-          if (appStore.userType == USER_TYPE_PROVIDER) {
-            final newCount = artisanNotifBadge.value + 1;
-            artisanNotifBadge.value = newCount;
-            setValue(ARTISAN_NOTIF_BADGE_KEY, newCount);
-            LiveStream().emit(LIVESTREAM_ARTISAN_HOME_REFRESH, true);
-            LiveStream().emit(LIVESTREAM_ARTISAN_ORDERS_REFRESH, true);
-          }
-        } catch (_) {}
-      });
-    }, onError: (e) {
-      log("setAutoInitEnabled error $e");
-    });
+  await FirebaseMessaging.instance.setAutoInitEnabled(true);
 
-    // replacement for onResume: When the app is in the background and opened directly from the push notification.
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+  // onMessageOpenedApp — app en arrière-plan, user tape la notif
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    handleNotificationClick(message);
+  }, onError: (e) {
+    log("onMessageOpenedApp Error $e");
+  });
+
+  // getInitialMessage — app fermée, user tape la notif
+  FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+    if (message != null) {
       handleNotificationClick(message);
-    }, onError: (e) {
-      log("onMessageOpenedApp Error $e");
-    });
-
-    // workaround for onLaunch: When the app is completely closed (not in the background) and opened directly from the push notification
-    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
-      if (message != null) {
-        handleNotificationClick(message);
-      }
-    }, onError: (e) {
-      log("getInitialMessage error : $e");
-    });
-  }).onError((error, stackTrace) {
-    log("onGetInitialMessage error: $error");
+    }
+  }).catchError((e) {
+    log("getInitialMessage error : $e");
   });
 }
 
@@ -146,13 +306,37 @@ void _openIncomingCall(Map<String, dynamic> data) {
 }
 
 void handleNotificationClick(RemoteMessage message) {
+  // Rafraîchit les listes dès que l'utilisateur ouvre l'app depuis une notif.
+  // Pas de badge ici : déjà incrémenté à la réception.
+  if (message.data['type'] != 'INCOMING_CALL' &&
+      message.data['type'] != 'ORDER_CHAT_MESSAGE') {
+    emitOrderListRefresh(badge: false);
+  }
+
   if (message.data['url'] != null && message.data['url'] is String) {
     commonLaunchUrl(message.data['url'], launchMode: LaunchMode.externalApplication);
   }
 
   // Appel entrant (background/terminé → tap sur notif)
   if (message.data['type'] == 'INCOMING_CALL') {
-    _openIncomingCall(message.data);
+    final orderId = message.data['order_id']?.toString() ?? '';
+    if (!MisonCallScreen.isOutgoing(orderId)) _openIncomingCall(message.data);
+    return;
+  }
+
+  // Chat de commande — ouvre directement la discussion
+  if (message.data['type'] == 'ORDER_CHAT_MESSAGE') {
+    final orderId = message.data['order_id']?.toString() ?? '';
+    if (orderId.isNotEmpty) {
+      navigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => MisonOrderChatScreen(
+            orderId: orderId,
+            peerName: message.data['sender_name']?.toString() ?? '',
+          ),
+        ),
+      );
+    }
     return;
   }
 
@@ -198,22 +382,11 @@ void handleNotificationClick(RemoteMessage message) {
 }
 
 void showNotification(int id, String title, String message, RemoteMessage remoteMessage) async {
-  log('Notification : ${remoteMessage.notification!.toMap()}');
-  log('Message Data : ${remoteMessage.data}');
+  try {
+  log('[showNotification] id=$id title="$title"');
+  log('[showNotification] data=${remoteMessage.data}');
   log("User Message Image Url : ${remoteMessage.data["image_url"]} ");
   FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-
-  //code for background notification channel
-  AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'notification',
-    'Notification',
-    importance: Importance.high,
-    enableLights: true,
-    playSound: true,
-    showBadge: true,
-  );
-
-  await flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(channel);
 
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@drawable/ic_stat_ic_notification');
   var iOS = const DarwinInitializationSettings(
@@ -229,6 +402,17 @@ void showNotification(int id, String title, String message, RemoteMessage remote
       handleNotificationClick(remoteMessage);
     },
   );
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(const AndroidNotificationChannel(
+        _kChannelId,
+        _kChannelName,
+        importance: Importance.max,
+        enableLights: true,
+        playSound: true,
+        showBadge: true,
+      ));
 
   // region image logic
   Future<String> _downloadAndSaveFile(String url, String fileName) async {
@@ -249,9 +433,9 @@ void showNotification(int id, String title, String message, RemoteMessage remote
   // endregion
 
   var androidPlatformChannelSpecifics = AndroidNotificationDetails(
-    'notification',
-    'Notification',
-    importance: Importance.high,
+    _kChannelId,
+    _kChannelName,
+    importance: Importance.max,
     visibility: NotificationVisibility.public,
     autoCancel: true,
     playSound: true,
@@ -269,5 +453,10 @@ void showNotification(int id, String title, String message, RemoteMessage remote
     macOS: darwinPlatformChannelSpecifics,
   );
 
-  flutterLocalNotificationsPlugin.show(id, title, parseHtmlString(message), platformChannelSpecifics);
+  log('[showNotification] calling show()');
+  await flutterLocalNotificationsPlugin.show(id, title, parseHtmlString(message), platformChannelSpecifics);
+  log('[showNotification] show() done');
+  } catch (e, st) {
+    log('[showNotification] ERROR: $e\n$st');
+  }
 }

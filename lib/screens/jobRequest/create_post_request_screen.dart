@@ -16,6 +16,7 @@ import 'package:nb_utils/nb_utils.dart';
 
 import '../../component/chat_gpt_loder.dart';
 import '../../component/empty_error_state_widget.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class CreatePostRequestScreen extends StatefulWidget {
   @override
@@ -52,7 +53,7 @@ class _CreatePostRequestScreenState extends State<CreatePostRequestScreen> {
       }
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
 
     setState(() {});
@@ -80,12 +81,12 @@ class _CreatePostRequestScreenState extends State<CreatePostRequestScreen> {
 
     savePostJob(request).then((value) {
       appStore.setLoading(false);
-      toast(value.message.validate());
+      TopToast.show(message: value.message.validate());
 
       finish(context, true);
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -94,11 +95,11 @@ class _CreatePostRequestScreenState extends State<CreatePostRequestScreen> {
 
     deleteServiceRequest(data.id.validate()).then((value) {
       appStore.setLoading(false);
-      toast(value.message.validate());
+      TopToast.show(message: value.message.validate());
       init();
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -161,6 +162,7 @@ class _CreatePostRequestScreenState extends State<CreatePostRequestScreen> {
                           errorThisFieldRequired: language.requiredText,
                           decoration: inputDecoration(context, labelText: language.price),
                           keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                          textInputAction: TextInputAction.done,
                           validator: (s) {
                             if (s!.isEmpty) return errorThisFieldRequired;
 
@@ -288,7 +290,7 @@ class _CreatePostRequestScreenState extends State<CreatePostRequestScreen> {
                         if (selectedServiceList.isNotEmpty) {
                           createPostJobClick();
                         } else {
-                          toast(language.createPostJobWithoutSelectService);
+                          TopToast.show(message: language.createPostJobWithoutSelectService.validate());
                         }
                       }
                     },

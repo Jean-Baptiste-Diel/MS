@@ -1,7 +1,8 @@
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/image_border_component.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
-import 'package:booking_system_flutter/screens/category/mison_category_fragment.dart';
+import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/screens/chat/chat_list_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/dashboard_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/mison_booking_fragment.dart';
@@ -44,18 +45,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     afterBuildCreated(() async {
-      /// Changes System theme when changed
-      if (getIntAsync(THEME_MODE_INDEX) == THEME_MODE_SYSTEM) {
-        appStore.setDarkMode(context.platformBrightness() == Brightness.dark);
-      }
-
-      View.of(context).platformDispatcher.onPlatformBrightnessChanged =
-          () async {
-        if (getIntAsync(THEME_MODE_INDEX) == THEME_MODE_SYSTEM) {
-          appStore.setDarkMode(
-              MediaQuery.of(context).platformBrightness == Brightness.light);
-        }
-      };
+      // Thème clair forcé — l'app ne suit plus le thème système.
     });
 
     /// Handle Firebase Notification click
@@ -134,10 +124,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return DoublePressBackWidget(
       message: language.lblBackPressMsg,
       child: Scaffold(
-        body: AnimatedOpacity(
-          opacity: 1,
-          duration: const Duration(milliseconds: 500),
-          child: [
+        backgroundColor: Colors.transparent,
+        body: DotGridBackground(
+          child: AnimatedOpacity(
+            opacity: 1,
+            duration: const Duration(milliseconds: 500),
+            child: [
             Observer(
               builder: (context) {
                 if (appConfigurationStore.userDashboardType == DASHBOARD_1) {
@@ -160,7 +152,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 builder: (context) => appStore.isLoggedIn
                     ? const MisonBookingFragment()
                     : const SignInScreen(isFromDashboard: true)),
-            const MisonCategoryFragment(),
+            const MisonSearchServiceScreen(showBackButton: false),
             if (appConfigurationStore.isEnableChat)
               Observer(
                   builder: (context) => appStore.isLoggedIn
@@ -168,13 +160,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       : const SignInScreen(isFromDashboard: true)),
             ProfileFragment(),
           ][currentIndex],
+          ),
         ),
-        bottomNavigationBar: Blur(
-          blur: 30,
-          borderRadius: radius(0),
-          child: NavigationBarTheme(
+        bottomNavigationBar: NavigationBarTheme(
             data: NavigationBarThemeData(
-              backgroundColor: context.primaryColor.withValues(alpha: 0.02),
+              backgroundColor: context.scaffoldBackgroundColor,
               indicatorColor: context.primaryColor.withValues(alpha: 0.1),
               labelTextStyle:
                   WidgetStateProperty.all(primaryTextStyle(size: 12)),
@@ -236,7 +226,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               },
             ),
           ),
-        ),
         bottomSheet: Observer(builder: (context) {
           return VoiceSearchComponent().visible(appStore.isSpeechActivated);
         }),

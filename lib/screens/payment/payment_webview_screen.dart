@@ -13,6 +13,7 @@ import 'package:nb_utils/nb_utils.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../utils/constant.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class PaymentWebViewScreen extends StatefulWidget {
   final String? url;
@@ -68,7 +69,7 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
 
         getSingleTrans(txnId.validate().replaceAll('#', ''));
       } else {
-        toast(language.lblInvalidTransaction);
+        TopToast.show(message: language.lblInvalidTransaction.validate());
       }
     }).catchError(onError);
   }
@@ -102,7 +103,7 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
         finish(context, '');
       }
     } else {
-      toast(errorSomethingWentWrong);
+      TopToast.show(message: errorSomethingWentWrong);
     }
   }
 

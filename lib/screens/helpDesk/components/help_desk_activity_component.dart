@@ -65,7 +65,7 @@ class _HelpDeskActivityComponentState extends State<HelpDeskActivityComponent> {
                     text: widget.helpDeskActivityData.activityType.validate().toHelpDeskActivityType(),
                     style: secondaryTextStyle(),
                   ),
-                  TextSpan(text: ' ${widget.helpDeskActivityData.senderName} ', style: boldTextStyle(size: 12)),
+                  TextSpan(text: ' ${widget.helpDeskActivityData.senderName} ', style: boldTextStyle(size: 14)),
                   TextSpan(
                     text: '${language.on} ${formatBookingDate(widget.helpDeskActivityData.updatedAt.validate(), format: DATE_FORMAT_10, isTime: true)}',
                     style: secondaryTextStyle(),
@@ -97,7 +97,7 @@ class _HelpDeskActivityComponentState extends State<HelpDeskActivityComponent> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(language.showMessage, style: boldTextStyle(size: 12, color: primaryColor)),
+                      Text(language.showMessage, style: boldTextStyle(size: 14, color: primaryColor)),
                       8.width,
                       Icon(isExpansionTile ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
                     ],
@@ -152,7 +152,7 @@ class _HelpDeskActivityComponentState extends State<HelpDeskActivityComponent> {
                                   text: widget.helpDeskActivityData.activityType.validate().toHelpDeskActivityType(),
                                   style: secondaryTextStyle(),
                                 ),
-                                TextSpan(text: ' ${widget.helpDeskActivityData.senderName} ', style: secondaryTextStyle(size: 12)),
+                                TextSpan(text: ' ${widget.helpDeskActivityData.senderName} ', style: secondaryTextStyle(size: 14)),
                                 TextSpan(
                                   text: '${language.on} ${formatBookingDate(widget.helpDeskActivityData.updatedAt.validate(), format: DATE_FORMAT_10, isTime: true)}',
                                   style: secondaryTextStyle(),

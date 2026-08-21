@@ -16,6 +16,7 @@ import '../../network/rest_apis.dart';
 import '../../utils/images.dart';
 import '../review/shimmer/ratting_shimmer.dart';
 import '../service/service_detail_screen.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class CustomerRatingScreen extends StatefulWidget {
   @override
@@ -157,13 +158,13 @@ class _CustomerRatingScreenState extends State<CustomerRatingScreen> {
 
                                         if (getStringAsync(USER_EMAIL) != DEFAULT_EMAIL) {
                                           await deleteReview(id: data.id.validate()).then((value) {
-                                            toast(value.message);
+                                            TopToast.show(message: value.message.validate());
                                             init();
                                           }).catchError((e) {
-                                            toast(e.toString(), print: true);
+                                            TopToast.show(message: e.toString(), type: TopToastType.error);
                                           });
                                         } else {
-                                          toast(language.lblUnAuthorized);
+                                          TopToast.show(message: language.lblUnAuthorized.validate(), type: TopToastType.error);
                                         }
                                         appStore.setLoading(false);
 

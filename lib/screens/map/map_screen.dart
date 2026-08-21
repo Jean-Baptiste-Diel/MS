@@ -11,6 +11,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../utils/constant.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class MapScreen extends StatefulWidget {
   final double? latLong;
@@ -76,7 +77,7 @@ class MapScreenState extends State<MapScreen> {
 
       setState(() {});
     }).catchError((e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
 
     appStore.setLoading(false);
@@ -229,12 +230,12 @@ class MapScreenState extends State<MapScreen> {
                   height: 16,
                   color: primaryColor.withValues(alpha:0.8),
                   text: language.setAddress.toUpperCase(),
-                  textStyle: boldTextStyle(color: white, size: 12),
+                  textStyle: boldTextStyle(color: white, size: 14),
                   onTap: () {
                     if (destinationAddressController.text.isNotEmpty) {
                       finish(context, destinationAddressController.text);
                     } else {
-                      toast(language.lblPickAddress);
+                      TopToast.show(message: language.lblPickAddress.validate());
                     }
                   },
                 ),

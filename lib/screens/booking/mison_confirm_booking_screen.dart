@@ -1,3 +1,5 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
@@ -10,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class MisonConfirmBookingScreen extends StatefulWidget {
   final MisonService service;
@@ -82,11 +85,11 @@ class _MisonConfirmBookingScreenState
           paymentMethod: '',
         ).launch(context, isNewTask: true);
       } else {
-        toast(response.message ?? 'Erreur lors de la création de la commande');
+        TopToast.show(message: response.message ?? 'Erreur lors de la création de la commande');
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      toast('Erreur : ${e.toString()}');
+      TopToast.show(message: 'Erreur : ${e.toString()}', type: TopToastType.error);
     }
   }
 
@@ -99,8 +102,9 @@ class _MisonConfirmBookingScreenState
         widget.isImmediate ? '' : _fmtTime(widget.serviceDate);
 
     return Scaffold(
-      backgroundColor: context.scaffoldBackgroundColor,
-      body: Stack(
+      backgroundColor: Colors.transparent,
+      body: DotGridBackground(
+        child: Stack(
         children: [
           CustomScrollView(
             slivers: [
@@ -140,7 +144,7 @@ class _MisonConfirmBookingScreenState
                         Text(
                           widget.service.name ?? '',
                           style: secondaryTextStyle(
-                              color: Colors.white70, size: 13),
+                              color: Colors.white70, size: 15),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -219,7 +223,7 @@ class _MisonConfirmBookingScreenState
                             Expanded(
                               child: Text(
                                 'En confirmant cette commande, j\'accepte les Conditions Générales d\'Utilisation de Mison et m\'engage à respecter la décision de la plateforme en cas de litige.',
-                                style: secondaryTextStyle(size: 12),
+                                style: secondaryTextStyle(size: 14),
                               ),
                             ),
                           ],
@@ -252,6 +256,7 @@ class _MisonConfirmBookingScreenState
               child: AppButton(
                 text: 'Confirmer la commande',
                 color: _isLoading ? Colors.grey : primaryColor,
+                disabledColor: Colors.grey,
                 textColor: Colors.white,
                 width: double.infinity,
                 height: 52,
@@ -272,7 +277,7 @@ class _MisonConfirmBookingScreenState
                               color: Colors.white, size: 20),
                           10.width,
                           Text('Confirmer la commande',
-                              style: boldTextStyle(color: Colors.white, size: 15)),
+                              style: boldTextStyle(color: Colors.white, size: 16)),
                         ],
                       ),
               ),
@@ -284,6 +289,7 @@ class _MisonConfirmBookingScreenState
                 LoaderWidget().visible(appStore.isLoading.validate()),
           ),
         ],
+        ),
       ),
     );
   }
@@ -299,7 +305,7 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Text(label, style: boldTextStyle(size: 14, color: Colors.grey));
+      Text(label, style: boldTextStyle(size: 16, color: Colors.grey));
 }
 
 class _ServiceCard extends StatelessWidget {
@@ -331,7 +337,7 @@ class _ServiceCard extends StatelessWidget {
               border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
               image: service.imageUrl != null && service.imageUrl!.isNotEmpty
                   ? DecorationImage(
-                      image: NetworkImage(service.imageUrl!), fit: BoxFit.cover)
+                      image: CachedNetworkImageProvider(service.imageUrl!), fit: BoxFit.cover)
                   : null,
             ),
             child: service.imageUrl == null || service.imageUrl!.isEmpty
@@ -344,16 +350,9 @@ class _ServiceCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(service.name ?? '',
-                    style: boldTextStyle(size: 15),
+                    style: boldTextStyle(size: 16),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
-                if (service.minPrice != null && service.minPrice!.isNotEmpty) ...[
-                  4.height,
-                  Text(
-                    'À partir de ${service.minPrice} FCFA',
-                    style: secondaryTextStyle(size: 12, color: primaryColor),
-                  ),
-                ],
               ],
             ),
           ),
@@ -365,7 +364,7 @@ class _ServiceCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text('Sélectionné',
-                style: boldTextStyle(size: 11, color: accept)),
+                style: boldTextStyle(size: 13, color: accept)),
           ),
         ],
       ),
@@ -425,10 +424,10 @@ class _InfoRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: secondaryTextStyle(size: 12)),
+                Text(label, style: secondaryTextStyle(size: 14)),
                 4.height,
                 Text(value,
-                    style: boldTextStyle(size: 14),
+                    style: boldTextStyle(size: 16),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis),
               ],

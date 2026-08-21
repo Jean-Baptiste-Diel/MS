@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
@@ -10,13 +11,15 @@ import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-import '../../component/empty_error_state_widget.dart';
+import '../../component/app_empty_state.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ArtisanDashboardScreen extends StatefulWidget {
   const ArtisanDashboardScreen({Key? key}) : super(key: key);
@@ -47,9 +50,12 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
     return DoublePressBackWidget(
       message: language.lblBackPressMsg,
       child: Scaffold(
-        body: IndexedStack(
-          index: _currentIndex,
-          children: _tabs,
+        backgroundColor: Colors.transparent,
+        body: DotGridBackground(
+          child: IndexedStack(
+            index: _currentIndex,
+            children: _tabs,
+          ),
         ),
         bottomNavigationBar: NavigationBarTheme(
           data: NavigationBarThemeData(
@@ -80,12 +86,12 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
               NavigationDestination(
                 icon: Observer(
                   builder: (_) => (appStore.isLoggedIn && appStore.userProfileImage.isNotEmpty)
-                      ? CircleAvatar(radius: 13, backgroundImage: NetworkImage(appStore.userProfileImage))
+                      ? CircleAvatar(radius: 13, backgroundImage: CachedNetworkImageProvider(appStore.userProfileImage))
                       : ic_profile2.iconImage(color: appTextSecondaryColor),
                 ),
                 selectedIcon: Observer(
                   builder: (_) => (appStore.isLoggedIn && appStore.userProfileImage.isNotEmpty)
-                      ? CircleAvatar(radius: 13, backgroundImage: NetworkImage(appStore.userProfileImage))
+                      ? CircleAvatar(radius: 13, backgroundImage: CachedNetworkImageProvider(appStore.userProfileImage))
                       : ic_profile2.iconImage(color: context.primaryColor),
                 ),
                 label: language.profile,
@@ -115,6 +121,10 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   UniqueKey _key = UniqueKey();
   bool _isAvailable = true;
   Position? _artisanPosition;
+  final ScrollController _scrollController = ScrollController();
+  bool _isCollapsed = false;
+
+  static const double _expandedHeight = 140.0;
 
   @override
   void initState() {
@@ -122,6 +132,11 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
     _load();
     _restoreBadge();
     _fetchPosition();
+    _scrollController.addListener(() {
+      final collapsed = _scrollController.hasClients &&
+          _scrollController.offset > (_expandedHeight - kToolbarHeight);
+      if (collapsed != _isCollapsed) setState(() => _isCollapsed = collapsed);
+    });
     LiveStream().on(LIVESTREAM_ARTISAN_HOME_REFRESH, (_) {
       if (mounted) setState(() => _load());
     });
@@ -129,6 +144,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     LiveStream().dispose(LIVESTREAM_ARTISAN_HOME_REFRESH);
     super.dispose();
   }
@@ -193,18 +209,30 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.scaffoldBackgroundColor,
+      backgroundColor: Colors.transparent,
       body: RefreshIndicator(
         color: primaryColor,
         onRefresh: () async { setState(() => _load()); },
         child: CustomScrollView(
+          controller: _scrollController,
           slivers: [
             SliverAppBar(
-              expandedHeight: 140,
+              expandedHeight: _expandedHeight,
               floating: false,
               pinned: true,
               backgroundColor: primaryColor,
               automaticallyImplyLeading: false,
+              centerTitle: false,
+              title: _isCollapsed
+                  ? Observer(
+                      builder: (_) => Text(
+                        '$_greeting, ${appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'} 👋',
+                        style: boldTextStyle(color: Colors.white, size: 16),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )
+                  : null,
               actions: [
                 ValueListenableBuilder<int>(
                   valueListenable: artisanNotifBadge,
@@ -268,7 +296,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '$_greeting, ${appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Artisan'} 👋',
+                                    '$_greeting, ${appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'} 👋',
                                     style: boldTextStyle(color: Colors.white, size: 19),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -276,7 +304,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                                   4.height,
                                   Text(
                                     DateFormat('EEEE dd MMMM yyyy', 'fr_FR').format(DateTime.now()),
-                                    style: secondaryTextStyle(color: Colors.white.withValues(alpha: 0.75), size: 12),
+                                    style: secondaryTextStyle(color: Colors.white.withValues(alpha: 0.75), size: 14),
                                   ),
                                 ],
                               ),
@@ -332,14 +360,11 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                   padding: EdgeInsets.symmetric(vertical: 60),
                   child: Center(child: CircularProgressIndicator()),
                 ),
-                errorBuilder: (error) => Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: NoDataWidget(
-                    title: error,
-                    imageWidget: const ErrorStateWidget(),
-                    retryText: language.reload,
-                    onRetry: () => setState(() => _load()),
-                  ),
+                errorBuilder: (error) => AppEmptyState(
+                  type: AppEmptyStateType.error,
+                  title: error,
+                  retryLabel: language.reload,
+                  onRetry: () => setState(() => _load()),
                 ),
                 onSuccess: (response) {
                   final orders = response.data ?? [];
@@ -377,7 +402,7 @@ class _DashboardBody extends StatelessWidget {
     final missions  = orders.where((o) => o.artisan != null).toList();
 
     final total     = missions.length;
-    final enCours   = missions.where((o) => o.isAccepted || o.isAwaitingTravelPayment || o.isInProgress || o.isAwaitingRealizationPayment).length;
+    final enCours   = missions.where((o) => o.isActiveWithArtisan).length;
     final terminees = missions.where((o) => o.isCompleted).length;
     final refusees  = missions.where((o) => o.isRejected).length;
 
@@ -448,13 +473,10 @@ class _DashboardBody extends StatelessWidget {
         ),
 
         if (recent.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 32),
-            child: NoDataWidget(
-              title: 'Aucune commande',
-              subTitle: 'Aucune commande ne vous a été assignée pour le moment.',
-              imageWidget: const EmptyStateWidget(),
-            ),
+          const AppEmptyState(
+            type: AppEmptyStateType.empty,
+            title: 'Aucune commande',
+            subtitle: 'Aucune commande ne vous a été assignée pour le moment.',
           )
         else
           ListView.separated(
@@ -518,7 +540,7 @@ class _UrgentOrderTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(order.service?.name ?? 'Service',
-                      style: boldTextStyle(size: 14),
+                      style: boldTextStyle(size: 16),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                   4.height,
                   Row(
@@ -526,13 +548,13 @@ class _UrgentOrderTile extends StatelessWidget {
                       Icon(Icons.person_outline, size: 12, color: Colors.grey),
                       4.width,
                       Flexible(child: Text(order.client?.fullName ?? '',
-                          style: secondaryTextStyle(size: 12),
+                          style: secondaryTextStyle(size: 14),
                           maxLines: 1, overflow: TextOverflow.ellipsis)),
                       8.width,
                       Icon(Icons.schedule, size: 12, color: Colors.grey),
                       4.width,
                       Flexible(child: Text(_formatDate(order.serviceDate),
-                          style: secondaryTextStyle(size: 12),
+                          style: secondaryTextStyle(size: 14),
                           maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ],
                   ),
@@ -546,7 +568,7 @@ class _UrgentOrderTile extends StatelessWidget {
                 color: Colors.orange,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Text('Voir', style: boldTextStyle(color: Colors.white, size: 11)),
+              child: Text('Voir', style: boldTextStyle(color: Colors.white, size: 13)),
             ),
           ],
         ),
@@ -592,7 +614,7 @@ class _StatCard extends StatelessWidget {
                 children: [
                   Text('$value', style: boldTextStyle(size: 22, color: color)),
                   2.height,
-                  Text(label, style: secondaryTextStyle(size: 12)),
+                  Text(label, style: secondaryTextStyle(size: 14)),
                 ],
               ),
             ),
@@ -628,11 +650,11 @@ class _RecentOrderTile extends StatelessWidget {
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':                      return 'Recherche d\'artisan';
-      case 'ACCEPTED':                     return 'Artisan trouvé';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'PENDING':                      return 'Recherche d\'ouvrier';
+      case 'ACCEPTED':                     return 'Ouvrier trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente de paiement';
       case 'IN_PROGRESS':                  return 'Intervention en cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement de la prestation';
       case 'COMPLETED':                    return 'Prestation terminée';
       case 'CANCELLED':                    return 'Commande annulée';
       default:                             return s ?? '';
@@ -661,7 +683,7 @@ class _RecentOrderTile extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: primaryColor.withValues(alpha: 0.1),
                 image: order.service?.imageUrl != null
-                    ? DecorationImage(image: NetworkImage(order.service!.imageUrl!), fit: BoxFit.cover)
+                    ? DecorationImage(image: CachedNetworkImageProvider(order.service!.imageUrl!), fit: BoxFit.cover)
                     : null,
               ),
               child: order.service?.imageUrl == null
@@ -673,40 +695,44 @@ class _RecentOrderTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(order.service?.name ?? 'Service', style: boldTextStyle(size: 14),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  4.height,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(order.service?.name ?? 'Service',
+                            style: boldTextStyle(size: 16),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                      4.width,
+                      Text(_formatDate(order.serviceDate),
+                          style: secondaryTextStyle(size: 13),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                  6.height,
                   Row(
                     children: [
                       Icon(Icons.person_outline, size: 12, color: Colors.grey),
                       4.width,
-                      Flexible(
+                      Expanded(
                         child: Text(order.client?.fullName ?? '',
-                            style: secondaryTextStyle(size: 12),
+                            style: secondaryTextStyle(size: 14),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                       8.width,
-                      Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
-                      4.width,
-                      Flexible(
-                        child: Text(_formatDate(order.serviceDate),
-                            style: secondaryTextStyle(size: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _statusColor(order.status).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(_statusLabel(order.status),
+                            style: boldTextStyle(size: 12, color: _statusColor(order.status)),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                     ],
                   ),
                 ],
               ),
-            ),
-            12.width,
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: _statusColor(order.status).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(_statusLabel(order.status),
-                  style: boldTextStyle(size: 11, color: _statusColor(order.status))),
             ),
           ],
         ),
@@ -825,10 +851,10 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
     appStore.setLoading(true);
     try {
       final res = await action();
-      toast(res.message ?? 'Succès');
+      TopToast.show(message: res.message ?? 'Succès', type: TopToastType.success);
       _reload();
     } catch (e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     } finally {
       appStore.setLoading(false);
     }
@@ -863,7 +889,7 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
         ctrl: ctrl,
         onConfirm: () {
           final amount = num.tryParse(ctrl.text.trim());
-          if (amount == null || amount <= 0) { toast('Montant invalide'); return; }
+          if (amount == null || amount <= 0) { TopToast.show(message: 'Montant invalide'); return; }
           Navigator.pop(context);
           _doAction(() => apiCall(amount));
         },
@@ -878,22 +904,38 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
       child: _ArtisanOrderCard(
         order: order,
         distanceKm: distanceKm,
-        onApprove: (order.isPending && order.artisan == null)
+        onApprove: ((order.isPending && order.artisan == null) ||
+                order.needsArtisanConfirmation)
             ? () => _confirmAction(
-                  title: 'Accepter la commande',
-                  subtitle: 'Confirmez-vous l\'acceptation de cette commande ?',
+                  title: order.needsArtisanConfirmation
+                      ? 'Confirmer la commande'
+                      : 'Accepter la commande',
+                  subtitle: order.needsArtisanConfirmation
+                      ? 'Cette commande vous a été affectée par Mison. La confirmez-vous ?'
+                      : 'Confirmez-vous l\'acceptation de cette commande ?',
                   action: () => artisanAcceptOrder(order.id!),
                 )
             : null,
-        onSetTravelFee: order.isAccepted
-            ? () => _showFeeModal(
-                  title: 'Frais de déplacement',
-                  apiCall: (amount) => setTravelFee(order.id!, amount),
+        onStart: (order.canStart && !order.needsArtisanConfirmation)
+            ? () => _confirmAction(
+                  title: 'Démarrer la prestation',
+                  subtitle: 'Confirmez-vous être sur place et prêt à commencer ?',
+                  action: () => artisanStartOrder(order.id!),
+                )
+            : null,
+        onRelease: order.canReleaseByArtisan
+            ? () => _confirmAction(
+                  title: 'Se désister',
+                  subtitle: 'La commande sera reproposée aux autres ouvriers. Confirmez-vous ?',
+                  action: () async {
+                    await cancelMisonOrder(order.id!);
+                    return MisonActionResponse(message: 'Vous vous êtes désisté de cette commande');
+                  },
                 )
             : null,
         onSetRealizationFee: order.isInProgress
             ? () => _showFeeModal(
-                  title: 'Frais de réalisation',
+                  title: 'Frais de prestation',
                   apiCall: (amount) => setRealizationFee(order.id!, amount),
                 )
             : null,
@@ -904,6 +946,7 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: context.primaryColor,
         elevation: 0,
@@ -991,13 +1034,10 @@ class _OrderTabState extends State<_OrderTab> with AutomaticKeepAliveClientMixin
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(
-            child: NoDataWidget(
-              title: snapshot.error.toString(),
-              imageWidget: const ErrorStateWidget(),
-              retryText: 'Réessayer',
-              onRetry: widget.onReload,
-            ),
+          return AppEmptyState(
+            type: AppEmptyStateType.error,
+            title: snapshot.error.toString(),
+            onRetry: widget.onReload,
           );
         }
         final all = snapshot.data?.data ?? [];
@@ -1009,14 +1049,12 @@ class _OrderTabState extends State<_OrderTab> with AutomaticKeepAliveClientMixin
               ? CustomScrollView(
                   slivers: [
                     SliverFillRemaining(
-                      child: Center(
-                        child: NoDataWidget(
-                          title: 'Aucune commande',
-                          subTitle: 'Aucune commande dans "${widget.tabLabel}" pour le moment.',
-                          imageWidget: const EmptyStateWidget(),
-                          retryText: 'Actualiser',
-                          onRetry: widget.onReload,
-                        ),
+                      child: AppEmptyState(
+                        type: AppEmptyStateType.empty,
+                        title: 'Aucune commande',
+                        subtitle: 'Aucune commande dans "${widget.tabLabel}" pour le moment.',
+                        retryLabel: 'Actualiser',
+                        onRetry: widget.onReload,
                       ),
                     ),
                   ],
@@ -1040,14 +1078,16 @@ class _ArtisanOrderCard extends StatelessWidget {
   final MisonOrder order;
   final double? distanceKm;
   final VoidCallback? onApprove;
-  final VoidCallback? onSetTravelFee;
+  final VoidCallback? onStart;
+  final VoidCallback? onRelease;
   final VoidCallback? onSetRealizationFee;
 
   const _ArtisanOrderCard({
     required this.order,
     this.distanceKm,
     this.onApprove,
-    this.onSetTravelFee,
+    this.onStart,
+    this.onRelease,
     this.onSetRealizationFee,
   });
 
@@ -1078,11 +1118,11 @@ class _ArtisanOrderCard extends StatelessWidget {
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':                      return 'Recherche d\'artisan';
-      case 'ACCEPTED':                     return 'Artisan trouvé';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'PENDING':                      return 'Recherche d\'ouvrier';
+      case 'ACCEPTED':                     return 'Ouvrier trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente de paiement';
       case 'IN_PROGRESS':                  return 'Intervention en cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement de la prestation';
       case 'COMPLETED':                    return 'Prestation terminée';
       case 'CANCELLED':                    return 'Commande annulée';
       default:                             return s ?? '';
@@ -1115,24 +1155,36 @@ class _ArtisanOrderCard extends StatelessWidget {
                 topRight: Radius.circular(20),
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Icon(Icons.person_outline, size: 16, color: context.primaryColor),
                     6.width,
-                    Text(clientName, style: boldTextStyle(size: 14, color: context.primaryColor)),
+                    Expanded(
+                      child: Text(
+                        clientName,
+                        style: boldTextStyle(size: 16, color: context.primaryColor),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
+                6.height,
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: _statusColor(order.status).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(_statusLabel(order.status),
-                      style: boldTextStyle(size: 12, color: _statusColor(order.status))),
+                  child: Text(
+                    _statusLabel(order.status),
+                    style: boldTextStyle(size: 14, color: _statusColor(order.status)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -1150,7 +1202,7 @@ class _ArtisanOrderCard extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: primaryColor.withValues(alpha: 0.1),
                     image: order.service?.imageUrl != null
-                        ? DecorationImage(image: NetworkImage(order.service!.imageUrl!), fit: BoxFit.cover)
+                        ? DecorationImage(image: CachedNetworkImageProvider(order.service!.imageUrl!), fit: BoxFit.cover)
                         : null,
                   ),
                   child: order.service?.imageUrl == null
@@ -1162,18 +1214,18 @@ class _ArtisanOrderCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(order.service?.name ?? 'Service', style: boldTextStyle(size: 15),
+                      Text(order.service?.name ?? 'Service', style: boldTextStyle(size: 16),
                           maxLines: 2, overflow: TextOverflow.ellipsis),
                       6.height,
                       Row(
                         children: [
                           Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
                           4.width,
-                          Text(_formatDate(order.serviceDate), style: secondaryTextStyle(size: 12)),
+                          Text(_formatDate(order.serviceDate), style: secondaryTextStyle(size: 14)),
                           12.width,
                           Icon(Icons.access_time, size: 12, color: Colors.grey),
                           4.width,
-                          Text(_formatTime(order.serviceDate), style: secondaryTextStyle(size: 12)),
+                          Text(_formatTime(order.serviceDate), style: secondaryTextStyle(size: 14)),
                         ],
                       ),
                       if (order.serviceAddress != null && order.serviceAddress!.isNotEmpty) ...[
@@ -1183,7 +1235,7 @@ class _ArtisanOrderCard extends StatelessWidget {
                             Icon(Icons.location_on_outlined, size: 12, color: Colors.grey),
                             4.width,
                             Expanded(
-                              child: Text(order.serviceAddress!, style: secondaryTextStyle(size: 12),
+                              child: Text(order.serviceAddress!, style: secondaryTextStyle(size: 14),
                                   maxLines: 1, overflow: TextOverflow.ellipsis),
                             ),
                           ],
@@ -1214,7 +1266,7 @@ class _ArtisanOrderCard extends StatelessWidget {
                     6.width,
                     Text(
                       'Prestation demandée à ${distanceKm! < 1 ? '${(distanceKm! * 1000).round()} m' : '${distanceKm!.toStringAsFixed(1)} km'} de vous',
-                      style: boldTextStyle(size: 12, color: Colors.orange),
+                      style: boldTextStyle(size: 14, color: Colors.orange),
                     ),
                   ],
                 ),
@@ -1222,7 +1274,7 @@ class _ArtisanOrderCard extends StatelessWidget {
             ),
 
           // Action buttons
-          if (onApprove != null || onSetTravelFee != null || onSetRealizationFee != null)
+          if (onApprove != null || onStart != null || onRelease != null || onSetRealizationFee != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               child: Column(
@@ -1234,16 +1286,19 @@ class _ArtisanOrderCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       onTap: onApprove,
-                      child: Text('Accepter', style: boldTextStyle(color: Colors.white, size: 14)),
+                      child: Text(
+                        order.needsArtisanConfirmation ? 'Confirmer' : 'Accepter',
+                        style: boldTextStyle(color: Colors.white, size: 14),
+                      ),
                     ),
-                  if (onSetTravelFee != null)
+                  if (onStart != null)
                     AppButton(
                       width: double.infinity,
-                      color: const Color(0xFFC99700),
+                      color: context.primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      onTap: onSetTravelFee,
-                      child: Text('Définir frais de déplacement', style: boldTextStyle(color: Colors.white, size: 14)),
+                      onTap: onStart,
+                      child: Text('Démarrer la prestation', style: boldTextStyle(color: Colors.white, size: 14)),
                     ),
                   if (onSetRealizationFee != null)
                     AppButton(
@@ -1252,8 +1307,21 @@ class _ArtisanOrderCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       onTap: onSetRealizationFee,
-                      child: Text('Définir frais de réalisation', style: boldTextStyle(color: Colors.white, size: 14)),
+                      child: Text('Définir les frais de prestation', style: boldTextStyle(color: Colors.white, size: 14)),
                     ),
+                  if (onRelease != null) ...[
+                    8.height,
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: rejected,
+                        side: BorderSide(color: rejected.withValues(alpha: 0.5)),
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: onRelease,
+                      child: Text('Se désister', style: boldTextStyle(color: rejected, size: 14)),
+                    ),
+                  ],
                 ],
               ),
             )
@@ -1306,12 +1374,13 @@ class _FeeBottomSheet extends StatelessWidget {
             controller: ctrl,
             autofocus: true,
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
             style: boldTextStyle(size: 16),
             decoration: InputDecoration(
               hintText: 'Montant en FCFA',
               hintStyle: secondaryTextStyle(size: 14),
               suffixText: 'FCFA',
-              suffixStyle: secondaryTextStyle(size: 13),
+              suffixStyle: secondaryTextStyle(size: 14),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               enabledBorder: OutlineInputBorder(

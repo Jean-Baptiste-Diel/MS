@@ -1,16 +1,17 @@
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
+import 'package:booking_system_flutter/component/nominatim_address_field.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/screens/booking/mison_confirm_booking_screen.dart';
-import 'package:booking_system_flutter/screens/map/osm_map_screen.dart';
-import 'package:booking_system_flutter/screens/map/google_place_map_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:intl/intl.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 /// Écran formulaire de commande Mison
 /// Correspond au design Figma "Onboarding_001"
@@ -116,12 +117,12 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   void _continueToConfirmation() {
     if (_formKey.currentState!.validate()) {
       if (!isImmediateService && (selectedDate == null || selectedTime == null)) {
-        toast('Veuillez sélectionner une date et une heure');
+        TopToast.show(message: 'Veuillez sélectionner une date et une heure');
         return;
       }
       
       if (zoneCont.text.isEmpty) {
-        toast('Veuillez sélectionner une zone d\'intervention');
+        TopToast.show(message: 'Veuillez sélectionner une zone d\'intervention');
         return;
       }
 
@@ -142,6 +143,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         widget.service.name ?? '',
         textColor: appStore.isDarkMode ? Colors.white : Colors.black,
@@ -152,9 +154,10 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
           statusBarColor: context.scaffoldBackgroundColor,
         ),
         showBack: true,
-        backWidget: BackWidget(iconColor: context.iconColor),
+        backWidget: BackWidget(iconColor: Colors.black),
       ),
-      body: Form(
+      body: DotGridBackground(
+        child: Form(
         key: _formKey,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -202,6 +205,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -241,17 +245,10 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
             textAlign: TextAlign.center,
           ),
           4.height,
-          // Price
-          Text(
-            'à partir de ${widget.service.minPrice ?? '0'}F',
-            style: secondaryTextStyle(),
-            textAlign: TextAlign.center,
-          ),
-          4.height,
           // Duration
           Text(
             '~ 30mn',
-            style: secondaryTextStyle(size: 12),
+            style: secondaryTextStyle(size: 14),
             textAlign: TextAlign.center,
           ),
         ],
@@ -277,7 +274,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
       children: [
         Text(
           'Choisir la date prévue pour les travaux',
-          style: boldTextStyle(size: 14),
+          style: boldTextStyle(size: 16),
         ),
         12.height,
         Row(
@@ -311,7 +308,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
       children: [
         Text(
           'Choisir une date et heure',
-          style: boldTextStyle(size: 14),
+          style: boldTextStyle(size: 16),
         ),
         12.height,
         // Month navigation
@@ -337,7 +334,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
-              .map((day) => Text(day, style: secondaryTextStyle(size: 12)))
+              .map((day) => Text(day, style: secondaryTextStyle(size: 13)))
               .toList(),
         ),
         8.height,
@@ -372,6 +369,16 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
             decoration: BoxDecoration(
               color: isSelected ? primaryColor : Colors.transparent,
               borderRadius: radius(8),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: primaryColor.withValues(alpha: 0.35),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
             ),
             child: Center(
               child: Text(
@@ -397,7 +404,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Choisir l\'heure', style: boldTextStyle(size: 14)),
+        Text('Choisir l\'heure', style: boldTextStyle(size: 16)),
         12.height,
         Wrap(
           spacing: 8,
@@ -421,7 +428,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
                   slot,
                   style: primaryTextStyle(
                     color: isSelected ? Colors.white : null,
-                    size: 14,
+                    size: 16,
                   ),
                 ),
               ),
@@ -432,68 +439,26 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
     );
   }
 
-  Future<void> _openZonePicker() async {
-    final result = await const GooglePlaceMapScreen().launch(context);
-    if (result == null || result is! Map<String, dynamic>) return;
-
-    if (result['use_map'] == true) {
-      final mapResult = await const OsmMapScreen().launch(context);
-      if (mapResult != null && mapResult is Map<String, dynamic>) {
-        setState(() {
-          zoneCont.text = mapResult['name'] ?? '';
-          zoneLat = mapResult['lat'] as double?;
-          zoneLon = mapResult['lon'] as double?;
-        });
-      }
-      return;
-    }
-
-    setState(() {
-      zoneCont.text = result['name'] ?? '';
-      zoneLat = result['lat'] as double?;
-      zoneLon = result['lon'] as double?;
-    });
-  }
-
   Widget _buildZoneDropdown() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Zone d\'intervention', style: boldTextStyle(size: 14)),
+        Text('Zone d\'intervention', style: boldTextStyle(size: 16)),
         8.height,
-        GestureDetector(
-          onTap: _openZonePicker,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            decoration: BoxDecoration(
-              color: context.cardColor,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: borderColor),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  size: 20,
-                  color: zoneCont.text.isNotEmpty ? primaryColor : grey,
-                ),
-                10.width,
-                Expanded(
-                  child: Text(
-                    zoneCont.text.isNotEmpty
-                        ? zoneCont.text
-                        : 'Rechercher une adresse...',
-                    style: zoneCont.text.isNotEmpty
-                        ? primaryTextStyle(size: 14)
-                        : secondaryTextStyle(),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Icon(Icons.search, size: 18, color: grey),
-              ],
-            ),
+        Container(
+          decoration: BoxDecoration(
+            color: context.cardColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: borderColor),
+          ),
+          child: NominatimAddressField(
+            controller: zoneCont,
+            hintText: 'Rechercher une adresse...',
+            countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+            onSelected: (s) => setState(() {
+              zoneLat = s.lat;
+              zoneLon = s.lon;
+            }),
           ),
         ),
         if (zoneLat != null && zoneLon != null)
@@ -505,7 +470,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
                 4.width,
                 Text(
                   '${zoneLat!.toStringAsFixed(4)}, ${zoneLon!.toStringAsFixed(4)}',
-                  style: secondaryTextStyle(size: 11, color: Colors.green.shade600),
+                  style: secondaryTextStyle(size: 13, color: Colors.green.shade600),
                 ),
               ],
             ),
@@ -518,13 +483,15 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Description', style: boldTextStyle(size: 14)),
+        Text('Description', style: boldTextStyle(size: 16)),
         8.height,
         AppTextField(
           controller: descriptionCont,
           textFieldType: TextFieldType.MULTILINE,
           minLines: 3,
           maxLines: 5,
+          textInputAction: TextInputAction.done,
+          onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
           decoration: inputDecoration(context).copyWith(
             hintText: 'Description du service',
             fillColor: context.cardColor,
@@ -545,7 +512,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Notre promesse client', style: boldTextStyle(size: 14)),
+          Text('Notre promesse client', style: boldTextStyle(size: 16)),
           12.height,
           _PromiseItem(icon: Icons.check_circle, text: 'Annulation possible à tout moment avant le rendez-vous'),
           _PromiseItem(icon: Icons.access_time, text: 'Disponible 24h/24'),
@@ -624,7 +591,7 @@ class _PromiseItem extends StatelessWidget {
           Icon(icon, color: primaryColor, size: 16),
           8.width,
           Expanded(
-            child: Text(text, style: secondaryTextStyle(size: 12)),
+            child: Text(text, style: secondaryTextStyle(size: 14)),
           ),
         ],
       ),

@@ -76,7 +76,7 @@ class _BlogItemComponentState extends State<BlogItemComponent> {
                           children: [
                             Text(widget.blogData!.authorName.validate(), style: primaryTextStyle(size: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
                             2.height,
-                            Text(widget.blogData!.publishDate.validate(), style: secondaryTextStyle(size: 10)),
+                            Text(widget.blogData!.publishDate.validate(), style: secondaryTextStyle(size: 12)),
                           ],
                         ).expand(),
                       ],

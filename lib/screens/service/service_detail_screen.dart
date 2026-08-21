@@ -434,7 +434,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> with TickerPr
                                       maxLines: 1,
                                       textAlign: TextAlign.center,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                      style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 14),
                                     ),
                                   )),
                                 ],
@@ -476,11 +476,11 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> with TickerPr
                             children: [
                               if (snap.data!.serviceDetail!.discount.validate() > 0)
                                 PriceWidget(
-                                  size: 14,
+                                  size: 16,
                                   price: snap.data!.serviceDetail!.getDiscountedPrice.validate(),
                                 ).paddingRight(8),
                               PriceWidget(
-                                size: snap.data!.serviceDetail!.discount != 0 ? 12 : 14,
+                                size: snap.data!.serviceDetail!.discount != 0 ? 14 : 16,
                                 price: snap.data!.serviceDetail!.price.validate(),
                                 isLineThroughEnabled: snap.data!.serviceDetail!.discount != 0 ? true : false,
                                 color: snap.data!.serviceDetail!.discount != 0 ? textSecondaryColorGlobal : primaryColor,
@@ -491,7 +491,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> with TickerPr
                                   "${snap.data!.serviceDetail!.discount.validate()}% ${language.lblOff}",
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
-                                  style: const TextStyle(color: defaultActivityStatus, fontWeight: FontWeight.bold, fontSize: 12),
+                                  style: const TextStyle(color: defaultActivityStatus, fontWeight: FontWeight.bold, fontSize: 14),
                                 ).expand(),
                             ],
                           ),
@@ -592,6 +592,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> with TickerPr
       future: future,
       builder: (context, snap) {
         return Scaffold(
+          backgroundColor: Colors.transparent,
           body: Stack(
             children: [
               buildBodyWidget(snap),

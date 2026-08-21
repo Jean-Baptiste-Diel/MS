@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../../component/price_widget.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class CouponWidget extends StatefulWidget {
   final List<CouponData> couponData;
@@ -146,13 +147,13 @@ class _CouponWidgetState extends State<CouponWidget> {
                       if (widget.couponData.any((element) => element.code == couponCode)) {
                         finish(context, widget.couponData[selectedIndex ?? 0]);
                       } else {
-                        toast(language.lblInvalidCoupon);
+                        TopToast.show(message: language.lblInvalidCoupon.validate());
                       }
                     } else {
                       if (isUpdate) {
                         finish(context);
                       } else {
-                        toast(language.lblSelectCode);
+                        TopToast.show(message: language.lblSelectCode.validate());
                       }
                     }
                   },

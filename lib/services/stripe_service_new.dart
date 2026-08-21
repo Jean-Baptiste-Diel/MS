@@ -12,6 +12,7 @@ import '../network/network_utils.dart';
 import '../utils/colors.dart';
 import '../utils/common.dart';
 import '../utils/configs.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class StripeServiceNew {
   late PaymentSetting paymentSetting;
@@ -49,7 +50,7 @@ class StripeServiceNew {
     Stripe.publishableKey = stripePaymentPublishKey;
 
     Stripe.instance.applySettings().catchError((e) {
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
       appStore.setLoading(false);
       throw e.toString();
     });
@@ -108,7 +109,7 @@ class StripeServiceNew {
       });
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
 
       throw e.toString();
     });

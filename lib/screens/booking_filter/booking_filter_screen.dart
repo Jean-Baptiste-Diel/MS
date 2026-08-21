@@ -19,6 +19,7 @@ import 'components/filter_payment_type_component.dart';
 import 'components/filter_provider_list_component.dart';
 import 'components/filter_service_list_component.dart';
 import 'models/payment_status_model.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BookingFilterScreen extends StatefulWidget {
   final bool showProviderFilter;
@@ -76,7 +77,7 @@ class _BookingFilterScreenState extends State<BookingFilterScreen> {
       });
       setState(() {});
     }).catchError((e) {
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
 
     // Payment Type List
@@ -91,7 +92,7 @@ class _BookingFilterScreenState extends State<BookingFilterScreen> {
       });
       setState(() {});
     }).catchError((e) {
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
 
     // Payment Status List

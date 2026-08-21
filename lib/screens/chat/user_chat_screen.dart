@@ -21,6 +21,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../component/cached_image_widget.dart';
+import '../../component/dot_grid_background.dart';
 import '../../component/empty_error_state_widget.dart';
 import '../../services/chat_services.dart';
 import '../../utils/configs.dart';
@@ -265,6 +266,7 @@ class _UserChatScreenState extends State<UserChatScreen> with WidgetsBindingObse
     return GestureDetector(
       onTap: () => hideKeyboard(context),
       child: Scaffold(
+        backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: context.primaryColor,
           leadingWidth: context.width(),
@@ -334,47 +336,49 @@ class _UserChatScreenState extends State<UserChatScreen> with WidgetsBindingObse
             )
           ],
         ),
-        body: SafeArea(
-          child: SizedBox(
-            height: context.height(),
-            width: context.width(),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Container(
-                  margin: EdgeInsets.only(bottom: widget.isChattingAllow ? 0 : 80),
-                  child: FirestorePagination(
-                    reverse: true,
-                    isLive: true,
-                    padding: const EdgeInsets.only(left: 8, top: 8, right: 8, bottom: 0),
-                    physics: const BouncingScrollPhysics(),
-                    query: chatServices.chatMessagesWithPagination(senderId: appStore.uid.validate(), receiverUserId: widget.receiverUser.uid.validate()),
-                    initialLoader: LoaderWidget(),
-                    limit: PER_PAGE_CHAT_LIST_COUNT,
-                    onEmpty: NoDataWidget(
-                      title: language.noConversation,
-                      imageWidget: const EmptyStateWidget(),
+        body: DotGridBackground(
+          child: SafeArea(
+            child: SizedBox(
+              height: context.height(),
+              width: context.width(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(
+                    margin: EdgeInsets.only(bottom: widget.isChattingAllow ? 0 : 80),
+                    child: FirestorePagination(
+                      reverse: true,
+                      isLive: true,
+                      padding: const EdgeInsets.only(left: 8, top: 8, right: 8, bottom: 0),
+                      physics: const BouncingScrollPhysics(),
+                      query: chatServices.chatMessagesWithPagination(senderId: appStore.uid.validate(), receiverUserId: widget.receiverUser.uid.validate()),
+                      initialLoader: LoaderWidget(),
+                      limit: PER_PAGE_CHAT_LIST_COUNT,
+                      onEmpty: NoDataWidget(
+                        title: language.noConversation,
+                        imageWidget: const EmptyStateWidget(),
+                      ),
+                      shrinkWrap: true,
+                      viewType: ViewType.list,
+                      itemBuilder: (context, snap, index) {
+                        ChatMessageModel data = ChatMessageModel.fromJson(snap[index].data() as Map<String, dynamic>);
+                        data.isMe = data.senderId == appStore.uid;
+                        data.chatDocumentReference = snap[index].reference;
+
+                        return ChatItemWidget(chatItemData: data);
+                      },
                     ),
-                    shrinkWrap: true,
-                    viewType: ViewType.list,
-                    itemBuilder: (context, snap, index) {
-                      ChatMessageModel data = ChatMessageModel.fromJson(snap[index].data() as Map<String, dynamic>);
-                      data.isMe = data.senderId == appStore.uid;
-                      data.chatDocumentReference = snap[index].reference;
-          
-                      return ChatItemWidget(chatItemData: data);
-                    },
                   ),
-                ),
-                if (!widget.isChattingAllow)
-                  Positioned(
-                    bottom: 16,
-                    left: 16,
-                    right: 16,
-                    child: _buildChatFieldWidget(),
-                  ),
-                Observer(builder: (context) => LoaderWidget().visible(appStore.isLoading)),
-              ],
+                  if (!widget.isChattingAllow)
+                    Positioned(
+                      bottom: 16,
+                      left: 16,
+                      right: 16,
+                      child: _buildChatFieldWidget(),
+                    ),
+                  Observer(builder: (context) => LoaderWidget().visible(appStore.isLoading)),
+                ],
+              ),
             ),
           ),
         ),

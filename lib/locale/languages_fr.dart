@@ -2409,7 +2409,7 @@ Utilisez mon code de parrainage $referralCode pour obtenir des points de fidéli
 
   // Artisan Registration
   @override
-  String get registerAsArtisan => "S'inscrire comme artisan";
+  String get registerAsArtisan => "S'inscrire comme ouvrier";
 
   @override
   String get worker => 'Ouvrier';

@@ -2373,7 +2373,7 @@ Use my referral code $referralCode to get loyalty points on your signup.
 
   // Artisan Registration
   @override
-  String get registerAsArtisan => 'Register as Artisan';
+  String get registerAsArtisan => 'Register as Ouvrier';
 
   @override
   String get worker => 'Worker';

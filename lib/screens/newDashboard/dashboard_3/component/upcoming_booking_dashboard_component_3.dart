@@ -102,14 +102,14 @@ class _UpcomingBookingDashboardComponent3State extends State<UpcomingBookingDash
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(language.lblDate.suffixText(value: ': '), style: secondaryTextStyle()),
-                                        Text(formatDate(widget.upcomingBookingData!.date), style: primaryTextStyle(size: 12)),
+                                        Text(formatDate(widget.upcomingBookingData!.date), style: primaryTextStyle(size: 14)),
                                       ],
                                     ),
                                     8.width,
                                     Row(
                                       children: [
                                         Text(language.lblTime.suffixText(value: ': '), style: secondaryTextStyle()),
-                                        Text(formatDate(widget.upcomingBookingData!.date, isTime: true), style: primaryTextStyle(size: 12)),
+                                        Text(formatDate(widget.upcomingBookingData!.date, isTime: true), style: primaryTextStyle(size: 14)),
                                       ],
                                     ),
                                   ],
@@ -159,7 +159,7 @@ class _UpcomingBookingDashboardComponent3State extends State<UpcomingBookingDash
                                     8.width,
                                     Text(
                                       '${language.bookingStatus}: ',
-                                      style: primaryTextStyle(size: 12),
+                                      style: primaryTextStyle(size: 14),
                                     ),
                                   ],
                                 ),
@@ -170,7 +170,7 @@ class _UpcomingBookingDashboardComponent3State extends State<UpcomingBookingDash
                                     8.width,
                                     Text(
                                       '${language.paymentStatus}: ',
-                                      style: primaryTextStyle(size: 12),
+                                      style: primaryTextStyle(size: 14),
                                     ),
                                   ],
                                 ),
@@ -186,7 +186,7 @@ class _UpcomingBookingDashboardComponent3State extends State<UpcomingBookingDash
                                   overflow: TextOverflow.ellipsis,
                                   style: boldTextStyle(
                                     color: widget.upcomingBookingData!.status.validate().getPaymentStatusBackgroundColor,
-                                    size: 12,
+                                    size: 14,
                                   ),
                                 ),
                                 16.height,
@@ -202,7 +202,7 @@ class _UpcomingBookingDashboardComponent3State extends State<UpcomingBookingDash
                                             (widget.upcomingBookingData!.paymentStatus == SERVICE_PAYMENT_STATUS_PAID || widget.upcomingBookingData!.paymentStatus == PENDING_BY_ADMIN)
                                         ? Colors.green
                                         : Colors.red,
-                                    size: 12,
+                                    size: 14,
                                   ),
                                 ),
                               ],

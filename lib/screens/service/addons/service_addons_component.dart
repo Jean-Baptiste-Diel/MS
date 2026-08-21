@@ -7,6 +7,7 @@ import '../../../component/price_widget.dart';
 import '../../../component/view_all_label_component.dart';
 import '../../../main.dart';
 import '../../../model/service_detail_response.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class AddonComponent extends StatefulWidget {
   final List<Serviceaddon> serviceAddon;
@@ -116,7 +117,7 @@ class _AddonComponentState extends State<AddonComponent> {
                 PriceWidget(
                   price: addon.price.validate(),
                   hourlyTextColor: Colors.white,
-                  size: 12,
+                  size: 14,
                 ),
               ],
             ),
@@ -196,7 +197,7 @@ class _AddonComponentState extends State<AddonComponent> {
                 PriceWidget(
                   price: data.price.validate(),
                   hourlyTextColor: Colors.white,
-                  size: 12,
+                  size: 14,
                 ),
               ],
             ),
@@ -217,7 +218,7 @@ class _AddonComponentState extends State<AddonComponent> {
         child: Text(
           data.isSelected ? language.remove : language.add, // Toggle between Add and Remove
           textAlign: TextAlign.center,
-          style: boldTextStyle(color: context.primaryColor, size: 12),
+          style: boldTextStyle(color: context.primaryColor, size: 13),
         ),
       ),
     ).onTap(() => handleAddRemove(data));
@@ -226,9 +227,9 @@ class _AddonComponentState extends State<AddonComponent> {
   void handleAddRemove(Serviceaddon data) {
     data.isSelected = !data.isSelected;
     if (data.isSelected) {
-      toast('${data.name.validate()} added successfully');
+      TopToast.show(message: '${data.name.validate()} added successfully', type: TopToastType.success);
     } else {
-      toast('${data.name.validate()} removed successfully');
+      TopToast.show(message: '${data.name.validate()} removed successfully', type: TopToastType.success);
     }
 
     selectedServiceAddon = widget.serviceAddon.where((p0) => p0.isSelected).toList();

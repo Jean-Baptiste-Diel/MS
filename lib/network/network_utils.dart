@@ -4,16 +4,103 @@ import 'dart:io';
 
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
+import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
-import 'package:booking_system_flutter/utils/model_keys.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/http.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:dio/dio.dart' as dio_package;
 
 const kPendingApprovalError = 'PENDING_APPROVAL';
+
+// ── Redirect to login ─────────────────────────────────────────────────────────
+
+bool _isRedirectingToLogin = false;
+
+Future<void> _redirectToLogin() async {
+  if (_isRedirectingToLogin) return;
+  _isRedirectingToLogin = true;
+
+  await clearPreferences();
+
+  final ctx = navigatorKey.currentContext;
+  if (ctx != null) {
+    TopToast.show(
+      message: 'Session expirée, reconnectez-vous',
+      type: TopToastType.error,
+    );
+    await Future.delayed(const Duration(milliseconds: 800));
+    SignInScreen().launch(ctx, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
+  }
+
+  Future.delayed(const Duration(seconds: 3), () => _isRedirectingToLogin = false);
+}
+
+// ── Token refresh (mutex) ─────────────────────────────────────────────────────
+
+bool _isRefreshing = false;
+Completer<bool>? _refreshCompleter;
+
+/// Rafraîchit l'access token via POST /auth/refresh.
+/// Retourne true si le refresh a réussi, false si le refresh token est expiré.
+/// Mutex : si un refresh est déjà en cours, les appelants concurrents attendent le même résultat.
+Future<bool> _tryRefreshToken() async {
+  if (_isRefreshing) {
+    return _refreshCompleter!.future;
+  }
+
+  final refreshToken = appStore.refreshToken;
+  if (refreshToken.isEmpty) return false;
+
+  _isRefreshing = true;
+  _refreshCompleter = Completer<bool>();
+
+  try {
+    final response = await http.post(
+      Uri.parse('${BASE_URL}auth/refresh'),
+      body: jsonEncode({'refresh': refreshToken}),
+      headers: {
+        HttpHeaders.contentTypeHeader: 'application/json',
+        HttpHeaders.acceptHeader: 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200 && response.body.isJson()) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final newAccess = body['access'] as String?;
+      final newRefresh = body['refresh'] as String?;
+
+      if (newAccess != null && newAccess.isNotEmpty) {
+        await appStore.setToken(newAccess);
+        if (newRefresh != null && newRefresh.isNotEmpty) {
+          await appStore.setRefreshToken(newRefresh);
+        }
+        log('Access token refreshed');
+        _refreshCompleter!.complete(true);
+        return true;
+      }
+    }
+
+    // 401 ou 400 = refresh token expiré/blacklisté → rediriger vers login
+    log('Refresh token invalide (status ${response.statusCode})');
+    _refreshCompleter!.complete(false);
+    return false;
+  } catch (e) {
+    log('Token refresh error: $e');
+    _refreshCompleter!.complete(false);
+    return false;
+  } finally {
+    _isRefreshing = false;
+    _refreshCompleter = null;
+  }
+}
+
+/// Point d'entrée public — utilisé par WebSocket / multipart qui gèrent eux-mêmes leurs 401.
+/// Retourne true si le token a été rafraîchi, false si le refresh token est expiré.
+Future<bool> refreshToken() => _tryRefreshToken();
 
 Map<String, String> buildHeaderTokens() {
   Map<String, String> header = {};
@@ -42,6 +129,7 @@ Future<Response> buildHttpResponse(
   HttpMethodType method = HttpMethodType.GET,
   Map? request,
   Map<String, String>? header,
+  bool isRetry = false,
 }) async {
   var headers = header ?? buildHeaderTokens();
   Uri url = buildBaseUrl(endPoint);
@@ -59,7 +147,6 @@ Future<Response> buildHttpResponse(
       response = await get(url, headers: headers);
     }
 
-    /* log('Response (${method.name}) ${response.statusCode}: ${response.body}'); */
     apiPrint(
       url: url.toString(),
       endPoint: endPoint,
@@ -71,18 +158,22 @@ Future<Response> buildHttpResponse(
       methodtype: method.name,
     );
 
-    if (appStore.isLoggedIn && response.statusCode == 401 && !endPoint.startsWith('http')) {
-      try {
-        await reGenerateToken();
-      } catch (_) {
-        // Refresh échoué — on retente quand même avec le token actuel
-        // (401 transitoire côté backend)
-        await Future.delayed(const Duration(milliseconds: 300));
+    if (appStore.isLoggedIn && response.statusCode == 401 && !endPoint.startsWith('http') && !endPoint.startsWith('auth/')) {
+      if (isRetry) {
+        // Le token rafraîchi est aussi rejeté → session invalide
+        await _redirectToLogin();
+        return response;
       }
-      return await buildHttpResponse(endPoint, method: method, request: request, header: header);
-    } else {
-      return response;
+      final refreshed = await _tryRefreshToken();
+      if (refreshed) {
+        return buildHttpResponse(endPoint, method: method, request: request, isRetry: true);
+      } else {
+        await _redirectToLogin();
+        return response;
+      }
     }
+
+    return response;
   } on Exception {
     throw errorInternetNotAvailable;
   }
@@ -168,107 +259,6 @@ Future<Map<String, dynamic>> handleSadadResponse(Response res) async {
   }
 }
 
-// Mutex pour éviter les refreshs concurrents
-bool _isRefreshing = false;
-Completer<void>? _refreshCompleter;
-
-/// Refresh access token using refresh token
-/// POST /api/auth/refresh avec { refresh: refreshToken }
-Future<void> reGenerateToken() async {
-  // Si un refresh est déjà en cours, attendre sa completion
-  if (_isRefreshing) {
-    return _refreshCompleter!.future;
-  }
-  _isRefreshing = true;
-  _refreshCompleter = Completer<void>();
-
-  try {
-    await _doReGenerateToken();
-    _refreshCompleter!.complete();
-  } catch (e) {
-    _refreshCompleter!.completeError(e);
-    rethrow;
-  } finally {
-    _isRefreshing = false;
-    _refreshCompleter = null;
-  }
-}
-
-Future<void> _doReGenerateToken() async {
-  log('Regenerating Token using refresh token');
-  
-  String refreshToken = appStore.refreshToken;
-  
-  if (refreshToken.isEmpty) {
-    // Fallback to login if no refresh token
-    log('No refresh token, falling back to re-login');
-    Map req = {
-      UserKeys.email: appStore.userEmail,
-      UserKeys.password: getStringAsync(USER_PASSWORD),
-    };
-    
-    return await loginUser(req, isSocialLogin: !isLoginTypeUser).then((value) async {
-      await appStore.setToken(value.userData!.apiToken.validate());
-      if (value.refreshToken != null) {
-        await appStore.setRefreshToken(value.refreshToken!);
-      }
-      appStore.setLoading(false);
-    }).catchError((e) {
-      log(e);
-      throw e;
-    });
-  }
-  
-  // Use refresh token to get new access token
-  Map req = {'refresh': refreshToken};
-  
-  try {
-    var response = await http.post(
-      Uri.parse('${BASE_URL}auth/refresh'),
-      body: jsonEncode(req),
-      headers: {
-        HttpHeaders.contentTypeHeader: 'application/json',
-        HttpHeaders.acceptHeader: 'application/json',
-      },
-    );
-    
-    if (response.statusCode == 200 && response.body.isJson()) {
-      var body = jsonDecode(response.body);
-      String newAccessToken = body['access'] ?? '';
-      String? newRefreshToken = body['refresh'];
-      
-      if (newAccessToken.isNotEmpty) {
-        await appStore.setToken(newAccessToken);
-        if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
-          await appStore.setRefreshToken(newRefreshToken);
-        }
-        log('Token refreshed successfully');
-        return;
-      }
-    }
-    
-    // If refresh fails, try re-login
-    throw 'Refresh token invalid';
-  } catch (e) {
-    log('Token refresh failed: $e');
-    // Fallback to re-login
-    Map loginReq = {
-      UserKeys.email: appStore.userEmail,
-      UserKeys.password: getStringAsync(USER_PASSWORD),
-    };
-    
-    return await loginUser(loginReq, isSocialLogin: !isLoginTypeUser).then((value) async {
-      await appStore.setToken(value.userData!.apiToken.validate());
-      if (value.refreshToken != null) {
-        await appStore.setRefreshToken(value.refreshToken!);
-      }
-      appStore.setLoading(false);
-    }).catchError((err) {
-      log(err);
-      throw err;
-    });
-  }
-}
 
 Future<MultipartRequest> getMultiPartRequest(String endPoint, {String? baseUrl}) async {
   String url = '${baseUrl ?? buildBaseUrl(endPoint).toString()}';
@@ -288,7 +278,11 @@ Future<void> sendMultiPartRequest(MultipartRequest multiPartRequest, {Function(d
       methodtype: "MultiPart",
     );
 
-    if (response.statusCode.isSuccessful()) {
+    if (response.statusCode == 401) {
+      final refreshed = await _tryRefreshToken();
+      if (!refreshed) await _redirectToLogin();
+      return;
+    } else if (response.statusCode.isSuccessful()) {
       onSuccess?.call(response.body);
     } else {
       try {

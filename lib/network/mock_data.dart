@@ -377,7 +377,7 @@ List<SliderModel> getMockSliders() {
     SliderModel(
       id: 1,
       title: 'Bienvenue sur Mison',
-      description: 'Trouvez les meilleurs artisans près de chez vous',
+      description: 'Trouvez les meilleurs ouvriers près de chez vous',
       sliderImage: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800',
       status: 1,
       type: 'category',
@@ -394,8 +394,8 @@ List<SliderModel> getMockSliders() {
     ),
     SliderModel(
       id: 3,
-      title: 'Nouveaux artisans',
-      description: 'Découvrez nos artisans vérifiés',
+      title: 'Nouveaux ouvriers',
+      description: 'Découvrez nos ouvriers vérifiés',
       sliderImage: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800',
       status: 1,
       type: 'provider',

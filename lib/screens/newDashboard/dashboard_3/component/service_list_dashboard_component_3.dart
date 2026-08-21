@@ -26,7 +26,7 @@ class ServiceListDashboardComponent3 extends StatelessWidget {
         ViewAllLabel(
           label: serviceListTitle,
           list: serviceList,
-          trailingTextStyle: boldTextStyle(color: primaryColor, size: 12),
+          trailingTextStyle: boldTextStyle(color: primaryColor, size: 14),
           onTap: () {
             ViewAllServiceScreen(isFeatured: isFeatured ? '1' : '').launch(context).then((value) {
               setStatusBarColor(Colors.transparent, statusBarIconBrightness: Brightness.dark);

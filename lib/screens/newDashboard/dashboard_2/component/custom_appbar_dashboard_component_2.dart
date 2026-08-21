@@ -14,6 +14,7 @@ import '../../../../utils/constant.dart';
 import '../../../../utils/images.dart';
 import '../../../notification/notification_screen.dart';
 import '../../../service/search_service_screen.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class CustomAppbarDashboardComponent2 extends StatefulWidget {
   final List<ServiceData>? featuredList;
@@ -53,7 +54,7 @@ class _CustomAppbarDashboardComponent2State extends State<CustomAppbarDashboardC
       setState(() {});
     } else {
       appStore.setSpeechStatus(false);
-      toast(language.theUserHasDenied);
+      TopToast.show(message: language.theUserHasDenied.validate());
     }
   }
 

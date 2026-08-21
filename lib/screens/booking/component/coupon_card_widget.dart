@@ -108,7 +108,6 @@ class CouponCardWidget extends StatelessWidget {
                     style: primaryTextStyle(
                       color: hold,
                       size: 12,
-                      fontStyle: FontStyle.italic,
                       weight: FontWeight.w700,
                     ),
                   ).expand(),

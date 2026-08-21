@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/component/back_widget.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -40,20 +41,22 @@ class AppScaffold extends StatelessWidget {
               actions: actions,
             )
           : null,
-      backgroundColor: scaffoldBackgroundColor,
-      body: Observer(
-        builder: (_) {
-          final loading = showLoader && (isLoading?.value ?? false);
-          return Stack(
-            children: [
-              AbsorbPointer(
-                absorbing: loading,
-                child: child,
-              ),
-              if (loading) LoaderWidget().center(),
-            ],
-          );
-        },
+      backgroundColor: scaffoldBackgroundColor ?? Colors.transparent,
+      body: DotGridBackground(
+        child: Observer(
+          builder: (_) {
+            final loading = showLoader && (isLoading?.value ?? false);
+            return Stack(
+              children: [
+                AbsorbPointer(
+                  absorbing: loading,
+                  child: child,
+                ),
+                if (loading) LoaderWidget().center(),
+              ],
+            );
+          },
+        ),
       ),
       bottomNavigationBar: bottomNavigationBar,
     );

@@ -13,8 +13,8 @@ class AppTheme {
     primarySwatch: createMaterialColor(color ?? primaryColor),
     primaryColor: color ?? primaryColor,
     colorScheme: ColorScheme.fromSeed(seedColor: color ?? primaryColor, outlineVariant: borderColor),
-    scaffoldBackgroundColor: Colors.white,
-    fontFamily: GoogleFonts.inter().fontFamily,
+    scaffoldBackgroundColor: const Color(0xFFF1F2F4),
+    fontFamily: GoogleFonts.manrope().fontFamily,
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(backgroundColor: Colors.white),
     iconTheme: const IconThemeData(color: appTextSecondaryColor),
     listTileTheme: ListTileThemeData(
@@ -22,7 +22,7 @@ class AppTheme {
         titleTextStyle: boldTextStyle(color: black),
         subtitleTextStyle: secondaryTextStyle(),
     ),
-    textTheme: GoogleFonts.interTextTheme(
+    textTheme: GoogleFonts.manropeTextTheme(
         const TextTheme(
           headlineSmall: TextStyle(color: black),
           headlineMedium: TextStyle(color: black),
@@ -70,7 +70,7 @@ class AppTheme {
       systemOverlayStyle: const SystemUiOverlayStyle(statusBarIconBrightness: Brightness.light),
     ),
     scaffoldBackgroundColor: scaffoldColorDark,
-    fontFamily: GoogleFonts.inter().fontFamily,
+    fontFamily: GoogleFonts.manrope().fontFamily,
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(backgroundColor: scaffoldSecondaryDark),
     iconTheme: const IconThemeData(color: Colors.white),
     listTileTheme: ListTileThemeData(
@@ -78,7 +78,7 @@ class AppTheme {
         titleTextStyle: boldTextStyle(color: white),
         subtitleTextStyle: secondaryTextStyle(),
     ),
-    textTheme: GoogleFonts.interTextTheme(
+    textTheme: GoogleFonts.manropeTextTheme(
         const TextTheme(
           headlineSmall: TextStyle(color: white),
           headlineMedium: TextStyle(color: white),

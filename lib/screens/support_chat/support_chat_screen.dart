@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/services/support_chat_service.dart';
@@ -16,7 +17,22 @@ import 'package:nb_utils/nb_utils.dart';
 const _kSendTimeout = Duration(seconds: 10);
 
 class SupportChatScreen extends StatefulWidget {
-  const SupportChatScreen({Key? key}) : super(key: key);
+  /// Quand renseigné, l'écran ouvre le chat privé client ↔ ouvrier de cette
+  /// commande au lieu de la conversation de support.
+  final String? orderId;
+  final String title;
+  final String emptyTitle;
+  final String emptySubtitle;
+  final IconData emptyIcon;
+
+  const SupportChatScreen({
+    Key? key,
+    this.orderId,
+    this.title = 'Support Mison',
+    this.emptyTitle = 'Démarrez la conversation',
+    this.emptySubtitle = 'Notre équipe vous répondra dans les plus brefs délais.',
+    this.emptyIcon = Icons.support_agent_rounded,
+  }) : super(key: key);
 
   @override
   State<SupportChatScreen> createState() => _SupportChatScreenState();
@@ -36,6 +52,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   bool _wsConnected = false;
   String? _error;
 
+  // Reconnexion automatique : le socket peut tomber sur simple perte réseau,
+  // l'utilisateur ne doit pas avoir à quitter puis rouvrir l'écran.
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
+  static const _kMaxReconnectAttempts = 5;
+
   @override
   void initState() {
     super.initState();
@@ -52,9 +74,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
 
     try {
       // Rafraîchir le token avant tout appel pour s'assurer qu'il est valide
-      await reGenerateToken().catchError((e) => log('Token refresh skipped: $e'));
+      await refreshToken();
 
-      final conversationId = await _service.createOrGetConversation();
+      final conversationId = widget.orderId != null
+          ? await _service.createOrGetOrderConversation(widget.orderId!)
+          : await _service.createOrGetConversation();
       await _service.connect(conversationId);
 
       _historySub = _service.historyStream.listen((history) {
@@ -84,14 +108,41 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       // Écouter les changements d'état de connexion WS
       _connectionSub?.cancel();
       _connectionSub = _service.connectionStream.listen((connected) {
+        if (!mounted) return;
         setState(() => _wsConnected = connected);
+        if (connected) {
+          _reconnectAttempt = 0;
+          _reconnectTimer?.cancel();
+        } else {
+          _scheduleReconnect();
+        }
       });
+      _reconnectAttempt = 0;
       setState(() => _wsConnected = true);
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
       setState(() => _isConnecting = false);
     }
+  }
+
+  void _scheduleReconnect() {
+    if (!mounted || _reconnectAttempt >= _kMaxReconnectAttempts) return;
+    _reconnectTimer?.cancel();
+    // Back-off progressif : 2s, 4s, 6s, 8s, 10s.
+    final delay = Duration(seconds: 2 * (_reconnectAttempt + 1));
+    _reconnectAttempt++;
+    _reconnectTimer = Timer(delay, () async {
+      if (!mounted || _service.isReady) return;
+      final ok = await _service.reconnect();
+      if (!mounted) return;
+      if (ok) {
+        setState(() => _wsConnected = true);
+        _reconnectAttempt = 0;
+      } else {
+        _scheduleReconnect();
+      }
+    });
   }
 
   void _handleSend(String content, String messageType) {
@@ -175,6 +226,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     for (final t in _pendingTimers.values) {
       t.cancel();
     }
+    _reconnectTimer?.cancel();
     _historySub?.cancel();
     _newMessageSub?.cancel();
     _connectionSub?.cancel();
@@ -188,12 +240,13 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     return GestureDetector(
       onTap: () => hideKeyboard(context),
       child: Scaffold(
+        backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: context.primaryColor,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Support Mison', style: boldTextStyle(color: Colors.white, size: 16)),
+              Text(widget.title, style: boldTextStyle(color: Colors.white, size: 16)),
               Row(
                 children: [
                   Container(
@@ -207,7 +260,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                   4.width,
                   Text(
                     _wsConnected ? 'Connecté' : 'Reconnexion...',
-                    style: secondaryTextStyle(color: Colors.white70, size: 11),
+                    style: secondaryTextStyle(color: Colors.white70, size: 13),
                   ),
                 ],
               ),
@@ -218,11 +271,13 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             onPressed: () => finish(context),
           ),
         ),
-        body: Column(
-          children: [
-            Expanded(child: _buildBody()),
-            if (!_isConnecting && _error == null) _buildInputBar(),
-          ],
+        body: DotGridBackground(
+          child: Column(
+            children: [
+              Expanded(child: _buildBody()),
+              if (!_isConnecting && _error == null) _buildInputBar(),
+            ],
+          ),
         ),
       ),
     );
@@ -248,11 +303,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.support_agent_rounded, size: 64, color: Colors.grey),
+          Icon(widget.emptyIcon, size: 64, color: Colors.grey),
           16.height,
-          Text('Démarrez la conversation', style: boldTextStyle()),
+          Text(widget.emptyTitle, style: boldTextStyle()),
           8.height,
-          Text('Notre équipe vous répondra dans les plus brefs délais.', style: secondaryTextStyle(), textAlign: TextAlign.center),
+          Text(widget.emptySubtitle, style: secondaryTextStyle(), textAlign: TextAlign.center),
         ],
       ).paddingSymmetric(horizontal: 32);
     }
@@ -280,7 +335,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           if (!isMe && msg.senderName.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 2),
-              child: Text(msg.senderName, style: secondaryTextStyle(size: 11)),
+              child: Text(msg.senderName, style: secondaryTextStyle(size: 13)),
             ),
           Container(
             constraints: BoxConstraints(maxWidth: context.width() * 0.72),
@@ -312,7 +367,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
               children: [
                 Text(
                   DateFormat('HH:mm').format(msg.createdAt),
-                  style: secondaryTextStyle(size: 10),
+                  style: secondaryTextStyle(size: 12),
                 ),
                 if (isMe) ...[
                   4.width,
@@ -332,7 +387,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                           4.width,
                           Text(
                             'Échec · Réessayer',
-                            style: secondaryTextStyle(size: 10, color: const Color(0xFFB00020)),
+                            style: secondaryTextStyle(size: 12, color: const Color(0xFFB00020)),
                           ),
                         ],
                       ),

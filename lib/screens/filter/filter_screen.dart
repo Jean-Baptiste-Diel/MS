@@ -15,6 +15,7 @@ import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../utils/constant.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class FilterScreen extends StatefulWidget {
   final bool isFromProvider;
@@ -76,7 +77,7 @@ class _FilterScreenState extends State<FilterScreen> {
       }
       setState(() {});
     }).catchError((e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     }).whenComplete(() => appStore.setLoading(false));
   }
 
@@ -90,7 +91,7 @@ class _FilterScreenState extends State<FilterScreen> {
       }
       setState(() {});
     }).catchError((e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -107,7 +108,7 @@ class _FilterScreenState extends State<FilterScreen> {
         color: isSelected ? context.cardColor : context.scaffoldBackgroundColor,
         borderRadius: radius(0),
       ),
-      child: Text(name, style: boldTextStyle(size: 12)),
+      child: Text(name, style: boldTextStyle(size: 14)),
     );
   }
 

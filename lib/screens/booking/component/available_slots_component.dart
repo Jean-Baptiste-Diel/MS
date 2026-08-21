@@ -2,6 +2,7 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/booking/component/slot_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class AvailableSlotsComponent extends StatefulWidget {
   final List<String>? selectedSlots;
@@ -155,7 +156,7 @@ class _AvailableSlotsComponentState extends State<AvailableSlotsComponent> {
               }
               setState(() {});
             } else {
-              toast(language.lblTimeSlotNotAvailable);
+              TopToast.show(message: language.lblTimeSlotNotAvailable.validate());
             }
           },
         );

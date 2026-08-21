@@ -12,6 +12,7 @@ import '../../utils/constant.dart';
 import '../../utils/model_keys.dart';
 import 'model/help_desk_detail_response.dart';
 import 'model/help_desk_response.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 // region Save Help Desk API
 Future<void> saveHelpDeskMultiPart({required Map<String, dynamic> value, List<File>? imageFile}) async {
@@ -37,14 +38,14 @@ Future<void> saveHelpDeskMultiPart({required Map<String, dynamic> value, List<Fi
 
     log("Response: ${jsonDecode(temp)}");
 
-    toast(jsonDecode(temp)['message'], print: true);
+    TopToast.show(message: jsonDecode(temp)['message'], type: TopToastType.error);
     finish(getContext, true);
   }, onError: (error) {
-    toast(error.toString(), print: true);
+    TopToast.show(message: error.toString(), type: TopToastType.error);
     appStore.setLoading(false);
   }).catchError((e) {
     appStore.setLoading(false);
-    toast(e.toString());
+    TopToast.show(message: e.toString(), type: TopToastType.error);
   });
 }
 //endregion
@@ -131,13 +132,13 @@ Future<void> saveHelpDeskActivityMultiPart({required int helpDeskId, required Ma
 
     log("Response: ${jsonDecode(temp)}");
 
-    toast(jsonDecode(temp)['message'], print: true);
+    TopToast.show(message: jsonDecode(temp)['message'], type: TopToastType.error);
   }, onError: (error) {
-    toast(error.toString(), print: true);
+    TopToast.show(message: error.toString(), type: TopToastType.error);
     appStore.setLoading(false);
   }).catchError((e) {
     appStore.setLoading(false);
-    toast(e.toString());
+    TopToast.show(message: e.toString(), type: TopToastType.error);
   });
 }
 

@@ -15,6 +15,7 @@ import '../../../../utils/constant.dart';
 import '../../../../utils/images.dart';
 import '../../../notification/notification_screen.dart';
 import '../../../service/search_service_screen.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class AppBarDashboardComponent4 extends StatefulWidget {
   final List<ServiceData>? featuredList;
@@ -53,7 +54,7 @@ class _AppBarDashboardComponent4State extends State<AppBarDashboardComponent4> {
       setState(() {});
     } else {
       appStore.setSpeechStatus(false);
-      toast(language.theUserHasDenied);
+      TopToast.show(message: language.theUserHasDenied.validate());
     }
   }
 
@@ -171,7 +172,7 @@ class _AppBarDashboardComponent4State extends State<AppBarDashboardComponent4> {
                                 ? Container(
                                     padding: EdgeInsets.all(appStore.unreadCount.validate() > 0 ? 3 : 4),
                                     child: FittedBox(
-                                      child: Text(appStore.unreadCount.toString(), style: primaryTextStyle(size: 12, color: Colors.white)),
+                                      child: Text(appStore.unreadCount.toString(), style: primaryTextStyle(size: 14, color: Colors.white)),
                                     ),
                                     decoration: boxDecorationDefault(color: Colors.red, shape: BoxShape.circle),
                                   )

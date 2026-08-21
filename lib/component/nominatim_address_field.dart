@@ -37,6 +37,52 @@ class NominatimSuggestion {
     );
   }
 
+  /// Construit une suggestion à partir d'une feature GeoJSON renvoyée par
+  /// l'API Photon (komoot) — moteur d'autocomplétion bâti sur les données OSM.
+  factory NominatimSuggestion.fromPhotonFeature(Map<String, dynamic> feature) {
+    final props = feature['properties'] as Map<String, dynamic>? ?? {};
+    final coords = (feature['geometry'] as Map<String, dynamic>?)?['coordinates']
+            as List<dynamic>? ??
+        const [0, 0];
+    // GeoJSON: [lon, lat]
+    final lon = double.tryParse(coords[0].toString()) ?? 0;
+    final lat = double.tryParse(coords.length > 1 ? coords[1].toString() : '0') ?? 0;
+
+    final name      = props['name']?.toString();
+    final street     = props['street']?.toString();
+    final district   = props['district']?.toString();
+    final main = (name?.isNotEmpty ?? false)
+        ? name!
+        : (street?.isNotEmpty ?? false)
+            ? street!
+            : (district?.isNotEmpty ?? false)
+                ? district!
+                : (props['city']?.toString() ?? '');
+
+    final city    = props['city']?.toString();
+    final state   = props['state']?.toString();
+    final country = props['country']?.toString();
+    final subParts = <String>[
+      if (city != null && city.isNotEmpty && city != main) city,
+      if (state != null && state.isNotEmpty && state != city) state,
+      if (country != null && country.isNotEmpty) country,
+    ];
+    final sub = subParts.take(2).join(', ');
+
+    final displayParts = <String>[
+      main,
+      if (sub.isNotEmpty) sub,
+    ];
+
+    return NominatimSuggestion(
+      displayName: displayParts.join(', '),
+      lat: lat,
+      lon: lon,
+      mainText: main,
+      subText: sub,
+    );
+  }
+
   /// Texte affiché dans le champ après sélection : "Quartier, Ville"
   String get shortName =>
       subText.isNotEmpty ? '$mainText, $subText' : mainText;
@@ -90,7 +136,7 @@ class NominatimAddressField extends StatefulWidget {
     required this.controller,
     this.hintText = 'Rechercher une adresse...',
     this.decoration,
-    this.countryCodes = const ['sn'],
+    this.countryCodes = const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
     this.onSelected,
   }) : super(key: key);
 
@@ -113,6 +159,19 @@ class _NominatimAddressFieldState extends State<NominatimAddressField> {
     super.dispose();
   }
 
+  // Biais géographique vers Dakar/Sénégal pour favoriser les résultats locaux.
+  static const double _biasLat = 14.6928;
+  static const double _biasLon = -17.4467;
+
+  // Boîte englobante Afrique de l'Ouest (Mauritanie/Sénégal → Niger/Bénin).
+  // Photon ne fait qu'un boost de pertinence avec lat/lon seuls : pour une
+  // requête courte/ambiguë ("plat", "da"...), les résultats mondiaux les plus
+  // "importants" (Europe, etc.) passent souvent devant les résultats locaux et
+  // finissent tous filtrés par countrycode côté client → liste vide. Le bbox
+  // restreint la recherche elle-même à la zone, donc les résultats remontés
+  // sont déjà pertinents.
+  static const String _westAfricaBbox = '-17.5,4.3,16.0,27.3';
+
   Future<void> _search(String query) async {
     if (query.trim().length < 2) {
       _removeOverlay();
@@ -122,25 +181,37 @@ class _NominatimAddressFieldState extends State<NominatimAddressField> {
     if (mounted) setState(() => _isSearching = true);
 
     try {
-      final countryFilter = widget.countryCodes.join(',');
+      final allowedCodes =
+          widget.countryCodes.map((c) => c.toLowerCase()).toSet();
       final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search'
+        'https://photon.komoot.io/api/'
         '?q=${Uri.encodeComponent(query)}'
-        '&format=json'
-        '&addressdetails=1'
-        '&accept-language=fr'
-        '&limit=6'
-        '&countrycodes=$countryFilter',
+        '&lang=fr'
+        '&limit=15'
+        '&lat=$_biasLat'
+        '&lon=$_biasLon'
+        '&bbox=$_westAfricaBbox',
       );
 
-      final response = await http.get(url, headers: {'User-Agent': 'MisonApp/1.0'});
+      final response = await http
+          .get(url, headers: {'User-Agent': 'MisonApp/1.0'})
+          .timeout(const Duration(seconds: 8));
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body) as List<dynamic>;
-        _suggestions = data
-            .map((e) => NominatimSuggestion.fromJson(e as Map<String, dynamic>))
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final features = data['features'] as List<dynamic>? ?? [];
+
+        _suggestions = features
+            .map((e) => MapEntry(
+                e as Map<String, dynamic>,
+                ((e['properties'] as Map<String, dynamic>?)?['countrycode'])
+                    ?.toString()
+                    .toLowerCase()))
+            .where((entry) => allowedCodes.contains(entry.value))
+            .map((entry) => NominatimSuggestion.fromPhotonFeature(entry.key))
             .where((s) => s.mainText.isNotEmpty)
+            .take(6)
             .toList();
 
         if (_suggestions.isNotEmpty) {
@@ -148,8 +219,12 @@ class _NominatimAddressFieldState extends State<NominatimAddressField> {
         } else {
           _removeOverlay();
         }
+      } else {
+        log('Photon error: HTTP ${response.statusCode} — ${response.body}');
+        _removeOverlay();
       }
-    } catch (_) {
+    } catch (e) {
+      log('Photon search failed: $e');
       _removeOverlay();
     }
 

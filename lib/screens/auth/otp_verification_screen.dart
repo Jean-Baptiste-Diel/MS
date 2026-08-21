@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:booking_system_flutter/component/back_widget.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart' as api;
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
@@ -11,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String email;
@@ -67,7 +69,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
   Future<void> verifyOtp() async {
     if (otpController.text.length != OTP_TEXT_FIELD_LENGTH) {
-      toast(language.pleaseEnterValidOTP);
+      TopToast.show(message: language.pleaseEnterValidOTP.validate());
       return;
     }
 
@@ -80,7 +82,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
     await api.verifyAccountOtp(request).then((response) {
       appStore.setLoading(false);
-      toast(response.message ?? language.accountVerifiedSuccessfully);
+      TopToast.show(message: response.message ?? language.accountVerifiedSuccessfully, type: TopToastType.success);
 
       const SignInScreen(allowHomeNavigation: true).launch(
         context,
@@ -89,7 +91,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       );
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -104,17 +106,18 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
     await api.resendOtp(request, purpose: 'verification').then((response) {
       appStore.setLoading(false);
-      toast(response.message ?? language.otpSentSuccessfully);
+      TopToast.show(message: response.message ?? language.otpSentSuccessfully, type: TopToastType.success);
       startTimer();
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: context.scaffoldBackgroundColor,
@@ -126,7 +129,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
           statusBarColor: context.scaffoldBackgroundColor,
         ),
       ),
-      body: Observer(
+      body: DotGridBackground(
+        child: Observer(
         builder: (_) => Stack(
           children: [
             SingleChildScrollView(
@@ -178,6 +182,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     length: OTP_TEXT_FIELD_LENGTH,
                     controller: otpController,
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     textStyle: boldTextStyle(size: 20),
                     cursorColor: primaryColor,
@@ -244,6 +249,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 ),
               ),
           ],
+        ),
         ),
       ),
     );

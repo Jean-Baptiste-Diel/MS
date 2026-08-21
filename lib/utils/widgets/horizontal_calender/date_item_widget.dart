@@ -58,7 +58,19 @@ class DateItemWidget extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       height: height,
       padding: EdgeInsets.only(left: padding / 2, right: padding / 2),
-      decoration: BoxDecoration(color: _getContainerColorByState(dateItemState), border: Border.all(color: context.dividerColor), borderRadius: radius()),
+      decoration: BoxDecoration(
+        color: _getContainerColorByState(dateItemState),
+        border: Border.all(color: context.dividerColor),
+        borderRadius: radius(),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            spreadRadius: 1,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       alignment: Alignment.center,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

@@ -2,7 +2,6 @@ import 'package:booking_system_flutter/screens/dashboard/component/horizontal_sh
 import 'package:booking_system_flutter/screens/dashboard/component/promotional_banner_slider_component.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_2/shimmer/dashboard_shimmer_2.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_3/component/referral_component.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -71,7 +70,7 @@ class _DashboardFragment2State extends State<DashboardFragment2> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: appStore.isDarkMode ? context.primaryColor.withValues(alpha: 0.01) : primaryLightColor,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           SnapHelperWidget<DashboardResponse>(

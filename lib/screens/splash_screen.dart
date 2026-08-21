@@ -13,6 +13,8 @@ import 'package:nb_utils/nb_utils.dart';
 
 import '../component/loader_widget.dart';
 import '../network/rest_apis.dart';
+import '../utils/firebase_messaging_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class SplashScreen extends StatefulWidget {
   @override
@@ -56,7 +58,7 @@ class _SplashScreenState extends State<SplashScreen> {
     ///Set app configurations
     await getAppConfigurations().then((value) {}).catchError((e) async {
       if (!await isNetworkAvailable()) {
-        toast(errorInternetNotAvailable);
+        TopToast.show(message: errorInternetNotAvailable, type: TopToastType.error);
       }
       log(e);
     });
@@ -66,10 +68,7 @@ class _SplashScreenState extends State<SplashScreen> {
       appNotSynced = true;
       setState(() {});
     } else {
-      int themeModeIndex = getIntAsync(THEME_MODE_INDEX, defaultValue: THEME_MODE_SYSTEM);
-      if (themeModeIndex == THEME_MODE_SYSTEM) {
-        appStore.setDarkMode(MediaQuery.of(context).platformBrightness == Brightness.dark);
-      }
+      // Thème clair forcé — l'app ne suit plus le thème système.
       // Check if the user is unauthorized and logged in, then clear preferences and cached data.
       // This condition occurs when the user is marked as inactive from the admin panel,
       if (!appConfigurationStore.isUserAuthorized && appStore.isLoggedIn) {
@@ -85,6 +84,11 @@ class _SplashScreenState extends State<SplashScreen> {
         if (getBoolAsync(IS_FIRST_TIME, defaultValue: true)) {
           const MisonWelcomeScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
         } else if (appStore.isLoggedIn) {
+          subscribeToFirebaseTopic();
+          // Re-synchronise les tokens push à chaque démarrage : sans cela un
+          // token régénéré empêche de recevoir appels et messages.
+          syncVoipToken();
+          refreshPushTokens();
           DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
         } else {
           SignInScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);

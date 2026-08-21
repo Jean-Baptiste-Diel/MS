@@ -9,6 +9,7 @@ import 'package:nb_utils/nb_utils.dart';
 import '../../component/back_widget.dart';
 import '../../component/cached_image_widget.dart';
 import '../../component/common_file_placeholders.dart';
+import '../../component/dot_grid_background.dart';
 import '../../main.dart';
 import '../../utils/colors.dart';
 import '../../utils/common.dart';
@@ -40,6 +41,7 @@ class _SendFilePreviewScreenState extends State<SendFilePreviewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         "",
         backWidget: BackWidget(iconColor: white),
@@ -50,12 +52,13 @@ class _SendFilePreviewScreenState extends State<SendFilePreviewScreen> {
           style: boldTextStyle(color: white, size: APP_BAR_TEXT_SIZE),
         ),
       ),
-      body: SizedBox(
-        height: context.height(),
-        width: context.width(),
-        child: Column(
-          children: [
-            32.height,
+      body: DotGridBackground(
+        child: SizedBox(
+          height: context.height(),
+          width: context.width(),
+          child: Column(
+            children: [
+              32.height,
             PageView.builder(
               itemCount: files.length,
               itemBuilder: (BuildContext context, int index) {
@@ -131,6 +134,7 @@ class _SendFilePreviewScreenState extends State<SendFilePreviewScreen> {
             16.height,
           ],
         ).paddingSymmetric(horizontal: 16),
+        ),
       ),
     );
   }

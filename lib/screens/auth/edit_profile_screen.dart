@@ -18,6 +18,7 @@ import 'package:flutter_vector_icons/flutter_vector_icons.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class EditProfileScreen extends StatefulWidget {
   @override
@@ -177,16 +178,16 @@ class EditProfileScreenState extends State<EditProfileScreen> {
           log('update() ← nouvelle photo: $newPhoto');
         }
 
-        toast(language.success);
+        TopToast.show(message: language.success.validate(), type: TopToastType.success);
         finish(context);
       } else {
         log('update() ${response.statusCode}: ${response.body}');
-        toast('Erreur ${response.statusCode}: ${response.body}');
+        TopToast.show(message: 'Erreur ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
       appStore.setLoading(false);
       log('update() exception: $e');
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     }
   }
 
@@ -348,7 +349,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
                                 children: [
                                   Text(
                                       '+${selectedCountryCode.phoneCode}',
-                                      style: primaryTextStyle(size: 12)),
+                                      style: primaryTextStyle(size: 16)),
                                   const Icon(Icons.arrow_drop_down),
                                 ],
                               ).paddingOnly(left: 8),

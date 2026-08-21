@@ -19,6 +19,7 @@ import '../../../utils/common.dart';
 import '../../../utils/constant.dart';
 import '../../payment/payment_screen.dart';
 import 'booking_confirmation_dialog.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ConfirmBookingDialog extends StatefulWidget {
   final ServiceDetailResponse data;
@@ -158,7 +159,7 @@ class _ConfirmBookingDialogState extends State<ConfirmBookingDialog> {
       }
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -220,7 +221,7 @@ class _ConfirmBookingDialogState extends State<ConfirmBookingDialog> {
               ),
               child: Text(
                 '* ${language.a} ${appConfigurationStore.cancellationChargeAmount}% ${language.feeAppliesForCancellations} ${appConfigurationStore.cancellationChargeHours} ${language.hoursOfTheScheduled}',
-                style: secondaryTextStyle(size: 10, color: redColor, fontStyle: FontStyle.italic, weight: FontWeight.w600),
+                style: secondaryTextStyle(size: 10, color: redColor, weight: FontWeight.w600),
               ),
             ).visible(!widget.data.serviceDetail!.isFreeService && appConfigurationStore.cancellationCharge),
             16.height,
@@ -271,7 +272,7 @@ class _ConfirmBookingDialogState extends State<ConfirmBookingDialog> {
                 if (isSelected) {
                   bookServices();
                 } else {
-                  toast(language.termsConditionsAccept);
+                  TopToast.show(message: language.termsConditionsAccept.validate());
                 }
               },
             ),

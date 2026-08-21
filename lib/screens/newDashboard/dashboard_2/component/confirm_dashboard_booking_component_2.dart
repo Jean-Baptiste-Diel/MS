@@ -118,7 +118,7 @@ class _ConfirmDashboardBookingComponent2State extends State<ConfirmDashboardBook
                                   '${language.bookingStatus}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: primaryTextStyle(size: 10),
+                                  style: primaryTextStyle(size: 12),
                                 ),
                                 10.height,
                                 Text(
@@ -127,7 +127,7 @@ class _ConfirmDashboardBookingComponent2State extends State<ConfirmDashboardBook
                                   overflow: TextOverflow.ellipsis,
                                   style: boldTextStyle(
                                     color: widget.upcomingConfirmedBooking!.status.validate().getPaymentStatusBackgroundColor,
-                                    size: 12,
+                                    size: 14,
                                   ),
                                 ),
                               ],
@@ -140,7 +140,7 @@ class _ConfirmDashboardBookingComponent2State extends State<ConfirmDashboardBook
                                   language.paymentStatus,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: primaryTextStyle(size: 10),
+                                  style: primaryTextStyle(size: 12),
                                 ),
                                 10.height,
                                 Text(
@@ -151,7 +151,7 @@ class _ConfirmDashboardBookingComponent2State extends State<ConfirmDashboardBook
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: boldTextStyle(
-                                    size: 12,
+                                    size: 14,
                                     color: widget.upcomingConfirmedBooking!.paymentStatus == SERVICE_PAYMENT_STATUS_ADVANCE_PAID ||
                                             (widget.upcomingConfirmedBooking!.paymentStatus == SERVICE_PAYMENT_STATUS_PAID || widget.upcomingConfirmedBooking!.paymentStatus == PENDING_BY_ADMIN)
                                         ? Colors.green

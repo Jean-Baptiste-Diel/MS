@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
@@ -11,6 +12,7 @@ class LiteHomeFragment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         'Accueil',
         textColor: white,
@@ -19,7 +21,8 @@ class LiteHomeFragment extends StatelessWidget {
         color: context.primaryColor,
         showBack: false,
       ),
-      body: ListView(
+      body: DotGridBackground(
+        child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Container(
@@ -71,6 +74,7 @@ class LiteHomeFragment extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }

@@ -11,6 +11,7 @@ import '../../../utils/common.dart';
 import '../../../utils/configs.dart';
 import '../../../utils/dashed_rect.dart';
 import '../../../utils/images.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ReferralComponent extends StatefulWidget {
   final TextEditingController codeConte;
@@ -43,10 +44,10 @@ class _ReferralComponentState extends State<ReferralComponent> {
       );
 
       if (result.status == ShareResultStatus.success) {
-        toast('Shared successfully!');
+        TopToast.show(message: 'Shared successfully!', type: TopToastType.success);
       }
     } catch (e) {
-      toast('Error sharing: $e');
+      TopToast.show(message: 'Error sharing: $e');
     }
   }
 
@@ -76,7 +77,7 @@ class _ReferralComponentState extends State<ReferralComponent> {
         8.height,
         Text(
           language.copyYourCodeAndShare,
-          style: secondaryTextStyle(size: 13),
+          style: secondaryTextStyle(size: 15),
         ),
         16.height,
         Container(
@@ -85,7 +86,7 @@ class _ReferralComponentState extends State<ReferralComponent> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(language.lblYourReferralCode, style: secondaryTextStyle(size: 13)),
+              Text(language.lblYourReferralCode, style: secondaryTextStyle(size: 15)),
               Row(
                 children: [
                   AppTextField(
@@ -97,7 +98,7 @@ class _ReferralComponentState extends State<ReferralComponent> {
                     ),
                     suffix: ic_copy.iconImage(size: 12).onTap(() async {
                       await Clipboard.setData(ClipboardData(text: widget.codeConte.text));
-                      toast(language.referralCodeIsCopied);
+                      TopToast.show(message: language.referralCodeIsCopied.validate());
                     }).paddingAll(16),
                   ).expand(),
                   8.width,
@@ -171,7 +172,7 @@ class _ReferralComponentState extends State<ReferralComponent> {
             children: [
               Text(title, style: boldTextStyle(size: 14)),
               4.height,
-              Text(description, style: secondaryTextStyle(size: 13)),
+              Text(description, style: secondaryTextStyle(size: 15)),
             ],
           ),
         ),

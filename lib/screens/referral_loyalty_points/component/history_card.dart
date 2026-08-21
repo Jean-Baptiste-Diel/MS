@@ -55,7 +55,7 @@ class HistoryCard extends StatelessWidget {
           Text(
             "${data.createdAt}",
             // formatBookingDate(data.createdAt, format: DATE_FORMAT_1),
-            style: secondaryTextStyle(size: 12),
+            style: secondaryTextStyle(size: 14),
           ),
         ],
       ),

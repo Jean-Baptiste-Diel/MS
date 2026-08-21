@@ -18,6 +18,7 @@ import '../../utils/common.dart';
 import '../../utils/configs.dart';
 import 'airtel_payment_response.dart';
 import 'aritel_auth_model.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class AirtelMoneyDialog extends StatefulWidget {
   final String reference;
@@ -261,7 +262,7 @@ Future<bool> checkAirtelPaymentStatus({
     } else if (maxApiCallCount > 0 && res.status != null && res.status!.responseCode == AirtelMoneyResponseCodes.IN_PROCESS) {
       await Future.delayed(const Duration(seconds: 2));
       maxApiCallCount--;
-      // toast("$maxApiCallCount");
+      // TopToast.show(message: "$maxApiCallCount");
       isSuccess = await checkAirtelPaymentStatus(txnId: txnId, loderOnOFF: loderOnOFF, currentPaymentMethod: currentPaymentMethod);
     } else {
       loderOnOFF(false);

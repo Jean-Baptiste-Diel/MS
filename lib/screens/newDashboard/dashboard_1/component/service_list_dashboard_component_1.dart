@@ -32,7 +32,7 @@ class ServiceListDashboardComponent1 extends StatelessWidget {
           ViewAllLabel(
             label: language.services,
             list: serviceList,
-            trailingTextStyle: boldTextStyle(color: primaryColor, size: 12),
+            trailingTextStyle: boldTextStyle(color: primaryColor, size: 14),
             onTap: () {
               ViewAllServiceScreen().launch(context);
             },

@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/booking_data_model.dart';
@@ -95,6 +96,7 @@ class _BookingFragmentState extends State<BookingFragment> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         language.booking,
         textColor: white,
@@ -144,12 +146,13 @@ class _BookingFragmentState extends State<BookingFragment> {
           ),
         ],
       ),
-      body: SizedBox(
-        width: context.width(),
-        height: context.height(),
-        child: Stack(
-          children: [
-            SnapHelperWidget<List<BookingData>>(
+      body: DotGridBackground(
+        child: SizedBox(
+          width: context.width(),
+          height: context.height(),
+          child: Stack(
+            children: [
+              SnapHelperWidget<List<BookingData>>(
               initialData: cachedBookingList,
               future: future,
               errorBuilder: (error) {
@@ -212,6 +215,7 @@ class _BookingFragmentState extends State<BookingFragment> {
             ),
             Observer(builder: (_) => LoaderWidget().visible(appStore.isLoading)),
           ],
+        ),
         ),
       ),
     );

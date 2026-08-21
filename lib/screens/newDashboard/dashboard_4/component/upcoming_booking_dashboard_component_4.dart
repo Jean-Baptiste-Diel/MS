@@ -167,7 +167,7 @@ class _UpComingBookingDashboardComponent4State extends State<UpComingBookingDash
                             language.bookingStatus,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: primaryTextStyle(size: 12),
+                            style: primaryTextStyle(size: 14),
                           ).expand(),
                           16.width,
                           Align(
@@ -178,7 +178,7 @@ class _UpComingBookingDashboardComponent4State extends State<UpComingBookingDash
                               overflow: TextOverflow.ellipsis,
                               style: boldTextStyle(
                                 color: widget.upComingBookingData!.status.validate().getPaymentStatusBackgroundColor,
-                                size: 12,
+                                size: 14,
                               ),
                             ),
                           ).expand(),
@@ -191,7 +191,7 @@ class _UpComingBookingDashboardComponent4State extends State<UpComingBookingDash
                             language.paymentStatus,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: primaryTextStyle(size: 12),
+                            style: primaryTextStyle(size: 14),
                           ).expand(),
                           Align(
                             alignment: Alignment.topRight,
@@ -203,7 +203,7 @@ class _UpComingBookingDashboardComponent4State extends State<UpComingBookingDash
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: boldTextStyle(
-                                size: 12,
+                                size: 14,
                                 color: widget.upComingBookingData!.paymentStatus == SERVICE_PAYMENT_STATUS_ADVANCE_PAID ||
                                         (widget.upComingBookingData!.paymentStatus == SERVICE_PAYMENT_STATUS_PAID || widget.upComingBookingData!.paymentStatus == PENDING_BY_ADMIN)
                                     ? Colors.green

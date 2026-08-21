@@ -3,6 +3,7 @@ import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../../component/cached_image_widget.dart';
+import '../../../component/dot_grid_background.dart';
 import '../../../component/empty_error_state_widget.dart';
 import '../../../main.dart';
 import '../../../model/user_data_model.dart';
@@ -19,8 +20,9 @@ class HandymanListComponent extends StatelessWidget {
 
     return Scaffold(
       appBar: appBarWidget(language.handymanList, color: context.primaryColor, textColor: white),
-      backgroundColor: appStore.isDarkMode ? blackColor : cardColor,
-      body: Stack(
+      backgroundColor: Colors.transparent,
+      body: DotGridBackground(
+        child: Stack(
         children: [
           AnimatedScrollView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 60),
@@ -70,6 +72,7 @@ class HandymanListComponent extends StatelessWidget {
             ).visible(!appStore.isLoading && handymanList.validate().isEmpty),
           ),
         ],
+        ),
       ),
     );
   }

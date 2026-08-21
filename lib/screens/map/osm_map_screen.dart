@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../utils/constant.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 /// Modèle pour les suggestions de recherche
 class PlaceSuggestion {
@@ -368,7 +369,7 @@ class OsmMapScreenState extends State<OsmMapScreen> {
       // Fallback: retourner juste le nom
       finish(context, {'name': _addressController.text});
     } else {
-      toast(language.lblPickAddress);
+      TopToast.show(message: language.lblPickAddress.validate());
     }
   }
 
@@ -535,7 +536,7 @@ class OsmMapScreenState extends State<OsmMapScreen> {
                             ),
                             subtitle: Text(
                               '${suggestion.lat.toStringAsFixed(4)}, ${suggestion.lon.toStringAsFixed(4)}',
-                              style: secondaryTextStyle(size: 12),
+                              style: secondaryTextStyle(size: 14),
                             ),
                             onTap: () => _selectSuggestion(suggestion),
                           );

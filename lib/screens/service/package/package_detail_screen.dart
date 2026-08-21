@@ -83,7 +83,7 @@ class _PackageDetailScreenState extends State<PackageDetailScreen> {
                                   color: lineTextColor,
                                   price: widget.packageData.originalPrice,
                                   hourlyTextColor: Colors.white,
-                                  size: 12,
+                                  size: 14,
                                   isLineThroughEnabled: true,
                                 ),
                             ],
@@ -141,16 +141,16 @@ class _PackageDetailScreenState extends State<PackageDetailScreen> {
                                               child: Marquee(
                                                 child: Row(
                                                   children: [
-                                                    Text('${data.categoryName}', style: boldTextStyle(size: 12, color: textSecondaryColorGlobal)),
+                                                    Text('${data.categoryName}', style: boldTextStyle(size: 14, color: textSecondaryColorGlobal)),
                                                     Text('  >  ', style: boldTextStyle(size: 14, color: textSecondaryColorGlobal)),
-                                                    Text('${data.subCategoryName}', style: boldTextStyle(size: 12, color: context.primaryColor)),
+                                                    Text('${data.subCategoryName}', style: boldTextStyle(size: 14, color: context.primaryColor)),
                                                   ],
                                                 ),
                                               ),
                                             )
                                           else
                                             Expanded(
-                                              child: Text('${data.categoryName}', style: boldTextStyle(size: 12, color: context.primaryColor)),
+                                              child: Text('${data.categoryName}', style: boldTextStyle(size: 14, color: context.primaryColor)),
                                             ),
                                           const SizedBox(width: 8),
                                           PriceWidget(

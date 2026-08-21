@@ -33,6 +33,7 @@ import '../service/addons/service_addons_component.dart';
 import 'component/applied_tax_list_bottom_sheet.dart';
 import 'component/booking_slots.dart';
 import 'component/coupon_list_screen.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BookServiceScreen extends StatefulWidget {
   final ServiceDetailResponse data;
@@ -190,7 +191,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
           setState(() {});
         }).catchError((e) {
           log(e);
-          // toast(e.toString());
+          // TopToast.show(message: e.toString(), type: TopToastType.error);
         });
 
         appStore.setLoading(false);
@@ -227,7 +228,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
       isPointsApplied = false;
       pointsDiscountAmount = 0;
       setPrice();
-      toast(language.youCannotApplyThisCoupon);
+      TopToast.show(message: language.youCannotApplyThisCoupon.validate());
     } else {
       advancePaymentAmount =
           bookingAmountModel.finalGrandTotalAmount * (widget.data.serviceDetail!.advancePaymentPercentage.validate() / 100).toStringAsFixed(appConfigurationStore.priceDecimalPoint).toDouble();
@@ -257,7 +258,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
   void selectDateAndTime(BuildContext context) async {
     if (packageExpiryDate != null && currentDateTime.isAfter(packageExpiryDate!)) {
-      return toast(language.packageIsExpired);
+      return TopToast.show(message: language.packageIsExpired.validate());
     }
 
     await showDatePicker(
@@ -295,7 +296,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
             DateTime now = DateTime.now().subtract(1.minutes);
             if (date.isToday && finalDate!.millisecondsSinceEpoch < now.millisecondsSinceEpoch) {
-              return toast(language.selectedOtherBookingTime);
+              return TopToast.show(message: language.selectedOtherBookingTime.validate());
             }
 
             selectedDate = date;
@@ -305,7 +306,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
           }
           setState(() {});
         }).catchError((e) {
-          toast(e.toString());
+          TopToast.show(message: e.toString(), type: TopToastType.error);
         });
       }
     });
@@ -444,12 +445,12 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                     textColor: Colors.white,
                     onTap: () {
                       if (widget.data.serviceDetail!.isOnSiteService && addressCont.text.isEmpty && widget.data.serviceDetail!.dateTimeVal.validate().isEmpty) {
-                        toast(language.pleaseEnterAddressAnd);
+                        TopToast.show(message: language.pleaseEnterAddressAnd.validate());
                       } else if (widget.data.serviceDetail!.isOnSiteService && addressCont.text.isEmpty) {
-                        toast(language.pleaseEnterYourAddress);
+                        TopToast.show(message: language.pleaseEnterYourAddress.validate());
                       } else if ((widget.data.serviceDetail!.isSlot != 1 && widget.data.serviceDetail!.dateTimeVal.validate().isEmpty) ||
                           (widget.data.serviceDetail!.isSlot == 1 && (widget.data.serviceDetail!.bookingSlot == null || widget.data.serviceDetail!.bookingSlot.validate().isEmpty))) {
-                        toast(language.pleaseSelectBookingDate);
+                        TopToast.show(message: language.pleaseSelectBookingDate.validate());
                       } else {
                         widget.data.serviceDetail!.address = addressCont.text;
                         showInDialog(
@@ -1285,7 +1286,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                         lastAppliedPoints = null;
                         setPrice();
                         fetchEarnPointsForCurrentSelection();
-                        toast("Applied Points removed");
+                        TopToast.show(message: "Applied Points removed");
                         return;
                       }
 
@@ -1297,13 +1298,13 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
                       if (redeemPointsData.redeemType.validate().contains('partial')) {
                         if (enteredRaw.isEmpty || entered == null) {
-                          toast("Please enter points to apply");
+                          TopToast.show(message: "Please enter points to apply");
                           return;
                         }
                       }
 
                       if (entered != null && entered <= 0) {
-                        toast("Please enter a valid points value greater than 0");
+                        TopToast.show(message: "Please enter a valid points value greater than 0");
                         return;
                       }
                       if (redeemPointsData.redeemType.validate().contains('partial')) {
@@ -1311,7 +1312,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                         if (entered == null && ranges.isNotEmpty) {
                           final minAllowed = (ranges..sort((a, b) => (a.pointFrom ?? 0).compareTo(b.pointFrom ?? 0))).first.pointFrom ?? 0;
                           if (userPointsAvailable < minAllowed) {
-                            toast("Insufficient points. Minimum required $minAllowed pts");
+                            TopToast.show(message: "Insufficient points. Minimum required $minAllowed pts");
                             return;
                           }
                         }
@@ -1327,12 +1328,12 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                           final discount = (result['discountAmount'] as num).toDouble();
 
                           if (appliedPts > userPointsAvailable) {
-                            toast("Insufficient points. You only have $userPointsAvailable pts");
+                            TopToast.show(message: "Insufficient points. You only have $userPointsAvailable pts");
                             return;
                           }
 
                           if (appliedPts <= 0 || discount <= 0) {
-                            toast("Cannot apply 0 points or zero discount. Please enter a valid points amount.");
+                            TopToast.show(message: "Cannot apply 0 points or zero discount. Please enter a valid points amount.");
                             return;
                           }
 
@@ -1343,9 +1344,9 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
                           setPrice();
                           fetchEarnPointsForCurrentSelection();
-                          toast("Applied $appliedPts pts for \$${discount.toStringAsFixed(2)} off");
+                          TopToast.show(message: "Applied $appliedPts pts for \$${discount.toStringAsFixed(2)} off");
                         } else {
-                          toast(result['message'].toString());
+                          TopToast.show(message: result['message'].toString());
                         }
                       } else {
                         final int threshold = redeemPointsData.thresholdPoints.validate().toInt();
@@ -1354,16 +1355,16 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                             final double discount = redeemPointsData.maxDiscount!.toDouble();
                             final num payableAmount = bookingAmountModel.finalTotalServicePrice;
                             if (discount >= payableAmount) {
-                              toast("You cannot apply more points than the service amount.");
+                              TopToast.show(message: "You cannot apply more points than the service amount.");
                               return;
                             }
                             isPointsApplied = true;
                             pointsDiscountAmount = discount;
                             setPrice();
                             fetchEarnPointsForCurrentSelection();
-                            toast("Points applied");
+                            TopToast.show(message: "Points applied");
                           } else {
-                            toast("Insufficient points. You need $threshold points");
+                            TopToast.show(message: "Insufficient points. You need $threshold points");
                           }
                         }
                       }
@@ -1418,6 +1419,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                 controller: controller,
                 textStyle: primaryTextStyle(),
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 enabled: true,
                 readOnly: false,

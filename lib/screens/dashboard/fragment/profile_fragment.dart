@@ -18,6 +18,7 @@ import 'package:booking_system_flutter/utils/images.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ProfileFragment extends StatefulWidget {
   @override
@@ -102,7 +103,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
 
             appStore.setLoading(false);
             await clearPreferences();
-            toast(value.message);
+            TopToast.show(message: value.message.validate());
 
             push(
               DashboardScreen(),
@@ -111,7 +112,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
             );
           }).catchError((e) {
             appStore.setLoading(false);
-            toast(e.toString());
+            TopToast.show(message: e.toString(), type: TopToastType.error);
           });
         });
       },
@@ -123,7 +124,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
   Widget _sectionTitle(String title, {Color? color}) {
     return Text(
       title,
-      style: boldTextStyle(size: 14, color: color ?? primaryColor),
+      style: boldTextStyle(size: 16, color: color ?? primaryColor),
     ).paddingOnly(left: 4, bottom: 10, top: 20);
   }
 
@@ -187,12 +188,12 @@ class ProfileFragmentState extends State<ProfileFragment> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: boldTextStyle(size: 13, color: titleColor)),
+                Text(title, style: boldTextStyle(size: 16, color: titleColor)),
                 if (subtitle.validate().isNotEmpty) ...[
                   2.height,
                   Text(
                     subtitle!,
-                    style: secondaryTextStyle(size: 11),
+                    style: secondaryTextStyle(size: 14),
                   ),
                 ],
               ],
@@ -271,14 +272,14 @@ class ProfileFragmentState extends State<ProfileFragment> {
                 children: [
                   Text(
                     appStore.userFullName.validate(),
-                    style: boldTextStyle(size: 16, color: primaryColor),
+                    style: boldTextStyle(size: 18, color: primaryColor),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   4.height,
                   Text(
                     appStore.userEmail.validate(),
-                    style: secondaryTextStyle(size: 12),
+                    style: secondaryTextStyle(size: 14),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -302,11 +303,11 @@ class ProfileFragmentState extends State<ProfileFragment> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Bienvenue sur Mison', style: boldTextStyle(size: 18)),
+          Text('Bienvenue sur Mison', style: boldTextStyle(size: 19)),
           6.height,
           Text(
             'Connectez-vous pour gérer votre profil et vos paramètres.',
-            style: secondaryTextStyle(size: 12),
+            style: secondaryTextStyle(size: 14),
           ),
           14.height,
           AppButton(
@@ -331,6 +332,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         language.profile,
         textColor: white,

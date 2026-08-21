@@ -1,5 +1,6 @@
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/nominatim_address_field.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
@@ -11,6 +12,7 @@ import 'package:booking_system_flutter/utils/common.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class MisonWorkerRequestScreen extends StatefulWidget {
   const MisonWorkerRequestScreen({Key? key}) : super(key: key);
@@ -97,11 +99,11 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedService == null) {
-      toast('Veuillez sélectionner un service');
+      TopToast.show(message: 'Veuillez sélectionner un service');
       return;
     }
     if (_selectedDate == null || _selectedTime == null) {
-      toast('Veuillez sélectionner une date et une heure');
+      TopToast.show(message: 'Veuillez sélectionner une date et une heure');
       return;
     }
 
@@ -126,7 +128,7 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
       ).launch(context, isNewTask: true);
     } catch (e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     }
   }
 
@@ -135,6 +137,7 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
     return GestureDetector(
       onTap: () => hideKeyboard(context),
       child: Scaffold(
+        backgroundColor: Colors.transparent,
         appBar: appBarWidget(
           'Demande d\'ouvrier',
           textColor: Colors.white,
@@ -147,7 +150,8 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
           showBack: true,
           backWidget: BackWidget(),
         ),
-        body: SingleChildScrollView(
+        body: DotGridBackground(
+          child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Form(
             key: _formKey,
@@ -156,7 +160,7 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Service ──────────────────────────────────────────────
-                Text('Service *', style: boldTextStyle(size: 14)),
+                Text('Service *', style: boldTextStyle(size: 16)),
                 8.height,
                 GestureDetector(
                   onTap: _pickService,
@@ -201,7 +205,7 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
                 20.height,
 
                 // ── Nombre d'ouvriers ────────────────────────────────────
-                Text('Nombre d\'ouvriers *', style: boldTextStyle(size: 14)),
+                Text('Nombre d\'ouvriers *', style: boldTextStyle(size: 16)),
                 8.height,
                 Row(
                   children: [
@@ -249,7 +253,7 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
                 20.height,
 
                 // ── Description ──────────────────────────────────────────
-                Text('Description *', style: boldTextStyle(size: 14)),
+                Text('Description *', style: boldTextStyle(size: 16)),
                 8.height,
                 AppTextField(
                   textFieldType: TextFieldType.MULTILINE,
@@ -272,7 +276,7 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
                 20.height,
 
                 // ── Date ─────────────────────────────────────────────────
-                Text('Date d\'intervention *', style: boldTextStyle(size: 14)),
+                Text('Date d\'intervention *', style: boldTextStyle(size: 16)),
                 8.height,
                 _PickerField(
                   icon: Icons.calendar_today_outlined,
@@ -283,7 +287,7 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
                 20.height,
 
                 // ── Heure ────────────────────────────────────────────────
-                Text('Heure d\'intervention *', style: boldTextStyle(size: 14)),
+                Text('Heure d\'intervention *', style: boldTextStyle(size: 16)),
                 8.height,
                 _PickerField(
                   icon: Icons.access_time,
@@ -295,7 +299,7 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
 
                 // ── Adresse ──────────────────────────────────────────────
                 Text('Adresse d\'intervention *',
-                    style: boldTextStyle(size: 14)),
+                    style: boldTextStyle(size: 16)),
                 8.height,
                 Container(
                   decoration: BoxDecoration(
@@ -328,6 +332,7 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
                 16.height,
               ],
             ),
+          ),
           ),
         ),
       ),
@@ -427,6 +432,7 @@ class _ServicePickerScreenState extends State<_ServicePickerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: appBarWidget(
         'Choisir un service',
         textColor: Colors.white,
@@ -435,48 +441,50 @@ class _ServicePickerScreenState extends State<_ServicePickerScreen> {
         showBack: true,
         backWidget: BackWidget(),
       ),
-      body: FutureBuilder<List<MisonService>>(
-        future: _future,
-        builder: (_, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) {
-            return Center(child: Text(snap.error.toString()));
-          }
-          final services = snap.data ?? [];
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: services.length,
-            separatorBuilder: (_, __) =>
-                const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final s = services[i];
-              return ListTile(
-                leading: s.imageUrl != null
-                    ? CachedImageWidget(
-                        url: s.imageUrl!,
-                        width: 40,
-                        height: 40,
-                        radius: 8,
-                      )
-                    : Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: primaryColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
+      body: DotGridBackground(
+        child: FutureBuilder<List<MisonService>>(
+          future: _future,
+          builder: (_, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snap.hasError) {
+              return Center(child: Text(snap.error.toString()));
+            }
+            final services = snap.data ?? [];
+            return ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: services.length,
+              separatorBuilder: (_, __) =>
+                  const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final s = services[i];
+                return ListTile(
+                  leading: s.imageUrl != null
+                      ? CachedImageWidget(
+                          url: s.imageUrl!,
+                          width: 40,
+                          height: 40,
+                          radius: 8,
+                        )
+                      : Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.handyman,
+                              color: primaryColor, size: 20),
                         ),
-                        child: Icon(Icons.handyman,
-                            color: primaryColor, size: 20),
-                      ),
-                title: Text(s.name ?? '', style: primaryTextStyle()),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.pop(context, s),
-              );
-            },
-          );
-        },
+                  title: Text(s.name ?? '', style: primaryTextStyle()),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.pop(context, s),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

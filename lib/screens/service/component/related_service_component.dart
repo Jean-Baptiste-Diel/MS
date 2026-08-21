@@ -96,7 +96,7 @@ class _ServiceComponentState extends State<RelatedServiceComponent> {
                           style: TextStyle(
                             color: primaryColor,
                             fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                            fontSize: 14,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -129,7 +129,7 @@ class _ServiceComponentState extends State<RelatedServiceComponent> {
                       8.width,
                       if (widget.serviceData.discount.validate() > 0)
                         PriceWidget(
-                          size: 12,
+                          size: 14,
                           price: widget.serviceData.getDiscountedPrice,
                           isDiscountedPrice: true,
                           color: textSecondaryColorGlobal,
@@ -141,7 +141,7 @@ class _ServiceComponentState extends State<RelatedServiceComponent> {
                           "${widget.serviceData.discount.validate()}% off", //Todo translate
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
-                          style: const TextStyle(color: defaultActivityStatus, fontWeight: FontWeight.bold, fontSize: 12),
+                          style: const TextStyle(color: defaultActivityStatus, fontWeight: FontWeight.bold, fontSize: 14),
                         ).expand(),
                     ],
                   )

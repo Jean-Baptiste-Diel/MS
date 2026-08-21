@@ -8,6 +8,7 @@ import 'package:nb_utils/nb_utils.dart';
 
 
 import '../../../../main.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class PhonePeServices {
   late PaymentSetting paymentSetting;
@@ -85,7 +86,7 @@ class PhonePeServices {
       appStore.setLoading(false);
       log(" PhonePe WebView Error: $e");
       log(" Stack: $stack");
-      toast("PhonePe payment failed: ${e.toString()}");
+      TopToast.show(message: "PhonePe payment failed: ${e.toString()}", type: TopToastType.error);
     }
   }
 

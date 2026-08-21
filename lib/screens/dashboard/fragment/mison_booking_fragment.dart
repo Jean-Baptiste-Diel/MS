@@ -3,15 +3,17 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart';
-import 'package:booking_system_flutter/screens/booking/mison_service_selection_screen.dart';
+import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-import '../../../component/empty_error_state_widget.dart';
+import '../../../component/app_empty_state.dart';
 import '../../../utils/constant.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class MisonBookingFragment extends StatelessWidget {
   const MisonBookingFragment({Key? key}) : super(key: key);
@@ -19,6 +21,7 @@ class MisonBookingFragment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text('Mes Commandes',
             style: boldTextStyle(color: Colors.white, size: 18)),
@@ -27,7 +30,7 @@ class MisonBookingFragment extends StatelessWidget {
         automaticallyImplyLeading: false,
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => const MisonServiceSelectionScreen().launch(context),
+        onPressed: () => const MisonSearchServiceScreen().launch(context),
         backgroundColor: primaryColor,
         icon: const Icon(Icons.add, color: Colors.white),
         label: Text('Nouvelle Commande',
@@ -64,9 +67,8 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
 
   final List<Map<String, String>> _filters = const [
     {'value': '', 'label': 'Tous'},
-    {'value': 'PENDING', 'label': 'Recherche artisan'},
-    {'value': 'ACCEPTED', 'label': 'Artisan trouvé'},
-    {'value': 'AWAITING_TRAVEL_PAYMENT', 'label': 'Paiement déplacement'},
+    {'value': 'PENDING', 'label': 'Recherche ouvrier'},
+    {'value': 'ACCEPTED', 'label': 'Ouvrier trouvé'},
     {'value': 'IN_PROGRESS', 'label': 'En intervention'},
     {'value': 'AWAITING_REALIZATION_PAYMENT', 'label': 'Paiement prestation'},
     {'value': 'COMPLETED', 'label': 'Terminé'},
@@ -107,10 +109,10 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
       onAccept: (_) async {
         try {
           await cancelMisonOrder(order.id ?? '');
-          toast('Commande annulée');
+          TopToast.show(message: 'Commande annulée');
           setState(() => _load());
         } catch (e) {
-          toast('Erreur: ${e.toString()}');
+          TopToast.show(message: 'Erreur: ${e.toString()}', type: TopToastType.error);
         }
       },
     );
@@ -164,10 +166,10 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
             future: _future,
             loadingWidget:
                 const Center(child: CircularProgressIndicator()),
-            errorBuilder: (error) => NoDataWidget(
+            errorBuilder: (error) => AppEmptyState(
+              type: AppEmptyStateType.error,
               title: error,
-              imageWidget: const ErrorStateWidget(),
-              retryText: language.reload,
+              retryLabel: language.reload,
               onRetry: () => setState(() => _load()),
             ),
             onSuccess: (response) {
@@ -177,14 +179,14 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
                   : all.where((o) => o.status == _selectedStatus).toList();
 
               if (orders.isEmpty) {
-                return NoDataWidget(
+                return AppEmptyState(
+                  type: AppEmptyStateType.empty,
                   title: _selectedStatus == null
                       ? 'Aucune commande'
                       : 'Aucune commande avec ce statut',
-                  subTitle: _selectedStatus == null
+                  subtitle: _selectedStatus == null
                       ? 'Vous n\'avez pas encore de commande'
                       : null,
-                  imageWidget: const EmptyStateWidget(),
                 );
               }
               return AnimatedListView(
@@ -268,11 +270,11 @@ class MisonOrderItemComponent extends StatelessWidget {
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':                      return 'Recherche d\'artisan';
-      case 'ACCEPTED':                     return 'Artisan trouvé';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'PENDING':                      return 'Recherche d\'ouvrier';
+      case 'ACCEPTED':                     return 'Ouvrier trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente de paiement';
       case 'IN_PROGRESS':                  return 'Intervention en cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement de la prestation';
       case 'COMPLETED':                    return 'Prestation terminée';
       case 'CANCELLED':                    return 'Commande annulée';
       default:                             return s ?? 'Inconnu';
@@ -313,19 +315,29 @@ class MisonOrderItemComponent extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Mise en relation', style: boldTextStyle(size: 14)),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _statusColor(order.status)
-                        .withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _statusLabel(order.status),
-                    style: boldTextStyle(
-                        size: 12, color: _statusColor(order.status)),
+                Expanded(
+                  child: Text('Mise en relation',
+                      style: boldTextStyle(size: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                8.width,
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _statusColor(order.status)
+                          .withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _statusLabel(order.status),
+                      style: boldTextStyle(
+                          size: 12, color: _statusColor(order.status)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],
@@ -348,7 +360,7 @@ class MisonOrderItemComponent extends StatelessWidget {
                         color: const Color(0xFFF0E8E0), width: 2),
                     image: order.service?.imageUrl != null
                         ? DecorationImage(
-                            image: NetworkImage(order.service!.imageUrl!),
+                            image: CachedNetworkImageProvider(order.service!.imageUrl!),
                             fit: BoxFit.cover,
                           )
                         : null,

@@ -3,8 +3,7 @@ import 'package:booking_system_flutter/component/view_all_label_component.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
-import 'package:booking_system_flutter/screens/category/mison_category_screen.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
+import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
@@ -99,11 +98,12 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
           16.height,
           ViewAllLabel(
             label: language.services,
+            labelSize: 17,
             list: services,
-            trailingTextStyle: boldTextStyle(color: primaryColor, size: 12),
+            usePillStyle: true,
             alwaysShowViewAll: true,
             onTap: () {
-              const MisonCategoryScreen().launch(context);
+              const MisonSearchServiceScreen().launch(context);
             },
           ).paddingSymmetric(horizontal: 16),
           HorizontalList(
@@ -177,7 +177,7 @@ class _MisonServiceCard extends StatelessWidget {
                         ),
                         child: Text(
                           'DISPONIBLE',
-                          style: boldTextStyle(color: const Color.fromARGB(255, 2, 2, 2), size: 10),
+                          style: boldTextStyle(color: const Color.fromARGB(255, 2, 2, 2), size: 12),
                         ),
                       ),
                     ),
@@ -202,24 +202,10 @@ class _MisonServiceCard extends StatelessWidget {
                 if (service.description != null && service.description!.isNotEmpty)
                   Text(
                     service.description!,
-                    style: secondaryTextStyle(size: 12),
+                    style: secondaryTextStyle(size: 14),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ).paddingSymmetric(horizontal: 16),
-                12.height,
-                // Prix minimum
-                Row(
-                  children: [
-                    Text(
-                      'À partir de ',
-                      style: secondaryTextStyle(size: 12),
-                    ),
-                    Text(
-                      '${service.minPriceValue.toStringAsFixed(0)} FCFA',
-                      style: boldTextStyle(color: primaryColor, size: 14),
-                    ),
-                  ],
-                ).paddingSymmetric(horizontal: 16),
                 16.height,
               ],
             ),

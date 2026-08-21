@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../../component/chat_gpt_loder.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ReasonDialog extends StatefulWidget {
   final BookingDetailResponse status;
@@ -102,10 +103,10 @@ class _ReasonDialogState extends State<ReasonDialog> {
     appStore.setLoading(true);
 
     await updateBooking(request).then((res) async {
-      toast(res.message!);
+      TopToast.show(message: res.message!);
       finish(context, true);
     }).catchError((e) {
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
 
     appStore.setLoading(false);
@@ -125,7 +126,7 @@ class _ReasonDialogState extends State<ReasonDialog> {
     appStore.setLoading(true);
 
     await updateBooking(request).then((res) async {
-      toast(res.message!);
+      TopToast.show(message: res.message!);
       Map<String, dynamic> liveStreamRequest = {
         "inSeconds": "${(widget.status.bookingDetail!.durationDiff.toInt() + request[BookingUpdateKeys.durationDiff].toString().toInt())}".toInt(),
         "status": BookingStatusKeys.hold,
@@ -133,7 +134,7 @@ class _ReasonDialogState extends State<ReasonDialog> {
       LiveStream().emit(LIVESTREAM_START_TIMER, liveStreamRequest);
       finish(context, true);
     }).catchError((e) {
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
 
     appStore.setLoading(false);

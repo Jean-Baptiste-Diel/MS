@@ -13,6 +13,7 @@ import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 import '../../../component/chat_gpt_loder.dart';
 import '../../../utils/images.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class CancellationsBookingChargeDialog extends StatefulWidget {
   final BookingDetailResponse status;
@@ -172,7 +173,7 @@ class _CancellationsBookingChargeDialogState extends State<CancellationsBookingC
       finish(context,true);
       _handleBookingCancelledDialog();
     }).catchError((e) {
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
     appStore.setLoading(false);
   }

@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import 'base_services.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class UserService extends BaseService {
   FirebaseFirestore fireStore = FirebaseFirestore.instance;
@@ -90,7 +91,7 @@ class UserService extends BaseService {
       await FirebaseAuth.instance.currentUser!.delete().then((value) async {
         //
       }).catchError((e) {
-        toast(e.toString(), print: true);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     }
   }

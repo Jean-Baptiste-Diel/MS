@@ -7,6 +7,7 @@ import '../../../model/booking_status_model.dart';
 import '../../../network/rest_apis.dart';
 import '../../../utils/colors.dart';
 import '../../../utils/constant.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BookingStatusFilterBottomSheet extends StatefulWidget {
   const BookingStatusFilterBottomSheet({Key? key}) : super(key: key);
@@ -147,7 +148,7 @@ class _BookingStatusFilterBottomSheetState extends State<BookingStatusFilterBott
                     if (selectedCount >= 1) {
                       finish(context, cachedBookingStatusDropdown!.where((element) => element.isSelected).map((e) => e.value).join(','));
                     } else {
-                      toast(language.serviceStatusPicMessage);
+                      TopToast.show(message: language.serviceStatusPicMessage.validate());
                     }
                   },
                 ).expand(),

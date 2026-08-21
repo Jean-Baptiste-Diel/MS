@@ -14,7 +14,6 @@ import '../../../component/loader_widget.dart';
 import '../../../main.dart';
 import '../../../model/dashboard_model.dart';
 import '../../../network/rest_apis.dart';
-import '../../../utils/colors.dart';
 import '../../../utils/constant.dart';
 import 'component/category_list_dashboard_component_4.dart';
 import 'component/job_request_dashboard_component_4.dart';
@@ -72,7 +71,7 @@ class _DashboardFragment4State extends State<DashboardFragment4> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: appStore.isDarkMode ? context.primaryColor.withValues(alpha: 0.01) : primaryLightColor,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           SnapHelperWidget<DashboardResponse>(

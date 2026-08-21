@@ -3,7 +3,7 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
-import 'package:booking_system_flutter/screens/booking/mison_service_selection_screen.dart';
+import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -55,7 +55,7 @@ class _MisonServicesDashboardComponentState extends State<MisonServicesDashboard
             TextButton(
               onPressed: () {
                 // Naviguer vers la liste complète des services
-                const MisonServiceSelectionScreen().launch(context);
+                const MisonSearchServiceScreen().launch(context);
               },
               child: Text(
                 'Voir tout',
@@ -185,7 +185,7 @@ class _ServiceCard extends StatelessWidget {
             8.height,
             Text(
               service.name ?? '',
-              style: primaryTextStyle(size: 12),
+              style: primaryTextStyle(size: 14),
               maxLines: 2,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,

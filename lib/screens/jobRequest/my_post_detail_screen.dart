@@ -66,7 +66,7 @@ class _MyPostDetailScreenState extends State<MyPostDetailScreen> {
             colorClickableText: context.primaryColor,
           )
         else
-          Text(detail.validate(), style: boldTextStyle(size: 12)),
+          Text(detail.validate(), style: boldTextStyle(size: 14)),
         20.height,
       ],
     );
@@ -234,7 +234,7 @@ class _MyPostDetailScreenState extends State<MyPostDetailScreen> {
                               directionMarguee: DirectionMarguee.oneDirection,
                               child: Text(
                                 user.email.validate(),
-                                style: primaryTextStyle(size: 12),
+                                style: primaryTextStyle(size: 14),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),

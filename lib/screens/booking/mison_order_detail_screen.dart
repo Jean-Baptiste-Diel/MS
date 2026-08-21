@@ -1,6 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' show sin, cos, sqrt, atan2;
 
+import 'package:booking_system_flutter/component/app_empty_state.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
@@ -14,11 +19,18 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../component/empty_error_state_widget.dart';
+import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+
 import '../call/mison_call_screen.dart';
+import '../chat/mison_order_chat_screen.dart';
+import '../map/mison_artisan_navigation_screen.dart';
 import '../map/mison_tracking_screen.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class MisonOrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -123,11 +135,11 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
 
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':                      return 'Recherche d\'artisan';
-      case 'ACCEPTED':                     return 'Artisan trouvé';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente du paiement déplacement';
+      case 'PENDING':                      return 'Recherche d\'ouvrier';
+      case 'ACCEPTED':                     return 'Ouvrier trouvé';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente de paiement';
       case 'IN_PROGRESS':                  return 'Intervention en cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement prestation';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement de la prestation';
       case 'COMPLETED':                    return 'Prestation terminée';
       case 'CANCELLED':                    return 'Commande annulée';
       default:                             return s ?? 'Inconnu';
@@ -153,10 +165,32 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
     appStore.setLoading(true);
     try {
       final res = await artisanAcceptOrder(id);
-      toast(res.message ?? 'Succès');
+      TopToast.show(message: res.message ?? 'Succès', type: TopToastType.success);
       init(); setState(() {});
-    } catch (e) { toast(e.toString()); }
+    } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
     finally { appStore.setLoading(false); }
+  }
+
+  Future<void> _startOrder(String id) async {
+    appStore.setLoading(true);
+    try {
+      final res = await artisanStartOrder(id);
+      TopToast.show(message: res.message ?? 'Prestation démarrée', type: TopToastType.success);
+      init(); setState(() {});
+    } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
+    finally { appStore.setLoading(false); }
+  }
+
+  Future<void> _openChat(MisonOrder order) async {
+    final peerName = appStore.userType == USER_TYPE_PROVIDER
+        ? (order.client?.fullName.isNotEmpty == true ? order.client!.fullName : 'Client')
+        : (order.artisan?.fullName.isNotEmpty == true ? order.artisan!.fullName : 'Ouvrier');
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MisonOrderChatScreen(orderId: order.id!, peerName: peerName),
+      ),
+    );
   }
 
   void _showSetFeeModal({
@@ -173,14 +207,14 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
         ctrl: ctrl,
         onConfirm: () async {
           final amount = num.tryParse(ctrl.text.trim());
-          if (amount == null || amount <= 0) { toast('Veuillez saisir un montant valide'); return; }
+          if (amount == null || amount <= 0) { TopToast.show(message: 'Veuillez saisir un montant valide'); return; }
           Navigator.pop(context);
           appStore.setLoading(true);
           try {
             final res = await apiCall(amount);
-            toast(res.message ?? 'Succès');
+            TopToast.show(message: res.message ?? 'Succès', type: TopToastType.success);
             init(); setState(() {});
-          } catch (e) { toast(e.toString()); }
+          } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
           finally { appStore.setLoading(false); }
         },
       ),
@@ -188,12 +222,17 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
   }
 
   Future<void> _cancelOrder(String id) async {
+    final isArtisan = appStore.userType == USER_TYPE_PROVIDER;
     appStore.setLoading(true);
     try {
       await cancelMisonOrder(id);
-      toast('Commande annulée');
+      TopToast.show(
+        message: isArtisan
+            ? 'Vous vous êtes désisté de cette commande'
+            : 'Commande annulée',
+      );
       init(); setState(() {});
-    } catch (e) { toast(e.toString()); }
+    } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
     finally { appStore.setLoading(false); }
   }
 
@@ -216,11 +255,8 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
 
 
   void _showPaymentModal(MisonOrder order) {
-    final isTravel = order.isAwaitingTravelPayment;
-    final title = isTravel ? 'Frais de déplacement' : 'Frais de réalisation';
-    final desc  = isTravel
-        ? 'Ces frais couvrent le déplacement de l\'artisan jusqu\'à votre lieu d\'intervention.'
-        : 'Ces frais correspondent à la réalisation de la prestation par l\'artisan.';
+    const title = 'Frais de prestation';
+    const desc  = 'Ces frais correspondent à la prestation réalisée par l\'ouvrier.';
     final feeRaw = order.currentFeeAmount;
     final feeNum = num.tryParse(feeRaw ?? '');
     final feeLabel = feeNum != null
@@ -243,10 +279,10 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
             if (res.waveLaunchUrl != null && res.waveLaunchUrl!.isNotEmpty) {
               await launchUrl(Uri.parse(res.waveLaunchUrl!), mode: LaunchMode.externalApplication);
             } else {
-              toast(res.message ?? 'Paiement Wave initié');
+              TopToast.show(message: res.message ?? 'Paiement Wave initié');
             }
             init(); setState(() {});
-          } catch (e) { toast(e.toString()); }
+          } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
           finally { appStore.setLoading(false); }
         },
         onPayOrange: () async {
@@ -257,10 +293,10 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
             if (res.deeplink != null && res.deeplink!.isNotEmpty) {
               await launchUrl(Uri.parse(res.deeplink!), mode: LaunchMode.externalApplication);
             } else {
-              toast(res.message ?? 'Paiement Orange Money initié');
+              TopToast.show(message: res.message ?? 'Paiement Orange Money initié');
             }
             init(); setState(() {});
-          } catch (e) { toast(e.toString()); }
+          } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
           finally { appStore.setLoading(false); }
         },
       ),
@@ -268,16 +304,25 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
   }
 
   Future<void> _startCall(MisonOrder order) async {
+    // Await the SharedPreferences write before the API call triggers FCM.
+    // data-only FCM (content-available:1) can arrive in the background isolate
+    // before the async write completes if not awaited here.
+    await MisonCallScreen.markOutgoing(order.id!);
     appStore.setLoading(true);
     try {
       final tokenData = await getCallToken(order.id!);
       appStore.setLoading(false);
+      if (tokenData.appId == null || tokenData.appId!.isEmpty || (tokenData.token ?? '').isEmpty) {
+        MisonCallScreen.clearOutgoing(order.id!);
+        TopToast.show(message: 'Service d\'appel indisponible pour le moment');
+        return;
+      }
       if (!mounted) return;
       final otherName = appStore.userType == USER_TYPE_PROVIDER
           ? order.client != null
               ? '${order.client!.firstName ?? ''} ${order.client!.lastName ?? ''}'.trim()
               : 'Client'
-          : order.artisan?.fullName ?? 'Artisan';
+          : order.artisan?.fullName ?? 'Ouvrier';
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -288,13 +333,15 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
             channel: tokenData.channel ?? '',
             token: tokenData.token ?? '',
             uid: tokenData.uid ?? 1,
+            isCaller: true,
           ),
         ),
       );
     } catch (e, st) {
+      MisonCallScreen.clearOutgoing(order.id!);
       appStore.setLoading(false);
       log('_startCall error: $e\n$st');
-      toast('Impossible d\'initier l\'appel : $e');
+      TopToast.show(message: 'Impossible d\'initier l\'appel : $e');
     }
   }
 
@@ -303,26 +350,27 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.scaffoldBackgroundColor,
-      body: Stack(
+      backgroundColor: Colors.transparent,
+      body: DotGridBackground(
+        child: Stack(
         children: [
           SnapHelperWidget<MisonOrderDetailResponse>(
             future: future,
             loadingWidget: const Center(child: CircularProgressIndicator()),
-            errorBuilder: (error) => Center(
-              child: NoDataWidget(
-                title: error,
-                imageWidget: const ErrorStateWidget(),
-                retryText: 'Réessayer',
-                onRetry: () { init(); setState(() {}); },
-              ),
+            errorBuilder: (error) => AppEmptyState(
+              type: AppEmptyStateType.error,
+              title: error,
+              onRetry: () { init(); setState(() {}); },
             ),
             onSuccess: (response) {
               final order = response.data;
               if (order == null) {
-                return const Center(child: NoDataWidget(title: 'Commande introuvable'));
+                return const AppEmptyState(
+                  type: AppEmptyStateType.empty,
+                  title: 'Commande introuvable',
+                );
               }
-              // Artisan : démarrer / arrêter le tracking selon le statut
+              // Ouvrier : démarrer / arrêter le tracking selon le statut
               if (appStore.userType == USER_TYPE_PROVIDER) {
                 if (order.canTrack) {
                   _startTracking(order.id!);
@@ -339,15 +387,26 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
                 statusLabel: _statusLabel,
                 statusIcon: _statusIcon,
                 onAccept: () => _confirm(title: 'Accepter la commande', subtitle: 'Confirmez-vous l\'acceptation ?', onConfirm: () => _acceptOrder(order.id!)),
-                onSetTravelFee: () => _showSetFeeModal(
-                  title: 'Frais de déplacement',
-                  apiCall: (amount) => setTravelFee(order.id!, amount),
+                onStart: () => _confirm(
+                  title: 'Démarrer la prestation',
+                  subtitle: 'Confirmez-vous être sur place et prêt à commencer ?',
+                  onConfirm: () => _startOrder(order.id!),
                 ),
+                onChat: () => _openChat(order),
                 onSetRealizationFee: () => _showSetFeeModal(
-                  title: 'Frais de réalisation',
+                  title: 'Frais de prestation',
                   apiCall: (amount) => setRealizationFee(order.id!, amount),
                 ),
-                onCancel: () => _confirm(title: 'Annuler la commande', subtitle: 'Êtes-vous sûr de vouloir annuler ?', type: DialogType.DELETE, onConfirm: () => _cancelOrder(order.id!)),
+                onCancel: () => _confirm(
+                  title: appStore.userType == USER_TYPE_PROVIDER
+                      ? 'Se désister de la commande'
+                      : 'Annuler la commande',
+                  subtitle: appStore.userType == USER_TYPE_PROVIDER
+                      ? 'La commande sera reproposée aux autres ouvriers. Confirmez-vous ?'
+                      : 'Êtes-vous sûr de vouloir annuler ?',
+                  type: DialogType.DELETE,
+                  onConfirm: () => _cancelOrder(order.id!),
+                ),
                 onPay: () => _showPaymentModal(order),
                 onRated: () { init(); setState(() {}); },
                 onCall: () => _startCall(order),
@@ -355,14 +414,33 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> {
                   builder: (_) => MisonTrackingScreen(
                     orderId: order.id!,
                     serviceAddress: order.serviceAddress ?? '',
-                    artisanName: order.artisan?.fullName ?? 'Artisan',
+                    artisanName: order.artisan?.fullName ?? 'Ouvrier',
+                    serviceLat: double.tryParse(order.latitude ?? ''),
+                    serviceLng: double.tryParse(order.longitude ?? ''),
                   ),
                 )),
+                onNavigate: () {
+                  final lat = double.tryParse(order.latitude ?? '');
+                  final lng = double.tryParse(order.longitude ?? '');
+                  if (lat == null || lng == null) {
+                    TopToast.show(message: 'Coordonnées de destination introuvables');
+                    return;
+                  }
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => MisonArtisanNavigationScreen(
+                      serviceAddress: order.serviceAddress ?? '',
+                      destLat: lat,
+                      destLng: lng,
+                      orderId: order.id!,
+                    ),
+                  ));
+                },
               );
             },
           ),
           Observer(builder: (_) => LoaderWidget().visible(appStore.isLoading)),
         ],
+        ),
       ),
     );
   }
@@ -381,13 +459,15 @@ class _OrderDetailBody extends StatelessWidget {
   final String Function(String?) statusLabel;
   final IconData Function(String?) statusIcon;
   final VoidCallback onAccept;
-  final VoidCallback onSetTravelFee;
+  final VoidCallback onStart;
+  final VoidCallback onChat;
   final VoidCallback onSetRealizationFee;
   final VoidCallback onCancel;
   final VoidCallback onPay;
   final VoidCallback onRated;
   final VoidCallback onCall;
   final VoidCallback onTrack;
+  final VoidCallback onNavigate;
 
   const _OrderDetailBody({
     required this.order,
@@ -398,13 +478,15 @@ class _OrderDetailBody extends StatelessWidget {
     required this.statusLabel,
     required this.statusIcon,
     required this.onAccept,
-    required this.onSetTravelFee,
+    required this.onStart,
+    required this.onChat,
     required this.onSetRealizationFee,
     required this.onCancel,
     required this.onPay,
     required this.onRated,
     required this.onCall,
     required this.onTrack,
+    required this.onNavigate,
   });
 
   bool get _isArtisan => appStore.userType == USER_TYPE_PROVIDER;
@@ -412,6 +494,9 @@ class _OrderDetailBody extends StatelessWidget {
 
   bool get _showPayButton =>
       _isClient && order.isAwaitingAnyPayment;
+
+  bool get _canCancel =>
+      _isArtisan ? order.canReleaseByArtisan : order.canCancelByClient;
 
   @override
   Widget build(BuildContext context) {
@@ -457,26 +542,44 @@ class _OrderDetailBody extends StatelessWidget {
                   6.height,
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(statusIcon(order.status), color: Colors.white, size: 13),
-                            5.width,
-                            Text(statusLabel(order.status), style: boldTextStyle(color: Colors.white, size: 12)),
-                          ],
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(statusIcon(order.status), color: Colors.white, size: 13),
+                              5.width,
+                              Flexible(
+                                child: Text(
+                                  statusLabel(order.status),
+                                  style: boldTextStyle(color: Colors.white, size: 14),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      if (order.id != null) ...[
-                        12.width,
+                      if (_isClient && order.artisan != null) ...[
+                        8.width,
+                        Flexible(
+                          child: Text(
+                            'Ouvrier : ${order.artisan!.fullName}',
+                            style: secondaryTextStyle(color: Colors.white70, size: 14),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ] else if (order.id != null) ...[
+                        8.width,
                         Text(
                           '#${order.id!.length > 8 ? order.id!.substring(0, 8).toUpperCase() : order.id!.toUpperCase()}',
-                          style: secondaryTextStyle(color: Colors.white60, size: 12),
+                          style: secondaryTextStyle(color: Colors.white60, size: 14),
                         ),
                       ],
                     ],
@@ -500,13 +603,20 @@ class _OrderDetailBody extends StatelessWidget {
                   20.height,
                 ],
 
-                // ── Artisan card — visible par le client uniquement ──────────
+                // ── Ouvrier section — client uniquement ──────────────────────
                 if (_isClient && order.artisan != null) ...[
-                  _ArtisanHeroCard(artisan: order.artisan!, statusColor: sColor, statusLabel: statusLabel(order.status)),
+                  if (order.canTrack)
+                    _LiveTrackingCard(
+                      order: order,
+                      artisan: order.artisan!,
+                      onTrack: onTrack,
+                    )
+                  else
+                    _ArtisanHeroCard(artisan: order.artisan!, statusColor: sColor, statusLabel: statusLabel(order.status)),
                   20.height,
                 ],
 
-                // ── Badge distance — artisan sur commandes à traiter ─────────
+                // ── Badge distance — ouvrier sur commandes à traiter ─────────
                 if (_isArtisan && distanceKm != null) ...[
                   Container(
                     width: double.infinity,
@@ -522,7 +632,7 @@ class _OrderDetailBody extends StatelessWidget {
                         8.width,
                         Text(
                           'Prestation demandée à ${distanceKm! < 1 ? '${(distanceKm! * 1000).round()} m' : '${distanceKm!.toStringAsFixed(1)} km'} de vous',
-                          style: boldTextStyle(size: 13, color: Colors.orange),
+                          style: boldTextStyle(size: 15, color: Colors.orange),
                         ),
                       ],
                     ),
@@ -531,17 +641,18 @@ class _OrderDetailBody extends StatelessWidget {
                 ],
 
 
-                // ── Suivre en direct — client quand artisan en déplacement ────
-                if (_isClient && order.canTrack) ...[
+
+                // ── Naviguer vers le client — ouvrier en déplacement ──────────
+                if (_isArtisan && order.canTrack) ...[
                   GestureDetector(
-                    onTap: onTrack,
+                    onTap: onNavigate,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: primaryColor.withValues(alpha: 0.07),
+                        color: Colors.green.withValues(alpha: 0.07),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
+                        border: Border.all(color: Colors.green.withValues(alpha: 0.25)),
                       ),
                       child: Row(
                         children: [
@@ -549,21 +660,21 @@ class _OrderDetailBody extends StatelessWidget {
                             width: 40, height: 40,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: primaryColor.withValues(alpha: 0.12),
+                              color: Colors.green.withValues(alpha: 0.12),
                             ),
-                            child: Icon(Icons.location_on_rounded, color: primaryColor, size: 20),
+                            child: const Icon(Icons.navigation_rounded, color: Colors.green, size: 20),
                           ),
                           12.width,
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Suivre en direct', style: boldTextStyle(size: 14, color: primaryColor)),
-                                Text('Voir l\'artisan sur la carte', style: secondaryTextStyle(size: 11)),
+                                Text('Naviguer vers le client', style: boldTextStyle(size: 16, color: Colors.green)),
+                                Text('Voir l\'itinéraire sur la carte', style: secondaryTextStyle(size: 13)),
                               ],
                             ),
                           ),
-                          Icon(Icons.chevron_right_rounded, color: primaryColor),
+                          const Icon(Icons.chevron_right_rounded, color: Colors.green),
                         ],
                       ),
                     ),
@@ -571,14 +682,40 @@ class _OrderDetailBody extends StatelessWidget {
                   16.height,
                 ],
 
-                // ── Frais de déplacement — bouton primaire client ─────────────
+                // ── Paiement de la prestation — bouton primaire client ───────
                 if (_showPayButton) ...[
                   _PaymentBanner(onPay: onPay),
                   20.height,
                 ],
 
-                // ── Artisan : actions (disponible) ──────────────────────────
-                if (_isArtisan && order.isPending && order.artisan == null) ...[
+                // ── Ouvrier : accepter (commande libre ou affectée par l'admin)
+                if (_isArtisan &&
+                    ((order.isPending && order.artisan == null) ||
+                        order.needsArtisanConfirmation)) ...[
+                  if (order.needsArtisanConfirmation) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.assignment_ind_rounded, size: 18, color: primaryColor),
+                          8.width,
+                          Expanded(
+                            child: Text(
+                              'Cette commande vous a été affectée par Mison. Confirmez-la pour la démarrer.',
+                              style: secondaryTextStyle(size: 14, color: primaryColor),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    12.height,
+                  ],
                   AppButton(
                     width: double.infinity,
                     color: accept,
@@ -590,28 +727,35 @@ class _OrderDetailBody extends StatelessWidget {
                       children: [
                         const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
                         8.width,
-                        Text('Accepter cette commande', style: boldTextStyle(color: Colors.white, size: 15)),
+                        Text(
+                          order.needsArtisanConfirmation
+                              ? 'Confirmer cette commande'
+                              : 'Accepter cette commande',
+                          style: boldTextStyle(color: Colors.white, size: 16),
+                        ),
                       ],
                     ),
                   ),
                   20.height,
                 ],
 
-                // ── Artisan : Définir frais déplacement / réalisation ────────
+                // ── Ouvrier : Définir les frais de prestation ────────────────
                 if (_isArtisan && order.artisan != null) ...[
-                  if (order.isAccepted) ...[
+                  // Sur une commande encore ASSIGNED, on affiche « Confirmer »
+                  // plus haut — pas deux boutons concurrents.
+                  if (order.canStart && !order.needsArtisanConfirmation) ...[
                     AppButton(
                       width: double.infinity,
                       color: primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      onTap: onSetTravelFee,
+                      onTap: onStart,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.directions_car_rounded, color: Colors.white, size: 20),
+                          const Icon(Icons.play_circle_outline_rounded, color: Colors.white, size: 20),
                           8.width,
-                          Text('Définir les frais de déplacement', style: boldTextStyle(color: Colors.white, size: 15)),
+                          Text('Démarrer la prestation', style: boldTextStyle(color: Colors.white, size: 16)),
                         ],
                       ),
                     ),
@@ -629,7 +773,7 @@ class _OrderDetailBody extends StatelessWidget {
                         children: [
                           const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 20),
                           8.width,
-                          Text('Définir les frais de réalisation', style: boldTextStyle(color: Colors.white, size: 15)),
+                          Text('Définir les frais de prestation', style: boldTextStyle(color: Colors.white, size: 16)),
                         ],
                       ),
                     ),
@@ -655,8 +799,8 @@ class _OrderDetailBody extends StatelessWidget {
                   ]),
                 ],
 
-                // ── Client : Annuler ────────────────────────────────────────
-                if (_isClient && order.isPending) ...[
+                // ── Annulation — client et ouvrier ──────────────────────────
+                if (_canCancel) ...[
                   20.height,
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
@@ -666,8 +810,19 @@ class _OrderDetailBody extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: onCancel,
-                    child: Text('Annuler la commande', style: boldTextStyle(color: rejected, size: 15)),
+                    child: Text(
+                      _isArtisan ? 'Se désister de la commande' : 'Annuler la commande',
+                      style: boldTextStyle(color: rejected, size: 16),
+                    ),
                   ),
+                  if (_isArtisan) ...[
+                    8.height,
+                    Text(
+                      'La commande sera reproposée aux autres ouvriers du service.',
+                      style: secondaryTextStyle(size: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ],
 
                 // ── Évaluation existante ────────────────────────────────────
@@ -679,7 +834,7 @@ class _OrderDetailBody extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Votre évaluation', style: boldTextStyle(size: 13, color: Colors.grey)),
+                          Text('Votre évaluation', style: boldTextStyle(size: 15, color: Colors.grey)),
                           8.height,
                           Row(
                             children: List.generate(5, (i) => Icon(
@@ -703,7 +858,7 @@ class _OrderDetailBody extends StatelessWidget {
       ],
       ),  // end CustomScrollView
 
-      // ── Bouton appel fixe en bas — artisan uniquement ──────────────────
+      // ── Barre fixe en bas : appel + chat ────────────────────────────────
       if (showBottomCall)
         Positioned(
           bottom: 0, left: 0, right: 0,
@@ -719,20 +874,60 @@ class _OrderDetailBody extends StatelessWidget {
                 ),
               ],
             ),
-            child: AppButton(
-              width: double.infinity,
-              height: 52,
-              color: Colors.green,
-              shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              onTap: onCall,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.call_rounded, color: Colors.white, size: 20),
-                  10.width,
-                  Text(_isArtisan ? 'Appeler le client' : 'Appeler l\'artisan', style: boldTextStyle(color: Colors.white, size: 15)),
+            child: Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    width: double.infinity,
+                    height: 52,
+                    color: Colors.green,
+                    shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    onTap: onCall,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.call_rounded, color: Colors.white, size: 20),
+                        8.width,
+                        Flexible(
+                          child: Text(
+                            'Appeler',
+                            style: boldTextStyle(color: Colors.white, size: 16),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (order.canChat) ...[
+                  12.width,
+                  Expanded(
+                    child: AppButton(
+                      width: double.infinity,
+                      height: 52,
+                      color: primaryColor,
+                      shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      onTap: onChat,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 20),
+                          8.width,
+                          Flexible(
+                            child: Text(
+                              _isArtisan ? 'Écrire au client' : 'Écrire',
+                              style: boldTextStyle(color: Colors.white, size: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
         ),
@@ -743,7 +938,7 @@ class _OrderDetailBody extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Artisan hero card
+// Ouvrier hero card
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ArtisanHeroCard extends StatelessWidget {
@@ -782,12 +977,12 @@ class _ArtisanHeroCard extends StatelessWidget {
                   decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
                 ),
                 8.width,
-                Text(statusLabel, style: boldTextStyle(size: 13, color: statusColor)),
+                Text(statusLabel, style: boldTextStyle(size: 15, color: statusColor)),
               ],
             ),
           ),
 
-          // ── Artisan info ───────────────────────────────────────────────────
+          // ── Ouvrier info ───────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -800,7 +995,7 @@ class _ArtisanHeroCard extends StatelessWidget {
                     color: primaryColor.withValues(alpha: 0.1),
                     border: Border.all(color: primaryColor.withValues(alpha: 0.2), width: 2),
                     image: artisan.profilePictureUrl != null
-                        ? DecorationImage(image: NetworkImage(artisan.profilePictureUrl!), fit: BoxFit.cover)
+                        ? DecorationImage(image: CachedNetworkImageProvider(artisan.profilePictureUrl!), fit: BoxFit.cover)
                         : null,
                   ),
                   child: artisan.profilePictureUrl == null
@@ -818,7 +1013,7 @@ class _ArtisanHeroCard extends StatelessWidget {
                         Row(children: [
                           Icon(Icons.work_outline_rounded, size: 13, color: Colors.grey),
                           4.width,
-                          Text('${artisan.experienceYears} ans d\'expérience', style: secondaryTextStyle(size: 12)),
+                          Text('${artisan.experienceYears} ans d\'expérience', style: secondaryTextStyle(size: 14)),
                         ]),
                       if (artisan.averageRating != null) ...[
                         4.height,
@@ -827,7 +1022,7 @@ class _ArtisanHeroCard extends StatelessWidget {
                           4.width,
                           Text(
                             '${artisan.rating.toStringAsFixed(1)} (${artisan.totalReviews ?? 0} avis)',
-                            style: secondaryTextStyle(size: 12),
+                            style: secondaryTextStyle(size: 14),
                           ),
                         ]),
                       ],
@@ -844,7 +1039,7 @@ class _ArtisanHeroCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bannière paiement des frais de déplacement
+// Bannière paiement des frais de prestation
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PaymentBanner extends StatelessWidget {
@@ -887,9 +1082,9 @@ class _PaymentBanner extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Payer les frais de déplacement', style: boldTextStyle(color: Colors.white, size: 15)),
+                      Text('Payer la prestation', style: boldTextStyle(color: Colors.white, size: 16)),
                       3.height,
-                      Text('Couvrez les frais de déplacement de l\'artisan', style: secondaryTextStyle(color: Colors.white70, size: 12)),
+                      Text('Réglez les frais de prestation de l\'ouvrier', style: secondaryTextStyle(color: Colors.white70, size: 14)),
                     ],
                   ),
                 ),
@@ -954,9 +1149,9 @@ class _InfoRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: secondaryTextStyle(size: 12)),
+                Text(label, style: secondaryTextStyle(size: 14)),
                 4.height,
-                Text(value, style: boldTextStyle(size: 14), maxLines: 3, overflow: TextOverflow.ellipsis),
+                Text(value, style: boldTextStyle(size: 16), maxLines: 3, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -1014,12 +1209,17 @@ class _FeeBottomSheet extends StatelessWidget {
             controller: ctrl,
             autofocus: true,
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
             style: boldTextStyle(size: 16),
             decoration: InputDecoration(
               hintText: 'Montant en FCFA',
               hintStyle: secondaryTextStyle(size: 14),
-              suffixText: 'FCFA',
-              suffixStyle: secondaryTextStyle(size: 13),
+              suffixIcon: IconButton(
+                icon: Icon(Icons.check_circle_outline, color: primaryColor),
+                onPressed: () => FocusScope.of(context).unfocus(),
+                tooltip: 'Fermer le clavier',
+              ),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               enabledBorder: OutlineInputBorder(
@@ -1125,7 +1325,7 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(widget.desc, style: secondaryTextStyle(size: 12)),
+                Text(widget.desc, style: secondaryTextStyle(size: 14)),
                 8.height,
                 Text(widget.feeLabel,
                     style: boldTextStyle(size: 20, color: const Color(0xFFC99700))),
@@ -1134,7 +1334,7 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
           ),
           20.height,
 
-          Text('Mode de paiement', style: boldTextStyle(size: 14)),
+          Text('Mode de paiement', style: boldTextStyle(size: 16)),
           12.height,
 
           // Wave
@@ -1233,9 +1433,9 @@ class _MethodTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: boldTextStyle(size: 14)),
+                    Text(label, style: boldTextStyle(size: 16)),
                     2.height,
-                    Text(subtitle, style: secondaryTextStyle(size: 11)),
+                    Text(subtitle, style: secondaryTextStyle(size: 13)),
                   ],
                 ),
               ),
@@ -1265,6 +1465,7 @@ class _RatingBoomChip extends StatefulWidget {
 
 class _RatingBoomChipState extends State<_RatingBoomChip> {
   bool _expanded = false;
+  bool _dismissed = false;
   int _rating = 5;
   final _ctrl = TextEditingController();
   bool _submitting = false;
@@ -1278,11 +1479,12 @@ class _RatingBoomChipState extends State<_RatingBoomChip> {
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
-      await rateMisonOrder(widget.order.id ?? '', _rating, _ctrl.text);
-      toast('Merci pour votre avis !');
+      // Le commentaire est facultatif : seule la note est requise.
+      await rateMisonOrder(widget.order.id ?? '', _rating, _ctrl.text.trim());
+      TopToast.show(message: 'Merci pour votre avis !');
       widget.onRated();
     } catch (e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
       setState(() => _submitting = false);
     }
   }
@@ -1300,6 +1502,7 @@ class _RatingBoomChipState extends State<_RatingBoomChip> {
 
   @override
   Widget build(BuildContext context) {
+    if (_dismissed) return const SizedBox.shrink();
     return AnimatedContainer(
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeInOut,
@@ -1334,11 +1537,30 @@ class _RatingBoomChipState extends State<_RatingBoomChip> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Donner votre avis', style: boldTextStyle(size: 14)),
+                        Row(
+                          children: [
+                            Text('Donner votre avis', style: boldTextStyle(size: 16)),
+                            8.width,
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text('Facultatif', style: secondaryTextStyle(size: 12)),
+                            ),
+                          ],
+                        ),
                         4.height,
-                        Text('Comment s\'est passée la prestation ?', style: secondaryTextStyle(size: 11)),
+                        Text('Comment s\'est passée la prestation ?', style: secondaryTextStyle(size: 13)),
                       ],
                     ),
+                  ),
+                  // Masquer l'invitation — l'évaluation n'est jamais imposée.
+                  IconButton(
+                    tooltip: 'Ignorer',
+                    icon: Icon(Icons.close_rounded, color: appTextSecondaryColor, size: 20),
+                    onPressed: () => setState(() => _dismissed = true),
                   ),
                   AnimatedRotation(
                     turns: _expanded ? 0.5 : 0,
@@ -1384,7 +1606,7 @@ class _RatingBoomChipState extends State<_RatingBoomChip> {
                   8.height,
                   Text(
                     _ratingLabel(_rating),
-                    style: boldTextStyle(size: 13, color: ratingBarColor),
+                    style: boldTextStyle(size: 15, color: ratingBarColor),
                   ),
                   16.height,
 
@@ -1392,9 +1614,12 @@ class _RatingBoomChipState extends State<_RatingBoomChip> {
                   TextField(
                     controller: _ctrl,
                     maxLines: 3,
+                    textInputAction: TextInputAction.done,
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) => FocusScope.of(context).unfocus(),
                     decoration: InputDecoration(
                       hintText: 'Partagez votre expérience (optionnel)',
-                      hintStyle: secondaryTextStyle(size: 12),
+                      hintStyle: secondaryTextStyle(size: 14),
                       filled: true,
                       fillColor: context.scaffoldBackgroundColor,
                       contentPadding: const EdgeInsets.all(14),
@@ -1431,12 +1656,433 @@ class _RatingBoomChipState extends State<_RatingBoomChip> {
                             children: [
                               const Icon(Icons.send_rounded, color: Colors.white, size: 18),
                               8.width,
-                              Text('Envoyer mon avis', style: boldTextStyle(color: Colors.white, size: 14)),
+                              Text(
+                                _ctrl.text.trim().isEmpty ? 'Envoyer ma note' : 'Envoyer mon avis',
+                                style: boldTextStyle(color: Colors.white, size: 16),
+                              ),
                             ],
                           ),
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mini-map tracking card — client, quand order.canTrack
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LiveTrackingCard extends StatefulWidget {
+  final MisonOrder order;
+  final MisonArtisanInfo artisan;
+  final VoidCallback onTrack;
+
+  const _LiveTrackingCard({
+    required this.order,
+    required this.artisan,
+    required this.onTrack,
+  });
+
+  @override
+  State<_LiveTrackingCard> createState() => _LiveTrackingCardState();
+}
+
+class _LiveTrackingCardState extends State<_LiveTrackingCard> {
+  final _mapController = MapController();
+  LatLng? _artisanPos;
+  LatLng? _destPos;
+  StreamSubscription<DocumentSnapshot>? _sub;
+
+  // Route OSRM
+  List<LatLng> _routePoints    = [];
+  double?      _roadDistanceM;
+  int?         _etaSeconds;
+  bool         _fetchingRoute  = false;
+  DateTime?    _lastRouteFetch;
+
+  // Alertes
+  bool _hadFirstUpdate    = false;
+  bool _wasNearby         = false;
+  bool _nearbyAlertShown  = false;
+  bool _arrivedAlertShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final lat = double.tryParse(widget.order.latitude ?? '');
+    final lng = double.tryParse(widget.order.longitude ?? '');
+    if (lat != null && lng != null) _destPos = LatLng(lat, lng);
+
+    _sub = FirebaseFirestore.instance
+        .collection('artisan_locations')
+        .doc(widget.order.id)
+        .snapshots()
+        .listen(_onLocation);
+  }
+
+  void _onLocation(DocumentSnapshot snap) {
+    if (!snap.exists || !mounted) return;
+    final data = snap.data() as Map<String, dynamic>;
+    final lat = (data['lat'] as num?)?.toDouble();
+    final lng = (data['lng'] as num?)?.toDouble();
+    if (lat == null || lng == null) return;
+    final pos = LatLng(lat, lng);
+    setState(() => _artisanPos = pos);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
+    _fetchRoute();
+    _checkNearby();
+  }
+
+  Future<void> _fetchRoute() async {
+    if (_artisanPos == null || _destPos == null) return;
+    if (_fetchingRoute) return;
+    final now = DateTime.now();
+    if (_lastRouteFetch != null &&
+        now.difference(_lastRouteFetch!) < const Duration(seconds: 30)) return;
+
+    _fetchingRoute  = true;
+    _lastRouteFetch = now;
+    try {
+      final url = 'https://router.project-osrm.org/route/v1/driving/'
+          '${_artisanPos!.longitude},${_artisanPos!.latitude};'
+          '${_destPos!.longitude},${_destPos!.latitude}'
+          '?steps=false&geometries=geojson&overview=full';
+
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200 || !mounted) return;
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data['code'] != 'Ok') return;
+
+      final route = (data['routes'] as List).first as Map<String, dynamic>;
+      final coords = (route['geometry']['coordinates'] as List)
+          .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _routePoints   = coords;
+          _roadDistanceM = (route['distance'] as num).toDouble();
+          _etaSeconds    = (route['duration'] as num).toInt();
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
+      }
+    } catch (_) {
+    } finally {
+      _fetchingRoute = false;
+    }
+  }
+
+  void _checkNearby() {
+    if (_destPos == null || _artisanPos == null) return;
+    final dist = _roadDistanceM ?? _haversineDist();
+    if (dist == null) return;
+
+    final isArrived = dist < 100;
+    final isNearby  = dist < 500;
+
+    if (_hadFirstUpdate) {
+      if (isArrived && !_arrivedAlertShown) {
+        _arrivedAlertShown = true;
+        _nearbyAlertShown  = true;
+        showSimpleLocalNotification(
+          id: 9002,
+          title: '${widget.artisan.fullName} est arrivé !',
+          body: 'Votre ouvrier est arrivé à votre adresse.',
+        );
+      } else if (isNearby && !_wasNearby && !_nearbyAlertShown) {
+        _nearbyAlertShown = true;
+        showSimpleLocalNotification(
+          id: 9001,
+          title: '${widget.artisan.fullName} est proche !',
+          body: 'Votre ouvrier est à moins de 500 m de chez vous.',
+        );
+      }
+    }
+
+    _wasNearby      = isNearby;
+    _hadFirstUpdate = true;
+  }
+
+  void _fitMap() {
+    final points = [
+      if (_routePoints.isNotEmpty) ..._routePoints
+      else ...[if (_artisanPos != null) _artisanPos!, if (_destPos != null) _destPos!],
+    ];
+    if (points.isEmpty) return;
+    try {
+      if (points.length == 1) {
+        _mapController.move(points.first, 14);
+      } else {
+        _mapController.fitCamera(
+          CameraFit.coordinates(coordinates: points, padding: const EdgeInsets.all(40)),
+        );
+      }
+    } catch (_) {}
+  }
+
+  double? _haversineDist() {
+    if (_artisanPos == null || _destPos == null) return null;
+    final lat1 = _artisanPos!.latitude * (3.14159265 / 180);
+    final lat2 = _destPos!.latitude * (3.14159265 / 180);
+    final dLat = (_destPos!.latitude - _artisanPos!.latitude) * (3.14159265 / 180);
+    final dLon = (_destPos!.longitude - _artisanPos!.longitude) * (3.14159265 / 180);
+    final a = sin(dLat / 2) * sin(dLat / 2) + cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2);
+    return 6371000.0 * 2 * atan2(sqrt(a), sqrt(1 - a));
+  }
+
+  String _fmtDist(double m) =>
+      m < 1000 ? '${m.round()} m' : '${(m / 1000).toStringAsFixed(1)} km';
+
+  String _fmtEta(int s) {
+    if (s < 60) return 'moins d\'1 min';
+    final min = s ~/ 60;
+    if (min < 60) return '$min min';
+    return '${min ~/ 60}h${(min % 60).toString().padLeft(2, '0')}';
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final artisan = widget.artisan;
+    final dist = _roadDistanceM ?? _haversineDist();
+    final initialCenter = _destPos ?? const LatLng(14.6928, -17.4467);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── Mini-map ─────────────────────────────────────────────────────
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: SizedBox(
+              height: 200,
+              child: Stack(
+                children: [
+                  FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: initialCenter,
+                      initialZoom: 14,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.none,
+                      ),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.misonservice.app',
+                      ),
+                      if (_routePoints.isNotEmpty)
+                        PolylineLayer(
+                          polylines: [
+                            Polyline(
+                              points: _routePoints,
+                              color: primaryColor,
+                              strokeWidth: 4,
+                            ),
+                          ],
+                        ),
+                      MarkerLayer(
+                        markers: [
+                          if (_destPos != null)
+                            Marker(
+                              point: _destPos!,
+                              width: 36,
+                              height: 44,
+                              child: const Icon(
+                                Icons.location_on,
+                                color: Colors.redAccent,
+                                size: 36,
+                                shadows: [Shadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2))],
+                              ),
+                            ),
+                          if (_artisanPos != null)
+                            Marker(
+                              point: _artisanPos!,
+                              width: 26,
+                              height: 26,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: primaryColor,
+                                  border: Border.all(color: Colors.white, width: 2.5),
+                                  boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4)],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // Badge LIVE / attente
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: _artisanPos != null
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade600,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
+                                ),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'LIVE',
+                                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 8,
+                                  height: 8,
+                                  child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white),
+                                ),
+                                SizedBox(width: 6),
+                                Text('Localisation…', style: TextStyle(color: Colors.white, fontSize: 10)),
+                              ],
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Infos + bouton ───────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    // Avatar
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: primaryColor.withValues(alpha: 0.1),
+                        border: Border.all(color: primaryColor.withValues(alpha: 0.2), width: 1.5),
+                        image: artisan.profilePictureUrl != null
+                            ? DecorationImage(
+                                image: CachedNetworkImageProvider(artisan.profilePictureUrl!),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: artisan.profilePictureUrl == null
+                          ? Icon(Icons.person_rounded, color: primaryColor, size: 24)
+                          : null,
+                    ),
+                    12.width,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(artisan.fullName, style: boldTextStyle(size: 16)),
+                          4.height,
+                          Row(
+                            children: [
+                              if (artisan.averageRating != null) ...[
+                                Icon(Icons.star_rounded, size: 13, color: ratingBarColor),
+                                3.width,
+                                Text(artisan.rating.toStringAsFixed(1), style: secondaryTextStyle(size: 14)),
+                                8.width,
+                              ],
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  'En route',
+                                  style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Distance + ETA
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (dist != null)
+                          Text(_fmtDist(dist), style: boldTextStyle(size: 16, color: primaryColor)),
+                        if (_etaSeconds != null)
+                          Text(_fmtEta(_etaSeconds!), style: secondaryTextStyle(size: 13, color: Colors.green.shade700)),
+                        if (dist == null && _etaSeconds == null)
+                          const SizedBox.shrink(),
+                      ],
+                    ),
+                  ],
+                ),
+                12.height,
+
+                // Bouton plein-écran
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: widget.onTrack,
+                    icon: const Icon(Icons.open_in_full_rounded, size: 16),
+                    label: const Text(
+                      'Suivre en direct',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

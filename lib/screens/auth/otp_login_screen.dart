@@ -16,6 +16,7 @@ import '../../network/rest_apis.dart';
 import '../../utils/configs.dart';
 import '../../utils/constant.dart';
 import '../dashboard/dashboard_screen.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class OTPLoginScreen extends StatefulWidget {
   const OTPLoginScreen({Key? key}) : super(key: key);
@@ -82,13 +83,13 @@ class _OTPLoginScreenState extends State<OTPLoginScreen> {
 
       appStore.setLoading(true);
 
-      toast(language.sendingOTP);
+      TopToast.show(message: language.sendingOTP.validate());
 
       try {
         await FirebaseAuth.instance.verifyPhoneNumber(
           phoneNumber: "+${selectedCountry.phoneCode}${numberController.text.trim()}",
           verificationCompleted: (PhoneAuthCredential credential) async {
-            toast(language.verified);
+            TopToast.show(message: language.verified.validate());
 
             if (isAndroid) {
               await FirebaseAuth.instance.signInWithCredential(credential);
@@ -97,13 +98,13 @@ class _OTPLoginScreenState extends State<OTPLoginScreen> {
           verificationFailed: (FirebaseAuthException e) {
             appStore.setLoading(false);
             if (e.code == 'invalid-phone-number') {
-              toast(language.theEnteredCodeIsInvalidPleaseTryAgain, print: true);
+              TopToast.show(message: language.theEnteredCodeIsInvalidPleaseTryAgain.validate(), type: TopToastType.error);
             } else {
-              toast(e.toString(), print: true);
+              TopToast.show(message: e.toString(), type: TopToastType.error);
             }
           },
           codeSent: (String _verificationId, int? resendToken) async {
-            toast(language.otpCodeIsSentToYourMobileNumber);
+            TopToast.show(message: language.otpCodeIsSentToYourMobileNumber.validate());
 
             appStore.setLoading(false);
 
@@ -126,7 +127,7 @@ class _OTPLoginScreenState extends State<OTPLoginScreen> {
         log(e);
         appStore.setLoading(false);
 
-        toast(e.toString(), print: true);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       }
     }
   }
@@ -169,29 +170,29 @@ class _OTPLoginScreenState extends State<OTPLoginScreen> {
               }
             }).catchError((e) {
               finish(context);
-              toast(e.toString());
+              TopToast.show(message: e.toString(), type: TopToastType.error);
               appStore.setLoading(false);
             });
           } catch (e) {
             appStore.setLoading(false);
-            toast(e.toString(), print: true);
+            TopToast.show(message: e.toString(), type: TopToastType.error);
           }
         } on FirebaseAuthException catch (e) {
           appStore.setLoading(false);
           if (e.code.toString() == 'invalid-verification-code') {
-            toast(language.theEnteredCodeIsInvalidPleaseTryAgain, print: true);
+            TopToast.show(message: language.theEnteredCodeIsInvalidPleaseTryAgain.validate(), type: TopToastType.error);
           } else {
-            toast(e.message.toString(), print: true);
+            TopToast.show(message: e.message.toString(), type: TopToastType.error);
           }
         } on Exception catch (e) {
           appStore.setLoading(false);
-          toast(e.toString(), print: true);
+          TopToast.show(message: e.toString(), type: TopToastType.error);
         }
       } else {
-        toast(language.pleaseEnterValidOTP);
+        TopToast.show(message: language.pleaseEnterValidOTP.validate());
       }
     } else {
-      toast(language.pleaseEnterValidOTP);
+      TopToast.show(message: language.pleaseEnterValidOTP.validate());
     }
   }
 
@@ -256,7 +257,7 @@ class _OTPLoginScreenState extends State<OTPLoginScreen> {
                         children: [
                           Text(
                             "+${selectedCountry.phoneCode}",
-                            style: primaryTextStyle(size: 12),
+                            style: primaryTextStyle(size: 14),
                           ),
                           Icon(
                             Icons.arrow_drop_down,

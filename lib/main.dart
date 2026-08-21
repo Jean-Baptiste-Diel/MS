@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:booking_system_flutter/app_theme.dart';
+import 'package:booking_system_flutter/firebase_options.dart';
 import 'package:booking_system_flutter/locale/app_localizations.dart';
 import 'package:booking_system_flutter/locale/language_en.dart';
 import 'package:booking_system_flutter/locale/languages.dart';
@@ -29,8 +32,15 @@ import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/services/deep_link_service.dart';
+import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
+import 'package:booking_system_flutter/screens/call/mison_incoming_call_screen.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
+import 'package:booking_system_flutter/network/rest_apis.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -50,8 +60,168 @@ import 'model/shop_model.dart';
 //region Handle Background Firebase Message
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  log('Message Data : ${message.data}');
-  await Firebase.initializeApp().then((value) {}).catchError((e) {});
+  try { await Firebase.initializeApp(); } catch (_) {}
+  if (message.data['type'] == 'INCOMING_CALL') {
+    final orderId  = message.data['order_id']?.toString()  ?? '';
+    final channel  = message.data['channel']?.toString()   ?? '';
+    final caller   = message.data['caller_name']?.toString() ?? 'Appel entrant';
+
+    // iOS: AppDelegate handles CallKit natively — MethodChannel unreliable
+    // from a terminated-app Dart background isolate.
+    if (Platform.isIOS) return;
+
+    // Skip if this device initiated the call (background isolate can't access
+    // the in-memory Set, so we check the SharedPreferences value instead).
+    try {
+      final p = await SharedPreferences.getInstance();
+      if (p.getString('outgoing_call_order_id') == orderId) return;
+    } catch (_) {}
+
+    await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
+      id: orderId,
+      nameCaller: caller,
+      appName: 'Mison',
+      type: 0, // audio
+      textAccept: 'Accepter',
+      textDecline: 'Refuser',
+      duration: 30000,
+      ios: const IOSParams(
+        iconName: '',
+        handleType: 'generic',
+        supportsHolding: false,
+        supportsGrouping: false,
+        supportsUngrouping: false,
+        supportsDTMF: false,
+        ringtonePath: '',
+        configureAudioSession: false,
+      ),
+      android: const AndroidParams(
+        isCustomNotification: false,
+        isShowLogo: false,
+        ringtonePath: 'system_ringtone_default',
+        backgroundColor: '#0F1B2D',
+        actionColor: '#4CAF50',
+        incomingCallNotificationChannelName: 'Appels entrants',
+        missedCallNotificationChannelName: 'Appels manqués',
+      ),
+      extra: {'order_id': orderId, 'channel': channel},
+    ));
+  }
+}
+
+/// Appelé quand l'utilisateur tape la notification d'appel Android (background/terminée).
+@pragma('vm:entry-point')
+void onNotificationTap(NotificationResponse details) {
+  if (details.payload == null) return;
+  try {
+    final data = jsonDecode(details.payload!);
+    if (data['type'] == 'INCOMING_CALL') {
+      final orderId = data['order_id']?.toString() ?? '';
+      final channel = data['channel']?.toString() ?? '';
+      if (orderId.isEmpty) return;
+      navigatorKey.currentState?.push(MaterialPageRoute(
+        builder: (_) => MisonIncomingCallScreen(orderId: orderId, channel: channel),
+      ));
+    }
+  } catch (_) {}
+}
+
+// Pending CallKit accept when navigator wasn't ready yet (app waking from background).
+String? _pendingCallOrderId;
+String? _pendingCallChannel;
+
+void _openCallScreen(String orderId, String channel) {
+  // Safety net: this device initiated the call — don't open the callee screen.
+  if (MisonCallScreen.isOutgoing(orderId)) return;
+
+  final nav = navigatorKey.currentState;
+  if (nav != null) {
+    nav.push(MaterialPageRoute(
+      builder: (_) => MisonIncomingCallScreen(
+        orderId: orderId,
+        channel: channel,
+        autoAccept: true,
+      ),
+    ));
+  } else {
+    // Navigator not ready yet — store and retry once the first frame is rendered.
+    _pendingCallOrderId = orderId;
+    _pendingCallChannel = channel;
+  }
+}
+
+/// Called from _MyAppState.initState() to flush any pending CallKit accept.
+void flushPendingCall() {
+  final orderId = _pendingCallOrderId;
+  final channel = _pendingCallChannel;
+  if (orderId != null) {
+    _pendingCallOrderId = null;
+    _pendingCallChannel = null;
+    _openCallScreen(orderId, channel ?? '');
+  }
+}
+
+/// Android 14+ : demande l'autorisation d'afficher un appel en plein écran.
+Future<void> _ensureFullScreenCallPermission() async {
+  if (!Platform.isAndroid) return;
+  try {
+    final canUse = await FlutterCallkitIncoming.canUseFullScreenIntent();
+    if (canUse == false) await FlutterCallkitIncoming.requestFullIntentPermission();
+  } catch (e) {
+    log('fullScreenIntent permission error: $e');
+  }
+}
+
+/// Enregistre le token PushKit iOS auprès du backend.
+///
+/// C'est ce token qui permet de faire sonner un appel alors que
+/// l'application est complètement fermée — une notification FCM classique
+/// n'y suffit pas sur iOS.
+Future<void> syncVoipToken() async {
+  if (!Platform.isIOS) return;
+  try {
+    final token = await FlutterCallkitIncoming.getDevicePushTokenVoIP();
+    final value = token?.toString() ?? '';
+    if (value.isNotEmpty) await saveVoipTokenToBackend(value);
+  } catch (e) {
+    log('syncVoipToken error: $e');
+  }
+}
+
+/// Écoute les actions CallKit (accepter / refuser depuis l'écran de verrouillage)
+/// et la mise à jour du token VoIP.
+void _listenCallKitEvents() {
+  FlutterCallkitIncoming.onEvent.listen((CallEvent? event) {
+    if (event == null) return;
+
+    if (event.event == Event.actionDidUpdateDevicePushTokenVoip) {
+      final token = event.body['deviceTokenVoIP']?.toString() ?? event.body.toString();
+      if (token.isNotEmpty && appStore.isLoggedIn) saveVoipTokenToBackend(token);
+      return;
+    }
+
+    final extra   = (event.body['extra'] as Map?)?.cast<String, dynamic>() ?? {};
+    final orderId = extra['order_id']?.toString() ?? '';
+    final channel = extra['channel']?.toString()  ?? '';
+    if (orderId.isEmpty) return;
+
+    switch (event.event) {
+      case Event.actionCallAccept:
+        _openCallScreen(orderId, channel);
+      case Event.actionCallDecline:
+      case Event.actionCallTimeout:
+        FirebaseFirestore.instance
+            .collection('call_status')
+            .doc(orderId)
+            .set({'status': 'rejected', 'at': FieldValue.serverTimestamp()})
+            .catchError((_) {});
+        FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
+      case Event.actionCallEnded:
+        FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
+      default:
+        break;
+    }
+  });
 }
 
 //endregion
@@ -65,7 +235,7 @@ RolesAndPermissionStore rolesAndPermissionStore = RolesAndPermissionStore();
 //region Global Variables
 BaseLanguage language = LanguageEn();
 
-/// Badge notifications non-lues pour l'artisan. Persisté en SharedPrefs.
+/// Badge notifications non-lues pour l'ouvrier. Persisté en SharedPrefs.
 final ValueNotifier<int> artisanNotifBadge = ValueNotifier<int>(0);
 //endregion
 
@@ -119,7 +289,9 @@ void main() async {
       ),
     );
   } else {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   }
 /*   await Firebase.initializeApp().then((value) {
     /// Firebase Notification
@@ -133,30 +305,55 @@ void main() async {
   appButtonBackgroundColorGlobal = primaryColor;
   defaultAppButtonTextColorGlobal = Colors.white;
   defaultRadius = 12;
-  defaultBlurRadius = 0;
-  defaultSpreadRadius = 0;
-  textSecondaryColorGlobal = appTextSecondaryColor;
-  textPrimaryColorGlobal = appTextPrimaryColor;
+  defaultBlurRadius = 10;
+  defaultSpreadRadius = 1;
   defaultAppButtonElevation = 0;
   pageRouteTransitionDurationGlobal = 400.milliseconds;
-  textBoldSizeGlobal = 14;
-  textPrimarySizeGlobal = 14;
-  textSecondarySizeGlobal = 12;
+  textBoldSizeGlobal = 16;
+  textPrimarySizeGlobal = 16;
+  textSecondarySizeGlobal = 14;
 
   await initialize();
   localeLanguageList = languageList();
 
-  int themeModeIndex =
-      getIntAsync(THEME_MODE_INDEX, defaultValue: THEME_MODE_SYSTEM);
-  if (themeModeIndex == THEME_MODE_LIGHT) {
-    appStore.setDarkMode(false);
-  } else if (themeModeIndex == THEME_MODE_DARK) {
-    appStore.setDarkMode(true);
-  }
+  appStore.setDarkMode(false);
 
   defaultToastBackgroundColor =
       appStore.isDarkMode ? Colors.white : Colors.black;
   defaultToastTextColor = appStore.isDarkMode ? Colors.black : Colors.white;
+
+  // Background handler — doit être enregistré le plus tôt possible
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  // iOS foreground : afficher alert/badge/son même quand l'app est ouverte
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  // Channel Android haute importance (avant tout affichage de notif)
+  await createNotificationChannel();
+
+  // Enregistre le callback de tap sur notifications locales (appels entrants).
+  // Doit être fait avant runApp pour couvrir le cas app terminée.
+  await FlutterLocalNotificationsPlugin().initialize(
+    const InitializationSettings(
+      android: AndroidInitializationSettings('@drawable/ic_stat_ic_notification'),
+      iOS: DarwinInitializationSettings(),
+      macOS: DarwinInitializationSettings(),
+    ),
+    onDidReceiveNotificationResponse: onNotificationTap,
+    onDidReceiveBackgroundNotificationResponse: onNotificationTap,
+  );
+
+  // Listener foreground enregistré UNE FOIS ici, avant runApp
+  registerForegroundMessageListener();
+  // CallKit events (accepter/refuser depuis l'écran verrouillé) + token VoIP
+  _listenCallKitEvents();
+  // Android 14+ : sans cette autorisation, l'écran d'appel plein écran ne
+  // s'affiche pas quand le téléphone est verrouillé.
+  await _ensureFullScreenCallPermission();
 
   // Initialize deep link service
   DeepLinkService().init();
@@ -169,15 +366,27 @@ class MyApp extends StatefulWidget {
   _MyAppState createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => flushPendingCall());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Quand l'app revient au premier plan après un background FCM, les listes
+  /// de commandes (ouvrier et client) sont rafraîchies automatiquement.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      emitOrderListRefresh(badge: false);
+    }
   }
 
   @override
@@ -196,8 +405,7 @@ class _MyAppState extends State<MyApp> {
                 home: SplashScreen(),
                 theme: AppTheme.lightTheme(color: snap.data),
                 darkTheme: AppTheme.darkTheme(color: snap.data),
-                themeMode:
-                    appStore.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+                themeMode: ThemeMode.light,
                 title: APP_NAME,
                 supportedLocales: LanguageDataModel.languageLocales(),
                 localizationsDelegates: [

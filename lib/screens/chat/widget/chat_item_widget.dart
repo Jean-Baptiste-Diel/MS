@@ -10,6 +10,7 @@ import 'package:nb_utils/nb_utils.dart';
 import '../../../component/cached_image_widget.dart';
 import '../../../component/common_file_placeholders.dart';
 import '../../zoom_image_screen.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ChatItemWidget extends StatefulWidget {
   final ChatMessageModel chatItemData;
@@ -49,7 +50,7 @@ class _ChatItemWidgetState extends State<ChatItemWidget> {
 
   void copyMessage() {
     widget.chatItemData.message.validate().copyToClipboard();
-    toast(language.copied);
+    TopToast.show(message: language.copied.validate());
   }
 
   @override

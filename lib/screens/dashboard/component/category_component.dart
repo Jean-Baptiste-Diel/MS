@@ -39,7 +39,7 @@ class CategoryComponentState extends State<CategoryComponent> {
         ViewAllLabel(
           label: widget.isNewDashboard ? language.lblCategory : language.category,
           list: widget.categoryList!,
-          trailingTextStyle: widget.isNewDashboard ? boldTextStyle(color: primaryColor, size: 12) : null,
+          trailingTextStyle: widget.isNewDashboard ? boldTextStyle(color: primaryColor, size: 14) : null,
           onTap: () {
             CategoryScreen().launch(context).then((value) {
               setStatusBarColor(Colors.transparent);

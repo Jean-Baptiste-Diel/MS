@@ -143,19 +143,48 @@ class MisonOrder {
   bool get isCancelled => status == 'CANCELLED';
   bool get isRejected => status == 'REJECTED';
 
-  bool get isAwaitingAnyPayment => isAwaitingTravelPayment || isAwaitingRealizationPayment;
+  /// Le paiement des frais de déplacement a été retiré du parcours : seul le
+  /// paiement de réalisation, en fin de prestation, reste dû.
+  bool get isAwaitingAnyPayment => isAwaitingRealizationPayment;
 
   /// Montant à payer selon le statut courant
-  String? get currentFeeAmount =>
-      isAwaitingTravelPayment ? travelFee : isAwaitingRealizationPayment ? realizationFee : null;
+  String? get currentFeeAmount => isAwaitingRealizationPayment ? realizationFee : null;
 
   /// Can rate: only completed orders without rating
   bool get canRate => isCompleted && clientRating == null;
 
-  /// Can call: artisan accepted and order is active
-  bool get canCall =>
+  /// Commande active : un ouvrier est rattaché à la commande, qu'il l'ait
+  /// acceptée lui-même (ACCEPTED) ou qu'un admin la lui ait affectée (ASSIGNED).
+  bool get isActiveWithArtisan =>
       artisan != null &&
-      (isAccepted || isAwaitingTravelPayment || isInProgress || isAwaitingRealizationPayment);
+      (isAssigned ||
+          isAccepted ||
+          isAwaitingTravelPayment ||
+          isInProgress ||
+          isAwaitingRealizationPayment);
+
+  /// Can call: artisan accepted and order is active
+  bool get canCall => isActiveWithArtisan;
+
+  /// Chat privé client ↔ ouvrier : dès qu'un ouvrier a accepté.
+  bool get canChat => isActiveWithArtisan;
+
+  /// L'ouvrier doit encore confirmer une commande que l'admin lui a affectée.
+  bool get needsArtisanConfirmation => isAssigned && artisan != null;
+
+  /// L'ouvrier peut démarrer la prestation (plus de paiement préalable).
+  bool get canStart =>
+      artisan != null && (isAssigned || isAccepted || isAwaitingTravelPayment);
+
+  /// Le client peut annuler définitivement sa commande.
+  bool get canCancelByClient =>
+      isPending || isAssigned || isAccepted || isAwaitingTravelPayment || isInProgress;
+
+  /// L'ouvrier peut se désister — après avoir accepté lui-même comme après une
+  /// affectation par l'admin. La commande retourne dans le pool.
+  bool get canReleaseByArtisan =>
+      artisan != null &&
+      (isAssigned || isAccepted || isAwaitingTravelPayment || isInProgress);
 
   /// Can track artisan location: intervention en cours
   bool get canTrack => artisan != null && isInProgress;

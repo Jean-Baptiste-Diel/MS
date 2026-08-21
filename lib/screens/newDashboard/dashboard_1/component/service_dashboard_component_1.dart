@@ -174,7 +174,7 @@ class _ServiceDashboardComponent1State extends State<ServiceDashboardComponent1>
                           8.width,
                           Text(
                             widget.serviceData.totalRating.validate().toString(),
-                            style: boldTextStyle(size: 12, color: Colors.black),
+                            style: boldTextStyle(size: 14, color: Colors.black),
                           ),
                         ],
                       ),
@@ -223,7 +223,7 @@ class _ServiceDashboardComponent1State extends State<ServiceDashboardComponent1>
                     if (widget.serviceData.providerName.validate().isNotEmpty)
                       Text(
                         widget.serviceData.providerName.validate(),
-                        style: secondaryTextStyle(size: 12, color: appStore.isDarkMode ? Colors.white : appTextSecondaryColor),
+                        style: secondaryTextStyle(size: 14, color: appStore.isDarkMode ? Colors.white : appTextSecondaryColor),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ).expand()

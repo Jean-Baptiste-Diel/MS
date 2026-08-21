@@ -61,7 +61,7 @@ class _FilterDateRangeComponentState extends State<FilterDateRangeComponent> {
           16.height,
           AppTextField(
             title: language.dateRange,
-            textStyle: primaryTextStyle(size: 12),
+            textStyle: primaryTextStyle(size: 15),
             controller: dateRangeCont,
             textFieldType: TextFieldType.NAME,
             readOnly: true,

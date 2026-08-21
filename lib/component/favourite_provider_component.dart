@@ -9,6 +9,7 @@ import '../network/rest_apis.dart';
 import '../utils/colors.dart';
 import '../utils/images.dart';
 import 'cached_image_widget.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class FavouriteProviderComponent extends StatefulWidget {
   final double width;
@@ -27,10 +28,10 @@ class _FavouriteProviderComponentState extends State<FavouriteProviderComponent>
   Future<bool> addProviderToWishList({required int providerId}) async {
     Map req = {"id": "", "provider_id": providerId, "user_id": appStore.userId};
     return await addProviderWishList(req).then((res) {
-      toast(language.providerAddedToFavourite);
+      TopToast.show(message: language.providerAddedToFavourite.validate());
       return true;
     }).catchError((error) {
-      toast(error.toString());
+      TopToast.show(message: error.toString(), type: TopToastType.error);
       return false;
     });
   }
@@ -39,10 +40,10 @@ class _FavouriteProviderComponentState extends State<FavouriteProviderComponent>
     Map req = {"user_id": appStore.userId, 'provider_id': providerId};
 
     return await removeProviderWishList(req).then((res) {
-      toast(language.providerRemovedFromFavourite);
+      TopToast.show(message: language.providerRemovedFromFavourite.validate());
       return true;
     }).catchError((error) {
-      toast(error.toString());
+      TopToast.show(message: error.toString(), type: TopToastType.error);
       return false;
     });
   }

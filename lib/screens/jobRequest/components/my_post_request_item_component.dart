@@ -11,6 +11,7 @@ import 'package:nb_utils/nb_utils.dart';
 import '../../../main.dart';
 import '../../../network/rest_apis.dart';
 import '../../../utils/images.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class MyPostRequestItemComponent extends StatefulWidget {
   final PostJobData data;
@@ -38,12 +39,12 @@ class _MyPostRequestItemComponentState extends State<MyPostRequestItemComponent>
 
     deletePostRequest(id: id.validate()).then((value) {
       appStore.setLoading(false);
-      toast(value.message.validate());
+      TopToast.show(message: value.message.validate());
 
       widget.callback.call(false);
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -94,7 +95,7 @@ class _MyPostRequestItemComponentState extends State<MyPostRequestItemComponent>
                       ),
                       child: Text(
                         widget.data.status.validate().toPostJobStatus(),
-                        style: boldTextStyle(color: widget.data.status.validate().getJobStatusColor, size: 12),
+                        style: boldTextStyle(color: widget.data.status.validate().getJobStatusColor, size: 14),
                       ),
                     ),
                   ],

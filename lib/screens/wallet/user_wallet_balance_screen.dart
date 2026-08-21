@@ -28,6 +28,7 @@ import '../../utils/colors.dart';
 import '../../utils/configs.dart';
 import '../../utils/constant.dart';
 import '../../utils/images.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class UserWalletBalanceScreen extends StatefulWidget {
   bool isBackScreen;
@@ -60,9 +61,9 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
 
   void _handleClick() async {
     if (currentPaymentMethod == null) {
-      return toast(language.pleaseChooseAnyOnePayment);
+      return TopToast.show(message: language.pleaseChooseAnyOnePayment.validate());
     } else if (walletAmountCont.text.toDouble() == 0) {
-      return toast(language.theAmountShouldBeEntered);
+      return TopToast.show(message: language.theAmountShouldBeEntered.validate());
     }
 
     if (currentPaymentMethod!.type == PAYMENT_METHOD_STRIPE) {
@@ -78,7 +79,7 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
 
       stripeServiceNew.stripePay().catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_RAZOR) {
       RazorPayServiceNew razorPayServiceNew = RazorPayServiceNew(
@@ -93,7 +94,7 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
       );
       razorPayServiceNew.razorPayCheckout().catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_FLUTTER_WAVE) {
       FlutterWaveServiceNew flutterWaveServiceNew = FlutterWaveServiceNew();
@@ -111,12 +112,12 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
       List<String> supportedCurrencies = ["XOF", "XAF", "CDF", "GNF", "USD"];
 
       if (!supportedCurrencies.contains(appConfigurationStore.currencyCode)) {
-        toast(language.cinetPayNotSupportedMessage);
+        TopToast.show(message: language.cinetPayNotSupportedMessage.validate());
         return;
       } else if (walletAmountCont.text.toDouble() < 100) {
-        return toast('${language.totalAmountShouldBeMoreThan} ${100.toPriceFormat()}');
+        return TopToast.show(message: '${language.totalAmountShouldBeMoreThan} ${100.toPriceFormat()}');
       } else if (walletAmountCont.text.toDouble() > 1500000) {
-        return toast('${language.totalAmountShouldBeLessThan} ${1500000.toPriceFormat()}');
+        return TopToast.show(message: '${language.totalAmountShouldBeLessThan} ${1500000.toPriceFormat()}');
       }
 
       CinetPayServicesNew cinetPayServices = CinetPayServicesNew(
@@ -131,7 +132,7 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
 
       cinetPayServices.payWithCinetPay(context: context).catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_SADAD_PAYMENT) {
       SadadServicesNew sadadServices = SadadServicesNew(
@@ -151,7 +152,7 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
 
       sadadServices.payWithSadad(context).catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_PAYPAL) {
       PayPalService.paypalCheckOut(
@@ -207,7 +208,7 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
       appStore.setLoading(false);
       paystackServices.checkout().catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_MIDTRANS) {
       MidtransService midtransService = MidtransService();
@@ -228,7 +229,7 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
       appStore.setLoading(false);
       midtransService.midtransPaymentCheckout().catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } else if (currentPaymentMethod!.type == PAYMENT_METHOD_PHONEPE) {
       PhonePeServices peServices = PhonePeServices(
@@ -236,7 +237,7 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
         totalAmount: walletAmountCont.text.toDouble(),
         onComplete: (res) {
           if(res['status'] == "payment_error"){
-            toast("Payment Failed");
+            TopToast.show(message: "Payment Failed");
             return;
           }
           Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_PHONEPE, "transaction_id": res['transactionId']};
@@ -249,7 +250,7 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
 
       peServices.phonePeCheckout(context, isV2: isV2).catchError((e) {
         appStore.setLoading(false);
-        toast(e);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     }
   }

@@ -90,7 +90,7 @@ class CategoryDashboardComponent4 extends StatelessWidget {
             child: Marquee(
               child: Text(
                 categoryData.name.validate(),
-                style: boldTextStyle(color: Colors.white, size: 10),
+                style: boldTextStyle(color: Colors.white, size: 12),
               ),
             ).center(),
           ),

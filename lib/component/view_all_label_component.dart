@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -11,6 +12,10 @@ class ViewAllLabel extends StatelessWidget {
   final TextStyle? trailingTextStyle;
   final bool? alwaysShowViewAll; // New parameter to always show View All button
   final int maxViewAllLength;
+  /// Affiche "Voir tout" comme une pilule avec ombre (style bouton) au lieu
+  /// d'un simple lien texte. Désactivé par défaut pour ne pas changer
+  /// l'apparence des écrans existants qui utilisent ce composant.
+  final bool usePillStyle;
 
   ViewAllLabel({
     required this.label,
@@ -20,24 +25,48 @@ class ViewAllLabel extends StatelessWidget {
     this.trailingTextStyle,
     this.alwaysShowViewAll,
     this.maxViewAllLength = 4,
+    this.usePillStyle = false,
   });
 
   bool isViewAllVisible(List list) => list.length >= maxViewAllLength;
 
   @override
   Widget build(BuildContext context) {
+    final bool showViewAll = list == null
+        ? true
+        : (alwaysShowViewAll == true ? true : isViewAllVisible(list!));
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: boldTextStyle(size: labelSize ?? LABEL_TEXT_SIZE)),
-        TextButton(
-          onPressed: (list == null ? true : (alwaysShowViewAll == true ? true : isViewAllVisible(list!)))
-              ? () {
-                  onTap?.call();
-                }
-              : null,
-          child: (list == null ? true : (alwaysShowViewAll == true ? true : isViewAllVisible(list!))) ? Text(language.lblViewAll, style: trailingTextStyle ?? secondaryTextStyle()) : SizedBox(),
-        )
+        if (!showViewAll)
+          const SizedBox()
+        else if (usePillStyle)
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: primaryColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.18),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Text(language.lblViewAll,
+                  style: trailingTextStyle ?? boldTextStyle(color: primaryColor, size: 14)),
+            ),
+          )
+        else
+          TextButton(
+            onPressed: onTap,
+            child: Text(language.lblViewAll, style: trailingTextStyle ?? secondaryTextStyle()),
+          ),
       ],
     );
   }

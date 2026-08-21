@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:booking_system_flutter/component/add_review_dialog.dart';
 import 'package:booking_system_flutter/component/app_common_dialog.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
+import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/price_widget.dart';
 import 'package:booking_system_flutter/component/view_all_label_component.dart';
 import 'package:booking_system_flutter/generated/assets.dart';
@@ -57,6 +58,7 @@ import '../../model/booking_amount_model.dart';
 import '../service/addons/service_addons_component.dart';
 import 'booking_history_component.dart';
 import 'component/cancellations_booking_charge_dialog.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BookingDetailScreen extends StatefulWidget {
   final int bookingId;
@@ -808,7 +810,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
                           InkWell(
                             onTap: () async {
                               await Clipboard.setData(ClipboardData(text: bookingData.txnId.validate()));
-                              toast(language.copied);
+                              TopToast.show(message: language.copied.validate());
                             },
                             child: const SizedBox(width: 23, height: 23, child: Icon(Icons.copy, size: 18)),
                           ),
@@ -852,7 +854,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
                           setState(() {});
                         }
                       }).catchError((e) {
-                        toast(e.toString());
+                        TopToast.show(message: e.toString(), type: TopToastType.error);
                       });
                     }),
                     ic_delete.iconImage(size: 16).paddingAll(8).onTap(() {
@@ -866,9 +868,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
                         onAccept: (p0) async {
                           appStore.setLoading(true);
                           await deleteReview(id: customerReview.id.validate()).then((value) {
-                            toast(value.message);
+                            TopToast.show(message: value.message.validate());
                           }).catchError((e) {
-                            toast(e.toString());
+                            TopToast.show(message: e.toString(), type: TopToastType.error);
                           });
                           init();
                           setState(() {});
@@ -1861,13 +1863,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
 
     appStore.setLoading(true);
     await updateBooking(request).then((res) async {
-      toast(res.message!);
+      TopToast.show(message: res.message!);
       appStore.setLoading(false);
       init();
       setState(() {});
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -1925,7 +1927,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
 
         log('RES: ${jsonEncode(request)}');
         await updateBooking(request).then((res) async {
-          toast(res.message!);
+          TopToast.show(message: res.message!);
           commonStartTimer(isHourlyService: status.bookingDetail!.isHourlyService, status: BookingStatusKeys.complete, timeInSec: status.bookingDetail!.durationDiff.validate().toInt());
 
           appStore.setLoading(false);
@@ -1933,7 +1935,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
           setState(() {});
         }).catchError((e) {
           appStore.setLoading(false);
-          toast(e.toString(), print: true);
+          TopToast.show(message: e.toString(), type: TopToastType.error);
         });
       },
     );
@@ -1953,14 +1955,14 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
     appStore.setLoading(true);
 
     await updateBooking(request).then((res) async {
-      toast(res.message!);
+      TopToast.show(message: res.message!);
       stopLocationUpdates();
       commonStartTimer(isHourlyService: status.bookingDetail!.isHourlyService, status: BookingStatusKeys.inProgress, timeInSec: status.bookingDetail!.durationDiff.validate().toInt());
 
       init();
       setState(() {});
     }).catchError((e) {
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
 
     appStore.setLoading(false);
@@ -2002,13 +2004,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
         appStore.setLoading(true);
 
         await updateBooking(request).then((res) async {
-          toast(res.message!);
+          TopToast.show(message: res.message!);
           commonStartTimer(isHourlyService: status.bookingDetail!.isHourlyService, status: BookingStatusKeys.inProgress, timeInSec: status.bookingDetail!.durationDiff.validate().toInt());
           init();
           setState(() {});
         }).catchError((e) {
           appStore.setLoading(false);
-          toast(e.toString(), print: true);
+          TopToast.show(message: e.toString(), type: TopToastType.error);
         });
       },
     );
@@ -2162,21 +2164,24 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
             }
 
             return Scaffold(
-              body: snapWidgetHelper(
-                snap,
-                errorBuilder: (error) {
-                  log("$error");
-                  return NoDataWidget(
-                    title: error,
-                    imageWidget: const ErrorStateWidget(),
-                    retryText: language.reload,
-                    onRetry: () {
-                      init();
-                      setState(() {});
-                    },
-                  );
-                },
-                loadingWidget: BookingDetailShimmer(),
+              backgroundColor: Colors.transparent,
+              body: DotGridBackground(
+                child: snapWidgetHelper(
+                  snap,
+                  errorBuilder: (error) {
+                    log("$error");
+                    return NoDataWidget(
+                      title: error,
+                      imageWidget: const ErrorStateWidget(),
+                      retryText: language.reload,
+                      onRetry: () {
+                        init();
+                        setState(() {});
+                      },
+                    );
+                  },
+                  loadingWidget: BookingDetailShimmer(),
+                ),
               ),
             );
           },

@@ -16,6 +16,7 @@ import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BookPostJobRequestScreen extends StatefulWidget {
   final PostJobDetailResponse postJobDetailResponse;
@@ -85,7 +86,7 @@ class _BookPostJobRequestScreenState extends State<BookPostJobRequestScreen> {
 
             DateTime now = DateTime.now().subtract(1.minutes);
             if (date.isToday && finalDate!.millisecondsSinceEpoch < now.millisecondsSinceEpoch) {
-              return toast(language.selectedBookingTimeIsAlreadyPassed);
+              return TopToast.show(message: language.selectedBookingTimeIsAlreadyPassed.validate());
             }
 
             selectedDate = date;
@@ -93,7 +94,7 @@ class _BookPostJobRequestScreenState extends State<BookPostJobRequestScreen> {
             dateTimeCont.text = "${formatBookingDate(selectedDate.toString(), format: DATE_FORMAT_3)} ${pickedTime!.format(context).toString()}";
           }
         }).catchError((e) {
-          toast(e.toString());
+          TopToast.show(message: e.toString(), type: TopToastType.error);
         });
       }
     });
@@ -126,7 +127,7 @@ class _BookPostJobRequestScreenState extends State<BookPostJobRequestScreen> {
           setState(() {});
         }).catchError((e) {
           log(e);
-          toast(e.toString());
+          TopToast.show(message: e.toString(), type: TopToastType.error);
         });
 
         appStore.setLoading(false);
@@ -224,7 +225,7 @@ class _BookPostJobRequestScreenState extends State<BookPostJobRequestScreen> {
       DashboardScreen(redirectToBooking: true).launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -303,14 +304,14 @@ class _BookPostJobRequestScreenState extends State<BookPostJobRequestScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           TextButton(
-                            child: Text(language.lblChooseFromMap, style: boldTextStyle(color: context.primaryColor, size: 13)),
+                            child: Text(language.lblChooseFromMap, style: boldTextStyle(color: context.primaryColor, size: 15)),
                             onPressed: () {
                               _handleSetLocationClick();
                             },
                           ).flexible(),
                           TextButton(
                             onPressed: _handleCurrentLocationClick,
-                            child: Text(language.lblUseCurrentLocation, style: boldTextStyle(color: context.primaryColor, size: 13)),
+                            child: Text(language.lblUseCurrentLocation, style: boldTextStyle(color: context.primaryColor, size: 15)),
                           ).flexible(),
                         ],
                       ),

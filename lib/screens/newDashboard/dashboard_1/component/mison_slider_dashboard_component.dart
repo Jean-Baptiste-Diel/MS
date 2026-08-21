@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/main.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
+import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
@@ -13,7 +14,6 @@ import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../../booking/mison_search_service_screen.dart';
@@ -46,28 +46,36 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
 
   Future<void> _fetchServices() async {
     try {
-      final headers = <String, String>{'Content-Type': 'application/json'};
-      if (appStore.token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer ${appStore.token}';
-      }
-
-      final uri = Uri.parse('https://api.mison.app/api/services');
-      final response = await http.get(uri, headers: headers);
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> body = json.decode(response.body);
-        final servicesResponse = MisonServicesResponse.fromJson(body);
-        setState(() {
-          _services = servicesResponse.data ?? [];
-          _isLoading = false;
-        });
-        _startAutoSlide();
-      } else {
-        setState(() => _isLoading = false);
-      }
+      // Réutilise le cache partagé de 10 min (getMisonServices) au lieu d'un
+      // appel réseau dédié — évite de dupliquer la requête déjà faite par les
+      // autres composants de l'accueil, ce qui ralentissait le chargement des
+      // images du slider (bande passante saturée par des requêtes en double).
+      final servicesResponse = await getMisonServices();
+      setState(() {
+        _services = servicesResponse.data ?? [];
+        _isLoading = false;
+      });
+      _startAutoSlide();
+      _precacheSlides();
     } catch (e) {
       log('Error fetching services for slider: $e');
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// Précharge toutes les images du slider dès que la liste arrive, pour que
+  /// le swipe/auto-slide n'affiche jamais de spinner entre deux diapos déjà
+  /// vues — seule la 1ère image attend encore le réseau.
+  void _precacheSlides() {
+    if (!mounted) return;
+    final width = (context.width() * MediaQuery.of(context).devicePixelRatio).round();
+    for (final service in _services) {
+      final url = service.imageUrl;
+      if (url == null || url.isEmpty) continue;
+      precacheImage(
+        CachedNetworkImageProvider(url, maxWidth: width),
+        context,
+      ).catchError((_) {});
     }
   }
 

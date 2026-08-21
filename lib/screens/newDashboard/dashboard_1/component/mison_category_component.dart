@@ -4,8 +4,7 @@ import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/component/view_all_label_component.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
-import 'package:booking_system_flutter/screens/category/mison_category_screen.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
+import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -101,7 +100,7 @@ class MisonCategoryComponentState extends State<MisonCategoryComponent> {
             directionMarguee: DirectionMarguee.oneDirection,
             child: Text(
               service.name.validate(),
-              style: primaryTextStyle(size: 12),
+              style: primaryTextStyle(size: 14),
             ),
           ),
         ],
@@ -141,11 +140,12 @@ class MisonCategoryComponentState extends State<MisonCategoryComponent> {
       children: [
         ViewAllLabel(
           label: language.lblCategory,
+          labelSize: 17,
           list: services,
-          trailingTextStyle: boldTextStyle(color: primaryColor, size: 12),
+          usePillStyle: true,
           alwaysShowViewAll: true,
           onTap: () {
-            const MisonCategoryScreen().launch(context);
+            const MisonSearchServiceScreen().launch(context);
           },
         ).paddingSymmetric(horizontal: 16),
         AnimatedWrap(

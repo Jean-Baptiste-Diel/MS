@@ -25,6 +25,7 @@ import '../../../component/chat_gpt_loder.dart';
 import '../../../component/loader_widget.dart';
 import '../../../model/multi_language_request_model.dart';
 import '../../../utils/configs.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class CreateServiceScreen extends StatefulWidget {
   final ServiceData? data;
@@ -103,7 +104,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
       appStore.setLoading(false);
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
@@ -159,7 +160,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
   //region Add Service
   Future<void> checkValidation({required bool isSave, LanguageDataModel? code}) async {
     if (imageFiles.isEmpty) {
-      return toast(language.pleaseAddImage);
+      return TopToast.show(message: language.pleaseAddImage.validate());
     }
 
     if (formKey.currentState!.validate()) {
@@ -209,20 +210,20 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
         req,
         onSuccess: (data) async {
           appStore.setLoading(false);
-          toast(jsonDecode(data)['message'], print: true);
+          TopToast.show(message: jsonDecode(data)['message'], type: TopToastType.error);
 
           finish(context, true);
         },
         onError: (error) {
-          toast(error.toString(), print: true);
+          TopToast.show(message: error.toString(), type: TopToastType.error);
           appStore.setLoading(false);
         },
       ).catchError((e) {
         appStore.setLoading(false);
-        toast(e.toString(), print: true);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
       });
     } catch (e) {
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     }
   }
 
@@ -350,10 +351,10 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
       // uniqueKey = UniqueKey();
 
       appStore.setLoading(false);
-      toast(value.message.validate(), print: true);
+      TopToast.show(message: value.message.validate(), type: TopToastType.error);
     }).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 

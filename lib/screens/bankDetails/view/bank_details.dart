@@ -12,6 +12,7 @@ import '../../../utils/colors.dart';
 import '../../../utils/common.dart';
 import '../../../utils/images.dart';
 import '../shimmer/bank_detail_shimmer.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class BankDetails extends StatefulWidget {
   final BankHistory? bankHistory;
@@ -41,7 +42,7 @@ class _BankDetailsState extends State<BankDetails> {
       init();
       setState(() {});
     }).catchError((value) async {
-      toast(value);
+      TopToast.show(message: value);
     }).whenComplete(() {
       appStore.setLoading(false);
     });
@@ -53,7 +54,7 @@ class _BankDetailsState extends State<BankDetails> {
       init();
       setState(() {});
     }).catchError((value) async {
-      toast(value);
+      TopToast.show(message: value);
     }).whenComplete(() {
       appStore.setLoading(false);
     });

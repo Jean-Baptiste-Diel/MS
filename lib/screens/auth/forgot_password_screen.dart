@@ -8,6 +8,7 @@ import 'package:nb_utils/nb_utils.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 
 import '../../main.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   @override
@@ -19,7 +20,10 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   TextEditingController otpCont = TextEditingController();
   TextEditingController newPasswordCont = TextEditingController();
   TextEditingController confirmPasswordCont = TextEditingController();
-  
+
+  FocusNode newPasswordFocus = FocusNode();
+  FocusNode confirmPasswordFocus = FocusNode();
+
   GlobalKey<FormState> formKey = GlobalKey<FormState>();
   GlobalKey<FormState> resetFormKey = GlobalKey<FormState>();
   
@@ -59,10 +63,10 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           setState(() {
             _showOtpStep = true;
           });
-          toast(res.message.validate());
+          TopToast.show(message: res.message.validate());
         }
       } catch (e) {
-        toast(e.toString(), print: true);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
         if (mounted) appStore.setLoading(false);
       }
     }
@@ -75,14 +79,14 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     // Validation manuelle du code OTP
     if (!mounted) return;
     if (otpCont.text.length != 6) {
-      toast(language.pleaseEnterValidOTP);
+      TopToast.show(message: language.pleaseEnterValidOTP.validate());
       return;
     }
 
     if (resetFormKey.currentState!.validate()) {
       if (!mounted) return;
       if (newPasswordCont.text != confirmPasswordCont.text) {
-        toast(language.passwordNotMatch);
+        TopToast.show(message: language.passwordNotMatch.validate());
         return;
       }
       
@@ -103,12 +107,12 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       try {
         final res = await resetPassword(req);
         appStore.setLoading(false);
-        toast(res.message.validate());
+        TopToast.show(message: res.message.validate());
         if (mounted) {
           finish(context);
         }
       } catch (e) {
-        toast(e.toString(), print: true);
+        TopToast.show(message: e.toString(), type: TopToastType.error);
         if (mounted) appStore.setLoading(false);
       }
     }
@@ -125,9 +129,9 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       await forgotPassword(req);
       if (mounted) appStore.setLoading(false);
-      toast(language.otpSentSuccessfully);
+      TopToast.show(message: language.otpSentSuccessfully.validate(), type: TopToastType.success);
     } catch (e) {
-      toast(e.toString(), print: true);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
       if (mounted) appStore.setLoading(false);
     }
   }
@@ -143,6 +147,8 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     otpCont.dispose();
     newPasswordCont.dispose();
     confirmPasswordCont.dispose();
+    newPasswordFocus.dispose();
+    confirmPasswordFocus.dispose();
     super.dispose();
   }
 
@@ -272,6 +278,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     length: 6,
                     controller: otpCont,
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
                     animationType: AnimationType.fade,
                     pinTheme: PinTheme(
                       shape: PinCodeFieldShape.box,
@@ -312,13 +319,15 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   builder: (_) => AppTextField(
                     textFieldType: TextFieldType.PASSWORD,
                     controller: newPasswordCont,
+                    focus: newPasswordFocus,
+                    nextFocus: confirmPasswordFocus,
                     errorThisFieldRequired: language.requiredText,
                     decoration: inputDecoration(context, labelText: language.hintNewPasswordTxt),
                   ).visible(!appStore.isLoading, defaultWidget: SizedBox()),
                 ),
-                
+
                 16.height,
-                
+
                 // Confirm Password
                 Text(language.hintReenterPasswordTxt, style: boldTextStyle()),
                 8.height,
@@ -326,6 +335,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   builder: (_) => AppTextField(
                     textFieldType: TextFieldType.PASSWORD,
                     controller: confirmPasswordCont,
+                    focus: confirmPasswordFocus,
                     errorThisFieldRequired: language.requiredText,
                     decoration: inputDecoration(context, labelText: language.hintReenterPasswordTxt),
                     validator: (value) {

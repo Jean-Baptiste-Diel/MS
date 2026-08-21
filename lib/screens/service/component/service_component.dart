@@ -155,7 +155,7 @@ class ServiceComponentState extends State<ServiceComponent> {
                             directionMarguee: DirectionMarguee.oneDirection,
                             child: Text(
                               "${widget.serviceData.subCategoryName.validate().isNotEmpty ? widget.serviceData.subCategoryName.validate() : widget.serviceData.categoryName.validate()}".toUpperCase(),
-                              style: boldTextStyle(color: appStore.isDarkMode ? white : primaryColor, size: 12),
+                              style: boldTextStyle(color: appStore.isDarkMode ? white : primaryColor, size: 14),
                             ).paddingSymmetric(horizontal: 8, vertical: 4),
                           ),
                         ),
@@ -263,7 +263,7 @@ class ServiceComponentState extends State<ServiceComponent> {
                         if (widget.serviceData.providerName.validate().isNotEmpty)
                           Text(
                             widget.serviceData.providerName.validate(),
-                            style: secondaryTextStyle(size: 12, color: appStore.isDarkMode ? Colors.white : appTextSecondaryColor),
+                            style: secondaryTextStyle(size: 14, color: appStore.isDarkMode ? Colors.white : appTextSecondaryColor),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ).expand()

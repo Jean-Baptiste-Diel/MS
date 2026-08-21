@@ -22,7 +22,7 @@ class ServiceFaqWidget extends StatelessWidget {
         child: ExpansionTile(
           title: Text(
             serviceFaq.title.validate(),
-            style: primaryTextStyle(weight: FontWeight.bold, size: 12),
+            style: primaryTextStyle(weight: FontWeight.bold, size: 14),
           ),
           tilePadding: const EdgeInsets.symmetric(horizontal: 16),
           children: [

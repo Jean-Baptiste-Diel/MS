@@ -16,6 +16,7 @@ import '../../../utils/common.dart';
 import '../../../utils/constant.dart';
 import '../../../utils/images.dart';
 import '../../../utils/model_keys.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class AddBankScreen extends StatefulWidget {
   final BankHistory? data;
@@ -78,12 +79,12 @@ class _AddBankScreenState extends State<AddBankScreen> {
         }
       },
       onError: (error) {
-        toast(error.toString(), print: true);
+        TopToast.show(message: error.toString(), type: TopToastType.error);
         appStore.setLoading(false);
       },
     ).catchError((e) {
       appStore.setLoading(false);
-      toast(e.toString());
+      TopToast.show(message: e.toString(), type: TopToastType.error);
     });
   }
 
