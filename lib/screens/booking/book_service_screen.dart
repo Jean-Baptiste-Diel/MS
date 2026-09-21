@@ -133,7 +133,28 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
       }
     } catch (e) {}
     setState(() {});
+    if (addressCont.text.trim().isEmpty) {
+      _autoFillCurrentAddress();
+    }
     fetchEarnPointsForCurrentSelection();
+  }
+
+  void _autoFillCurrentAddress() {
+    Permissions.cameraFilesAndLocationPermissionsGranted().then((value) async {
+      await setValue(PERMISSION_STATUS, value);
+      if (!value || !mounted) return;
+
+      await getUserLocation().then((value) {
+        if (!mounted || addressCont.text.trim().isNotEmpty) return;
+        addressCont.text = value;
+        widget.data.serviceDetail!.address = value.toString();
+        setState(() {});
+      }).catchError((e) {
+        log(e);
+      });
+    }).catchError((e) {
+      //
+    });
   }
 
   Future<void> fetchEarnPointsForCurrentSelection() async {

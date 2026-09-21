@@ -7,7 +7,8 @@ var defaultPrimaryColor = Color(0xFFF4BB16);
 
 
 
-const DOMAIN_URL = 'https://api.mison.app'; 
+const DOMAIN_URL = 'https://stony-ladylike-jolliness.ngrok-free.dev';
+//const DOMAIN_URL = 'https://api.mison.app';
 const BASE_URL = '$DOMAIN_URL/api/';
 
 const DEFAULT_LANGUAGE = 'fr';

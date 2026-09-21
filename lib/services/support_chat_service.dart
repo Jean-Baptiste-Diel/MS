@@ -10,7 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-const String _WS_BASE = 'wss://api.mison.app/ws/chat';
+final String _WS_BASE = '${DOMAIN_URL.replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://')}/ws/chat';
 const String _CONVERSATIONS_ENDPOINT = '${BASE_URL}chat/conversations';
 
 enum MessageStatus { sent, pending, failed }

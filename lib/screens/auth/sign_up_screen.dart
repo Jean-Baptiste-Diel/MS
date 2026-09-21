@@ -819,9 +819,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
               controller: emailCont,
               focus: emailFocus,
               nextFocus: mobileFocus,
-              errorThisFieldRequired: language.requiredText,
+              isValidationRequired: false,
               decoration: _fieldDecoration(
-                  label: language.hintEmailTxt, hint: 'exemple@email.com'),
+                  label: '${language.hintEmailTxt} (optionnel)',
+                  hint: 'exemple@email.com'),
               suffix: Icon(Icons.alternate_email_rounded, size: 18,
                       color: appTextSecondaryColor)
                   .paddingAll(14),

@@ -1,7 +1,10 @@
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
+import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/model_keys.dart';
+import 'package:booking_system_flutter/utils/string_extensions.dart';
+import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -17,6 +20,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   TextEditingController emailCont = TextEditingController();
+  TextEditingController mobileCont = TextEditingController();
   TextEditingController otpCont = TextEditingController();
   TextEditingController newPasswordCont = TextEditingController();
   TextEditingController confirmPasswordCont = TextEditingController();
@@ -26,9 +30,13 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   GlobalKey<FormState> formKey = GlobalKey<FormState>();
   GlobalKey<FormState> resetFormKey = GlobalKey<FormState>();
-  
+
+  // Choix du canal de réception du code : email ou téléphone (SMS)
+  bool _useEmail = true;
+  Country selectedCountry = defaultCountry();
+
   bool _showOtpStep = false;
-  String _email = '';
+  String _identity = '';
 
   @override
   void initState() {
@@ -40,26 +48,37 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     //
   }
 
-  /// Step 1: Send OTP to email
+  /// Construit +indicatif+numéro, ex: +221771234567
+  String buildMobileNumber() {
+    if (mobileCont.text.isEmpty) return '';
+    return '+${mobileCont.text.trim().formatPhoneNumber(selectedCountry.phoneCode)}';
+  }
+
+  /// Step 1: Send OTP by email or phone (SMS)
   Future<void> sendOtp() async {
     hideKeyboard(context);
+
+    if (!_useEmail && mobileCont.text.trim().isEmpty) {
+      TopToast.show(message: language.requiredText.validate());
+      return;
+    }
 
     if (formKey.currentState!.validate()) {
       formKey.currentState!.save();
       appStore.setLoading(true);
 
-      // Capture email before async operation
-      final email = emailCont.text.validate();
+      // Capture l'identité (email ou numéro) avant l'appel asynchrone
+      final identity = _useEmail ? emailCont.text.validate() : buildMobileNumber();
 
-      Map req = {
-        UserKeys.email: email,
-      };
+      Map req = _useEmail
+          ? {UserKeys.email: identity}
+          : {UserKeys.phone: identity};
 
       try {
         final res = await forgotPassword(req);
         appStore.setLoading(false);
         if (mounted) {
-          _email = email;
+          _identity = identity;
           setState(() {
             _showOtpStep = true;
           });
@@ -94,12 +113,11 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       appStore.setLoading(true);
 
       // Capture values before async operation
-      final email = _email;
       final otpCode = otpCont.text.validate();
       final newPassword = newPasswordCont.text.validate();
 
       Map req = {
-        'email': email,
+        (_useEmail ? UserKeys.email : UserKeys.phone): _identity,
         'otp_code': otpCode,
         'new_password': newPassword,
       };
@@ -123,7 +141,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     appStore.setLoading(true);
 
     Map req = {
-      UserKeys.email: _email,
+      (_useEmail ? UserKeys.email : UserKeys.phone): _identity,
     };
 
     try {
@@ -144,6 +162,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   void dispose() {
     emailCont.dispose();
+    mobileCont.dispose();
     otpCont.dispose();
     newPasswordCont.dispose();
     confirmPasswordCont.dispose();
@@ -194,16 +213,83 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 Text("${language.hintEmailAddressTxt}", style: boldTextStyle()),
                 6.height,
                 Text(language.lblForgotPwdSubtitle, style: secondaryTextStyle()),
-                24.height,
-                Observer(
-                  builder: (_) => AppTextField(
-                    textFieldType: TextFieldType.EMAIL_ENHANCED,
-                    controller: emailCont,
-                    autoFocus: true,
-                    errorThisFieldRequired: language.requiredText,
-                    decoration: inputDecoration(context, labelText: language.hintEmailTxt),
-                  ).visible(!appStore.isLoading, defaultWidget: Loader()),
+                16.height,
+
+                // Choix du canal : email ou téléphone (SMS)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ChannelToggleButton(
+                        label: language.hintEmailTxt,
+                        icon: Icons.alternate_email_rounded,
+                        isSelected: _useEmail,
+                        onTap: () => setState(() => _useEmail = true),
+                      ),
+                    ),
+                    10.width,
+                    Expanded(
+                      child: _ChannelToggleButton(
+                        label: language.hintContactNumberTxt,
+                        icon: Icons.phone_outlined,
+                        isSelected: !_useEmail,
+                        onTap: () => setState(() => _useEmail = false),
+                      ),
+                    ),
+                  ],
                 ),
+                24.height,
+
+                if (_useEmail)
+                  Observer(
+                    builder: (_) => AppTextField(
+                      textFieldType: TextFieldType.EMAIL_ENHANCED,
+                      controller: emailCont,
+                      autoFocus: true,
+                      errorThisFieldRequired: language.requiredText,
+                      decoration: inputDecoration(context, labelText: language.hintEmailTxt),
+                    ).visible(!appStore.isLoading, defaultWidget: Loader()),
+                  )
+                else
+                  Observer(
+                    builder: (_) => Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          onTap: () => showCountryPicker(
+                            context: context,
+                            showPhoneCode: true,
+                            onSelect: (Country country) => setState(() => selectedCountry = country),
+                          ),
+                          child: Container(
+                            height: 58,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            margin: const EdgeInsets.only(top: 4),
+                            decoration: BoxDecoration(
+                              color: context.cardColor,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: context.dividerColor),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('+${selectedCountry.phoneCode}', style: primaryTextStyle(size: 16)),
+                                const Icon(Icons.expand_more_rounded, size: 18),
+                              ],
+                            ),
+                          ),
+                        ),
+                        10.width,
+                        Expanded(
+                          child: AppTextField(
+                            textFieldType: isAndroid ? TextFieldType.PHONE : TextFieldType.NAME,
+                            controller: mobileCont,
+                            maxLength: 15,
+                            decoration: inputDecoration(context, labelText: language.hintContactNumberTxt),
+                          ),
+                        ),
+                      ],
+                    ).visible(!appStore.isLoading, defaultWidget: Loader()),
+                  ),
                 16.height,
                 AppButton(
                   text: language.btnSendOtp,
@@ -268,7 +354,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${language.enterTheCodeSentTo} $_email', style: secondaryTextStyle()),
+                Text('${language.enterTheCodeSentTo} $_identity', style: secondaryTextStyle()),
                 24.height,
                 
                 // OTP Input
@@ -360,6 +446,53 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ],
             ).paddingAll(16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bouton de bascule email / téléphone
+class _ChannelToggleButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ChannelToggleButton({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryColor : context.cardColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? primaryColor : context.dividerColor,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: isSelected ? Colors.white : primaryColor),
+            6.width,
+            Flexible(
+              child: Text(
+                label,
+                style: boldTextStyle(color: isSelected ? Colors.white : null, size: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
       ),

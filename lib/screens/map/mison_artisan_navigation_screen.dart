@@ -491,22 +491,32 @@ class _MisonArtisanNavigationScreenState
                         if (pos != null)
                           Marker(
                             point: LatLng(pos.latitude, pos.longitude),
-                            width: 28,
-                            height: 28,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.blueAccent,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2.5,
+                            width: 36,
+                            height: 36,
+                            rotate: false,
+                            child: Transform.rotate(
+                              // pos.heading = cap GPS en degrés (0° = nord), fourni par le device
+                              angle: pos.heading * (3.141592653589793 / 180),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.blueAccent,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2.5,
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black38,
+                                      blurRadius: 6,
+                                    )
+                                  ],
                                 ),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black38,
-                                    blurRadius: 6,
-                                  )
-                                ],
+                                child: const Icon(
+                                  Icons.navigation_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                               ),
                             ),
                           ),

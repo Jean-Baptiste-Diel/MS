@@ -26,6 +26,7 @@ class UserKeys {
   static String password = 'password';
   static String userType = 'user_type';
   static String contactNumber = 'contact_number';
+  static String phone = 'phone';
   static String countryId = 'country_id';
   static String stateId = 'state_id';
   static String cityId = 'city_id';

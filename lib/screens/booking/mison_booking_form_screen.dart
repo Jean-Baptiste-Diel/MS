@@ -5,8 +5,11 @@ import 'package:booking_system_flutter/component/nominatim_address_field.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/screens/booking/mison_confirm_booking_screen.dart';
+import 'package:booking_system_flutter/services/location_service.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
+import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/utils/permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -40,7 +43,33 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   bool isImmediateService = true; // "Tout de suite" vs "Plus tard"
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
-  
+
+  bool _isLocatingZone = false;
+
+  Future<void> _fillZoneWithCurrentLocation() async {
+    setState(() => _isLocatingZone = true);
+    try {
+      final granted = await Permissions.cameraFilesAndLocationPermissionsGranted();
+      await setValue(PERMISSION_STATUS, granted);
+      if (!granted || !mounted) return;
+
+      final position = await getUserLocationPosition();
+      final address = await buildFullAddressFromLatLong(position.latitude, position.longitude);
+      if (!mounted) return;
+
+      setState(() {
+        zoneCont.text = address;
+        zoneLat = position.latitude;
+        zoneLon = position.longitude;
+      });
+    } catch (e) {
+      log(e);
+      TopToast.show(message: 'Impossible de récupérer votre position');
+    } finally {
+      if (mounted) setState(() => _isLocatingZone = false);
+    }
+  }
+
   @override
   void dispose() {
     descriptionCont.dispose();
@@ -459,6 +488,16 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
               zoneLat = s.lat;
               zoneLon = s.lon;
             }),
+            suffixButton: IconButton(
+              onPressed: _isLocatingZone ? null : _fillZoneWithCurrentLocation,
+              icon: _isLocatingZone
+                  ? SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor),
+                    )
+                  : Icon(Icons.my_location_rounded, color: primaryColor, size: 20),
+              tooltip: 'Utiliser ma position actuelle',
+            ),
           ),
         ),
         if (zoneLat != null && zoneLon != null)

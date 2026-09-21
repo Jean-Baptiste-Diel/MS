@@ -472,14 +472,49 @@ class _ChatInputState extends State<ChatInput> {
   File? _selectedImage;
   bool _isUploading = false;
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage(ImageSource source) async {
     final picked = await _picker.pickImage(
-      source: ImageSource.gallery,
+      source: source,
       imageQuality: 85,
       maxWidth: 1920,
     );
     if (picked == null || !mounted) return;
     setState(() => _selectedImage = File(picked.path));
+  }
+
+  void _showImageSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.photo_library_outlined, color: primaryColor),
+                title: const Text('Galerie'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.camera_alt_outlined, color: primaryColor),
+                title: const Text('Appareil photo'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              8.height,
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _send() async {
@@ -539,9 +574,9 @@ class _ChatInputState extends State<ChatInput> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.image_outlined),
+                    icon: const Icon(Icons.add_circle_outline_rounded),
                     color: primaryColor,
-                    onPressed: (widget.enabled && !_isUploading) ? _pickImage : null,
+                    onPressed: (widget.enabled && !_isUploading) ? _showImageSourceSheet : null,
                   ),
                   Expanded(
                     child: AppTextField(

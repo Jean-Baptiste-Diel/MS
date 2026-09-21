@@ -53,7 +53,26 @@ class _BookPostJobRequestScreenState extends State<BookPostJobRequestScreen> {
   }
 
   void init() async {
-    //
+    if (addressCont.text.trim().isEmpty) {
+      _autoFillCurrentAddress();
+    }
+  }
+
+  void _autoFillCurrentAddress() {
+    Permissions.cameraFilesAndLocationPermissionsGranted().then((value) async {
+      await setValue(PERMISSION_STATUS, value);
+      if (!value || !mounted) return;
+
+      await getUserLocation().then((value) {
+        if (!mounted || addressCont.text.trim().isNotEmpty) return;
+        addressCont.text = value;
+        setState(() {});
+      }).catchError((e) {
+        log(e);
+      });
+    }).catchError((e) {
+      //
+    });
   }
 
   void selectDateAndTime(BuildContext context) async {

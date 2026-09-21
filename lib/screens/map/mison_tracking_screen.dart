@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' show min, max, sin, cos, sqrt, atan2;
+import 'dart:math' show min, max, sin, cos, sqrt, atan2, pi;
+import 'dart:ui' as ui;
 
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
@@ -40,6 +41,10 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
   LatLng? _animatedPosition;      // smoothly animated
   LatLng? _destinationPosition;
 
+  // Direction (bearing) of travel, in degrees clockwise from north
+  double _bearing = 0;
+  BitmapDescriptor? _arrowIcon;
+
   // Route
   List<LatLng> _routePoints = [];
   bool _fetchingRoute = false;
@@ -78,6 +83,8 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
       _destinationPosition = LatLng(widget.serviceLat!, widget.serviceLng!);
     }
 
+    _loadArrowIcon();
+
     _locationSub = FirebaseFirestore.instance
         .collection('artisan_locations')
         .doc(widget.orderId)
@@ -107,6 +114,17 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
     if (lat == null || lng == null) return;
 
     final newPos = LatLng(lat, lng);
+    final previous = _artisanPosition;
+    if (previous != null) {
+      final movedMeters = _haversine(
+        previous.latitude, previous.longitude,
+        newPos.latitude, newPos.longitude,
+      );
+      // On ignore le bruit GPS (petits sauts) pour une flèche stable
+      if (movedMeters > 3) {
+        _bearing = _bearingBetween(previous, newPos);
+      }
+    }
     _artisanPosition = newPos;
     _animateMarkerTo(newPos);
 
@@ -340,6 +358,64 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
     return r * 2 * atan2(sqrt(a), sqrt(1 - a));
   }
 
+  // Cap (direction) en degrés, 0° = nord, sens horaire — comme Google Maps
+  double _bearingBetween(LatLng start, LatLng end) {
+    const toRad = 3.141592653589793 / 180;
+    final lat1 = start.latitude * toRad;
+    final lat2 = end.latitude * toRad;
+    final dLng = (end.longitude - start.longitude) * toRad;
+    final y = sin(dLng) * cos(lat2);
+    final x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLng);
+    final deg = atan2(y, x) * 180 / pi;
+    return (deg + 360) % 360;
+  }
+
+  // ── Icône flèche de direction (style navigation Google Maps) ───────────────
+
+  Future<void> _loadArrowIcon() async {
+    final icon = await _buildNavigationArrowIcon(primaryColor);
+    if (mounted) setState(() => _arrowIcon = icon);
+  }
+
+  Future<BitmapDescriptor> _buildNavigationArrowIcon(Color color) async {
+    const double size = 130;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, size, size));
+    const center = Offset(size / 2, size / 2);
+
+    // Halo blanc + ombre douce
+    canvas.drawCircle(
+      center,
+      size / 2 - 6,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.20)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+    canvas.drawCircle(center, size / 2 - 10, Paint()..color = Colors.white);
+
+    // Disque de couleur
+    canvas.drawCircle(center, size / 2 - 18, Paint()..color = color);
+
+    // Flèche pointant vers le haut (le cap est appliqué via Marker.rotation)
+    const arrowSize = size * 0.34;
+    final path = Path()
+      ..moveTo(center.dx, center.dy - arrowSize / 1.4)
+      ..lineTo(center.dx - arrowSize / 2, center.dy + arrowSize / 2.4)
+      ..lineTo(center.dx, center.dy + arrowSize / 6)
+      ..lineTo(center.dx + arrowSize / 2, center.dy + arrowSize / 2.4)
+      ..close();
+    canvas.drawPath(path, Paint()..color = Colors.white);
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(
+      bytes!.buffer.asUint8List(),
+      width: 52,
+      height: 52,
+    );
+  }
+
   // ── Map overlays ──────────────────────────────────────────────────────────
 
   Set<Marker> get _markers {
@@ -349,11 +425,15 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
       markers.add(Marker(
         markerId: const MarkerId('artisan'),
         position: pos,
+        rotation: _bearing,
+        anchor: const Offset(0.5, 0.5),
+        flat: true,
         infoWindow: InfoWindow(
           title: widget.artisanName,
           snippet: _etaText != null ? 'Arrivée dans $_etaText' : 'En déplacement',
         ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        icon: _arrowIcon ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
       ));
     }
     if (_destinationPosition != null) {

@@ -186,8 +186,9 @@ class MisonOrder {
       artisan != null &&
       (isAssigned || isAccepted || isAwaitingTravelPayment || isInProgress);
 
-  /// Can track artisan location: intervention en cours
-  bool get canTrack => artisan != null && isInProgress;
+  /// Can track artisan location : dès que l'ouvrier est rattaché à la commande
+  /// (accepté/affecté), pour que le client voie où il se trouve en approche.
+  bool get canTrack => isActiveWithArtisan;
 }
 
 class MisonClient {

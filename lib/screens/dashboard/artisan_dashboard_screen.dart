@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
@@ -12,6 +14,7 @@ import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:geolocator/geolocator.dart';
@@ -124,6 +127,11 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   final ScrollController _scrollController = ScrollController();
   bool _isCollapsed = false;
 
+  // Diffusion continue de la position — tourne tant que l'ouvrier a une
+  // commande active, indépendamment de l'écran affiché (dashboard, chat…)
+  Timer? _bgLocationTimer;
+  String? _bgTrackedOrderId;
+
   static const double _expandedHeight = 140.0;
 
   @override
@@ -146,7 +154,55 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   void dispose() {
     _scrollController.dispose();
     LiveStream().dispose(LIVESTREAM_ARTISAN_HOME_REFRESH);
+    _bgLocationTimer?.cancel();
     super.dispose();
+  }
+
+  // ── Diffusion continue de la position de l'ouvrier vers Firestore ──────────
+  // Démarre/arrête automatiquement selon qu'il a (ou non) une commande en
+  // cours, sans dépendre de l'écran de détail de la commande.
+  void _syncLocationBroadcast(List<MisonOrder> orders) {
+    MisonOrder? activeOrder;
+    for (final o in orders) {
+      if (o.isActiveWithArtisan) { activeOrder = o; break; }
+    }
+
+    if (activeOrder == null || activeOrder.id == null) {
+      _bgLocationTimer?.cancel();
+      _bgLocationTimer = null;
+      _bgTrackedOrderId = null;
+      return;
+    }
+
+    if (_bgTrackedOrderId == activeOrder.id && _bgLocationTimer != null) return;
+
+    _bgLocationTimer?.cancel();
+    _bgTrackedOrderId = activeOrder.id;
+    final orderId = activeOrder.id!;
+
+    Future<void> pushPosition() async {
+      try {
+        final perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        );
+        await FirebaseFirestore.instance
+            .collection('artisan_locations')
+            .doc(orderId)
+            .set({
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (e) {
+        log('[Tracking] Erreur (dashboard): $e');
+      }
+    }
+
+    pushPosition();
+    _bgLocationTimer = Timer.periodic(const Duration(seconds: 5), (_) => pushPosition());
   }
 
   Future<void> _fetchPosition() async {
@@ -368,6 +424,9 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                 ),
                 onSuccess: (response) {
                   final orders = response.data ?? [];
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _syncLocationBroadcast(orders);
+                  });
                   return _DashboardBody(orders: orders, artisanPosition: _artisanPosition);
                 },
               ),
@@ -898,7 +957,7 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
   }
 
   Widget _buildCard(MisonOrder order) {
-    final distanceKm = (order.isPending && order.artisan == null) ? _distanceTo(order) : null;
+    final distanceKm = _distanceTo(order);
     return GestureDetector(
       onTap: () => MisonOrderDetailScreen(orderId: order.id ?? '', distanceKm: distanceKm).launch(context),
       child: _ArtisanOrderCard(
@@ -1249,10 +1308,11 @@ class _ArtisanOrderCard extends StatelessWidget {
           ),
 
           // Distance badge (commandes à traiter uniquement)
-          if (distanceKm != null)
+          if (distanceKm != null && order.status != 'CANCELLED' && order.status != 'REJECTED')
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Container(
+                width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.08),
@@ -1260,7 +1320,6 @@ class _ArtisanOrderCard extends StatelessWidget {
                   border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.near_me_rounded, size: 14, color: Colors.orange),
                     6.width,
@@ -1294,7 +1353,7 @@ class _ArtisanOrderCard extends StatelessWidget {
                   if (onStart != null)
                     AppButton(
                       width: double.infinity,
-                      color: context.primaryColor,
+                      color: Colors.green,
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       onTap: onStart,

@@ -131,6 +131,10 @@ class NominatimAddressField extends StatefulWidget {
   final List<String> countryCodes;
   final void Function(NominatimSuggestion suggestion)? onSelected;
 
+  /// Widget optionnel affiché à droite du champ (ex: bouton "Ma position"),
+  /// masqué pendant la recherche (le spinner de recherche prend sa place).
+  final Widget? suffixButton;
+
   const NominatimAddressField({
     Key? key,
     required this.controller,
@@ -138,6 +142,7 @@ class NominatimAddressField extends StatefulWidget {
     this.decoration,
     this.countryCodes = const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
     this.onSelected,
+    this.suffixButton,
   }) : super(key: key);
 
   @override
@@ -335,7 +340,7 @@ class _NominatimAddressFieldState extends State<NominatimAddressField> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     )
-                  : null,
+                  : widget.suffixButton,
               border: InputBorder.none,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 14),

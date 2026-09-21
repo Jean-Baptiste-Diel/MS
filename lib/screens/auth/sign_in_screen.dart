@@ -56,6 +56,10 @@ class _SignInScreenState extends State<SignInScreen> {
   bool showForgotOtpStep = false;
   String forgotEmail = '';
 
+  // Mémorise si l'identifiant envoyé était un email ou un numéro, pour le
+  // renvoi d'OTP et la réinitialisation finale.
+  bool _forgotIdentityIsEmail = true;
+
   @override
   void initState() {
     super.initState();
@@ -358,13 +362,17 @@ class _SignInScreenState extends State<SignInScreen> {
     if (!forgotFormKey.currentState!.validate()) return;
 
     appStore.setLoading(true);
-    final email = forgotEmailCont.text.trim();
     try {
-      final res = await forgotPassword({'email': email});
+      final identity = _normalizeIdentifier(forgotEmailCont.text);
+      final isEmail = identity.contains('@');
+      final res = await forgotPassword({
+        (isEmail ? 'email' : 'phone'): identity,
+      });
       appStore.setLoading(false);
       if (!mounted) return;
       setState(() {
-        forgotEmail = email;
+        forgotEmail = identity;
+        _forgotIdentityIsEmail = isEmail;
         showForgotOtpStep = true;
       });
       TopToast.show(message: res.message.validate());
@@ -393,7 +401,7 @@ class _SignInScreenState extends State<SignInScreen> {
     appStore.setLoading(true);
     try {
       final res = await resetPassword({
-        'email': forgotEmail,
+        (_forgotIdentityIsEmail ? 'email' : 'phone'): forgotEmail,
         'otp_code': forgotOtpCont.text.trim(),
         'new_password': forgotNewPasswordCont.text.trim(),
       });
@@ -416,7 +424,9 @@ class _SignInScreenState extends State<SignInScreen> {
     if (forgotEmail.isEmpty) return;
     appStore.setLoading(true);
     try {
-      final res = await forgotPassword({'email': forgotEmail});
+      final res = await forgotPassword({
+        (_forgotIdentityIsEmail ? 'email' : 'phone'): forgotEmail,
+      });
       appStore.setLoading(false);
       TopToast.show(message: res.message.validate().isNotEmpty
           ? res.message.validate()
@@ -700,15 +710,14 @@ class _SignInScreenState extends State<SignInScreen> {
       child: Column(
         children: [
           AppTextField(
-            textFieldType: TextFieldType.EMAIL_ENHANCED,
+            textFieldType: TextFieldType.NAME,
             controller: forgotEmailCont,
             errorThisFieldRequired: language.requiredText,
-            keyboardType: TextInputType.emailAddress,
             decoration: _fieldDecoration(
-              label: 'Adresse email',
-              hint: 'exemple@email.com',
+              label: 'Email ou numéro de téléphone',
+              hint: 'exemple@email.com ou +221771234567',
             ),
-            suffix: Icon(Icons.alternate_email_rounded, size: 18,
+            suffix: Icon(Icons.perm_identity_rounded, size: 18,
                     color: appTextSecondaryColor)
                 .paddingAll(14),
             isValidationRequired: true,
