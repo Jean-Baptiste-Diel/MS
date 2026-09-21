@@ -1325,18 +1325,18 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
             enabled: true,
             onTap: () => setState(() => _selected = 'wave'),
           ),
-          10.height,
+          // 10.height,
 
           // Orange Money
-          _MethodTile(
-            label: 'Orange Money',
-            subtitle: 'Paiement Orange Money',
-            logoAsset: 'assets/images/orange_money.jpg',
-            color: const Color(0xFFFF7900),
-            selected: isOrange,
-            enabled: true,
-            onTap: () => setState(() => _selected = 'orange'),
-          ),
+          // _MethodTile(
+          //   label: 'Orange Money',
+          //   subtitle: 'Paiement Orange Money',
+          //   logoAsset: 'assets/images/orange_money.jpg',
+          //   color: const Color(0xFFFF7900),
+          //   selected: isOrange,
+          //   enabled: true,
+          //   onTap: () => setState(() => _selected = 'orange'),
+          // ),
           24.height,
 
           AppButton(
