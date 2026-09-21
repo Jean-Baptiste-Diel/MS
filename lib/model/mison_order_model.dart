@@ -251,7 +251,7 @@ class MisonArtisanInfo {
   String? lastName;
   MisonServiceInfo? service;
   int? experienceYears;
-  String? bio;
+  String? professionName;
   String? address;
   bool? isAvailable;
   String? averageRating;
@@ -264,7 +264,7 @@ class MisonArtisanInfo {
     this.lastName,
     this.service,
     this.experienceYears,
-    this.bio,
+    this.professionName,
     this.address,
     this.isAvailable,
     this.averageRating,
@@ -285,7 +285,7 @@ class MisonArtisanInfo {
       experienceYears: json['experience_years'] != null
           ? int.tryParse(json['experience_years'].toString())
           : null,
-      bio: json['bio']?.toString(),
+      professionName: json['profession_name']?.toString(),
       address: json['address']?.toString(),
       isAvailable: json['is_available'] == true,
       averageRating: json['average_rating']?.toString(),
@@ -302,7 +302,7 @@ class MisonArtisanInfo {
         'last_name': lastName,
         'service': service?.toJson(),
         'experience_years': experienceYears,
-        'bio': bio,
+        'profession_name': professionName,
         'address': address,
         'is_available': isAvailable,
         'average_rating': averageRating,

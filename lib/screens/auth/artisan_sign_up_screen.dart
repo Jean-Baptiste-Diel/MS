@@ -77,6 +77,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   bool isAcceptedTc = false;
   bool isFirstTimeValidation = true;
   bool _obscurePassword = true;
+  bool isRegistering = false;
 
   // Champs complémentaires prestataire
   Country? selectedNationalityCountry;
@@ -92,6 +93,14 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     'Secondaire',
     'Supérieur',
   ];
+  // Le back-end attend la valeur enum (NONE/PRIMARY/SECONDARY/HIGHER),
+  // pas le libelle affiche dans le dropdown.
+  static const Map<String, String> _educationLevelApiValues = {
+    'Aucun': 'NONE',
+    'Primaire': 'PRIMARY',
+    'Secondaire': 'SECONDARY',
+    'Supérieur': 'HIGHER',
+  };
   final List<String> dakarDepartmentOptions = const [
     'Dakar',
     'Guédiawaye',
@@ -483,20 +492,58 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     }
   }
 
-  void nextStep() {
+  void nextStep() async {
     HapticFeedback.lightImpact();
-    if (validateStep(currentStep)) {
-      if (currentStep < totalSteps - 1) {
-        setState(() => currentStep++);
-        _pageController.animateToPage(currentStep,
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeInOutCubic);
-        _scrollToTop();
-      } else {
-        registerArtisan();
-      }
-    } else {
+    if (!validateStep(currentStep)) {
       HapticFeedback.heavyImpact();
+      return;
+    }
+
+    if (currentStep == 0) {
+      final bool canProceed = await _checkEmailPhoneAvailability();
+      if (!canProceed) {
+        HapticFeedback.heavyImpact();
+        return;
+      }
+    }
+
+    if (currentStep < totalSteps - 1) {
+      setState(() => currentStep++);
+      _pageController.animateToPage(currentStep,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOutCubic);
+      _scrollToTop();
+    } else {
+      registerArtisan();
+    }
+  }
+
+  /// Vérifie auprès du back-end que l'email et le téléphone ne sont pas déjà utilisés
+  Future<bool> _checkEmailPhoneAvailability() async {
+    appStore.setLoading(true);
+    try {
+      final result = await checkEmailPhoneAvailability(
+        email: emailCont.text.trim(),
+        phone: buildMobileNumber(),
+      );
+      bool ok = true;
+      if (result['email_exists'] == true) {
+        fieldErrors['email'] = 'Cet email est déjà utilisé';
+        ok = false;
+      }
+      if (result['phone_exists'] == true) {
+        fieldErrors['mobile'] = 'Ce numéro est déjà utilisé';
+        ok = false;
+      }
+      setState(() {});
+      return ok;
+    } catch (e) {
+      TopToast.show(
+          message: 'Impossible de vérifier la disponibilité, réessayez.',
+          type: TopToastType.error);
+      return false;
+    } finally {
+      appStore.setLoading(false);
     }
   }
 
@@ -537,6 +584,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     if (!validateStep(2)) return;
     if (formKey.currentState!.validate()) {
       formKey.currentState!.save();
+      isRegistering = true;
       appStore.setLoading(true);
       final String metierPrincipal = selectedServiceId == otherServiceValue
           ? customMetierCont.text.trim()
@@ -556,7 +604,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             : (selectedServiceId != null && selectedServiceId!.isNotEmpty
                 ? selectedServiceId!.trim()
                 : professionCont.text.trim()),
-        'bio': metierPrincipal,
+        'profession_name': metierPrincipal,
         'experience_years': int.parse(experienceCont.text.trim()),
         'has_other_professions': hasOtherProfessions ?? false,
         'other_professions': otherProfessionsList.join(','),
@@ -565,7 +613,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         'longitude': addressLon!.toString(),
         'age': int.parse(ageCont.text.trim()),
         'nationality': selectedNationalityCountry?.name ?? '',
-        'education_level': selectedEducationLevel ?? '',
+        'education_level': _educationLevelApiValues[selectedEducationLevel] ?? '',
         'region': selectedRegion,
         'department': selectedDepartment ?? '',
         'mobile_money_accounts': selectedMobileMoneyAccounts.join(','),
@@ -595,6 +643,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         professionProofBytes: professionProofBytes,
         professionProofFileName: professionProofFile?.name,
       ).then((response) async {
+        isRegistering = false;
         appStore.setLoading(false);
         TopToast.show(message: response.message.validate());
         OTPVerificationScreen(
@@ -602,6 +651,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           isFromSignUp: true,
         ).launch(context);
       }).catchError((e) {
+        isRegistering = false;
         appStore.setLoading(false);
         TopToast.show(message: e.toString(), type: TopToastType.error);
       });
@@ -2004,22 +2054,17 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                   ? Container(
                       color: Colors.black.withValues(alpha: 0.35),
                       child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 32, vertical: 24),
-                          decoration: BoxDecoration(
-                            color: context.cardColor,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              LoaderWidget(),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            LoaderWidget(),
+                            if (isRegistering) ...[
                               14.height,
                               Text('Inscription en cours...',
-                                  style: secondaryTextStyle()),
+                                  style: secondaryTextStyle(
+                                      color: Colors.white)),
                             ],
-                          ),
+                          ],
                         ),
                       ),
                     )

@@ -80,7 +80,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
 
       final artisan = body['artisan'] as Map<String, dynamic>?;
       if (artisan != null) {
-        bioCont.text        = artisan['bio']?.toString() ?? '';
+        bioCont.text        = artisan['profession_name']?.toString() ?? '';
         addressCont.text    = artisan['address']?.toString() ?? '';
         experienceCont.text = artisan['experience_years']?.toString() ?? '';
       }
@@ -193,7 +193,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
       ..fields['first_name'] = fNameCont.text.trim()
       ..fields['last_name']  = lNameCont.text.trim()
       ..fields['phone']      = _fullPhone
-      ..fields['bio']        = bioCont.text.trim()
+      ..fields['profession_name'] = bioCont.text.trim()
       ..fields['address']    = addressCont.text.trim();
 
     if (experienceCont.text.trim().isNotEmpty)

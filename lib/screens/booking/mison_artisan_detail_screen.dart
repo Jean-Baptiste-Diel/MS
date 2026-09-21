@@ -193,13 +193,13 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                     ],
                   ]),
 
-                  if (artisan.bio != null && artisan.bio!.isNotEmpty) ...[
+                  if (artisan.professionName != null && artisan.professionName!.isNotEmpty) ...[
                     16.height,
                     _InfoCard(children: [
                       _InfoRow(
                         icon: Icons.notes_rounded,
                         label: 'À propos',
-                        value: artisan.bio!,
+                        value: artisan.professionName!,
                       ),
                     ]),
                   ],

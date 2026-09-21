@@ -136,8 +136,8 @@ Future<BaseResponseModel> createUser(
 
 /// Inscription d'un ouvrier via l'API Mison
 /// POST /api/auth/register/artisan (multipart/form-data)
-/// Champs requis: email, password, phone, first_name, last_name
-/// Champs optionnels: profile_picture (File ou bytes), profession, experience_years, hourly_rate, daily_rate, bio, address, city
+/// Champs requis: email, password, phone, first_name, last_name, service, profession_name, address
+/// Champs optionnels: profile_picture (File ou bytes), experience_years, hourly_rate, daily_rate, city
 /// Retourne un message, l'ouvrier doit vérifier son compte avec l'OTP
 Future<BaseResponseModel> createArtisan(
   Map request, {
@@ -165,7 +165,7 @@ Future<BaseResponseModel> createArtisan(
   String lastName = request['last_name']?.toString() ?? '';
   String service =
       request['service']?.toString() ?? ''; // ✅ Changé: profession → service
-  String bio = request['bio']?.toString() ?? '';
+  String professionName = request['profession_name']?.toString() ?? '';
   String address = request['address']?.toString() ?? '';
 
   // Validation des champs requis
@@ -175,7 +175,7 @@ Future<BaseResponseModel> createArtisan(
       firstName.isEmpty ||
       lastName.isEmpty ||
       service.isEmpty ||
-      bio.isEmpty ||
+      professionName.isEmpty ||
       address.isEmpty) {
     completer.completeError(language.requiredText);
     return completer.future;
@@ -206,7 +206,7 @@ Future<BaseResponseModel> createArtisan(
   multiPartRequest.fields['first_name'] = firstName;
   multiPartRequest.fields['last_name'] = lastName;
   multiPartRequest.fields['service'] = service;
-  multiPartRequest.fields['bio'] = bio;
+  multiPartRequest.fields['profession_name'] = professionName;
   multiPartRequest.fields['address'] = address;
   multiPartRequest.fields['experience_years'] = (request['experience_years'] ?? 0).toString();
 
@@ -544,6 +544,33 @@ Future<BaseResponseModel> verifyAccountOtp(Map request) async {
   return BaseResponseModel.fromJson(await handleResponse(
       await buildHttpResponse('auth/register/verify',
           request: request, method: HttpMethodType.POST)));
+}
+
+/// Vérifie si un email et/ou un numéro de téléphone existent déjà en base
+/// GET /api/auth/check-availability?email=...&phone=...
+/// Reponse back-end : { email?: { available: bool }, phone?: { available: bool } }
+/// (une cle n'est presente que si le parametre correspondant a ete envoye)
+/// Retourne { email_exists: bool, phone_exists: bool }
+Future<Map<String, bool>> checkEmailPhoneAvailability({String? email, String? phone}) async {
+  final Map<String, String> params = {};
+  if (email != null && email.trim().isNotEmpty) params['email'] = email.trim();
+  if (phone != null && phone.trim().isNotEmpty) params['phone'] = phone.trim();
+
+  final String query = params.entries
+      .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+      .join('&');
+
+  final response = await handleResponse(await buildHttpResponse(
+      'auth/check-availability${query.isNotEmpty ? '?$query' : ''}',
+      method: HttpMethodType.GET));
+
+  final emailData = response['email'];
+  final phoneData = response['phone'];
+
+  return {
+    'email_exists': emailData is Map && emailData['available'] == false,
+    'phone_exists': phoneData is Map && phoneData['available'] == false,
+  };
 }
 
 /// Resend OTP
