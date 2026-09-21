@@ -214,6 +214,17 @@ Future<BaseResponseModel> createArtisan(
   multiPartRequest.fields['latitude'] = request['latitude']?.toString() ?? '';
   multiPartRequest.fields['longitude'] = request['longitude']?.toString() ?? '';
 
+  // Champs complémentaires prestataire
+  multiPartRequest.fields['age'] = request['age']?.toString() ?? '';
+  multiPartRequest.fields['nationality'] = request['nationality']?.toString() ?? '';
+  multiPartRequest.fields['education_level'] = request['education_level']?.toString() ?? '';
+  multiPartRequest.fields['region'] = request['region']?.toString() ?? '';
+  multiPartRequest.fields['department'] = request['department']?.toString() ?? '';
+  multiPartRequest.fields['mobile_money_accounts'] = request['mobile_money_accounts']?.toString() ?? '';
+  multiPartRequest.fields['join_whatsapp_community'] = request['join_whatsapp_community']?.toString() ?? '';
+  multiPartRequest.fields['has_other_professions'] = request['has_other_professions']?.toString() ?? '';
+  multiPartRequest.fields['other_professions'] = request['other_professions']?.toString() ?? '';
+
   // Ajouter photo de profil (profile_picture)
   if (profilePicture != null && profilePicture.existsSync()) {
     multiPartRequest.files.add(

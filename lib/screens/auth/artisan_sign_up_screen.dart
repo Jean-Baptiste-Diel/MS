@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -48,17 +47,17 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   TextEditingController mobileCont = TextEditingController();
   TextEditingController passwordCont = TextEditingController();
   TextEditingController professionCont = TextEditingController();
-  TextEditingController bioCont = TextEditingController();
   TextEditingController experienceCont = TextEditingController();
   TextEditingController addressCont = TextEditingController();
+  TextEditingController ageCont = TextEditingController();
 
   FocusNode fNameFocus = FocusNode();
   FocusNode lNameFocus = FocusNode();
   FocusNode emailFocus = FocusNode();
   FocusNode mobileFocus = FocusNode();
   FocusNode passwordFocus = FocusNode();
-  FocusNode bioFocus = FocusNode();
   FocusNode experienceFocus = FocusNode();
+  FocusNode ageFocus = FocusNode();
 
   XFile? profileImageFile;
   Uint8List? profileImageBytes;
@@ -78,6 +77,57 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   bool isAcceptedTc = false;
   bool isFirstTimeValidation = true;
   bool _obscurePassword = true;
+
+  // Champs complémentaires prestataire
+  Country? selectedNationalityCountry;
+  String? selectedEducationLevel;
+  final String selectedRegion = 'Dakar'; // Valeur fixe, masquée dans le formulaire
+  String? selectedDepartment;
+  final Set<String> selectedMobileMoneyAccounts = {};
+  bool joinWhatsappCommunity = false;
+
+  final List<String> educationLevelOptions = const [
+    'Aucun',
+    'Primaire',
+    'Secondaire',
+    'Supérieur',
+  ];
+  final List<String> dakarDepartmentOptions = const [
+    'Dakar',
+    'Guédiawaye',
+    'Pikine',
+    'Rufisque',
+    'Keur Massar',
+  ];
+  final List<String> mobileMoneyOptions = const [
+    'Orange Money',
+    'Wave',
+    'Mixx by YAS',
+    'InTouch',
+  ];
+
+  // Métier principal : valeur sentinelle pour l'option "Autre"
+  final String otherServiceValue = '__other__';
+  final TextEditingController customMetierCont = TextEditingController();
+
+  // Autres métiers maîtrisés
+  bool? hasOtherProfessions;
+  final Set<String> selectedOtherProfessions = {};
+  final TextEditingController otherProfessionCustomCont = TextEditingController();
+
+  final List<String> secondaryProfessionOptions = const [
+    'Maçon',
+    'Ferrailleur',
+    'Coffreur',
+    'Plombier',
+    'Électricien',
+    'Menuisier bois-aluminium',
+    'Menuisier métallique',
+    'Peintre-Décorateur',
+    'Carreleur',
+    "Conducteur d'engins",
+    'Autre',
+  ];
 
   double? addressLat;
   double? addressLon;
@@ -107,11 +157,13 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     mobileCont.dispose();
     passwordCont.dispose();
     professionCont.dispose();
-    bioCont.dispose();
     experienceCont.dispose();
-    bioFocus.dispose();
     experienceFocus.dispose();
     addressCont.dispose();
+    ageCont.dispose();
+    ageFocus.dispose();
+    customMetierCont.dispose();
+    otherProfessionCustomCont.dispose();
     _pageController.dispose();
     _progressAnimationController.dispose();
     _scrollController.dispose();
@@ -201,6 +253,29 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       ),
       showPhoneCode: true,
       onSelect: (Country country) => setState(() => selectedCountry = country),
+    );
+  }
+
+  Future<void> changeNationality() async {
+    showCountryPicker(
+      context: context,
+      countryListTheme: CountryListThemeData(
+        textStyle: secondaryTextStyle(color: textSecondaryColorGlobal),
+        searchTextStyle: primaryTextStyle(),
+        inputDecoration: InputDecoration(
+          labelText: language.search,
+          prefixIcon: const Icon(Icons.search),
+          border: OutlineInputBorder(
+            borderSide:
+                BorderSide(color: const Color(0xFF8C98A8).withValues(alpha: 0.2)),
+          ),
+        ),
+      ),
+      showPhoneCode: false,
+      onSelect: (Country country) => setState(() {
+        selectedNationalityCountry = country;
+        fieldErrors.remove('nationality');
+      }),
     );
   }
 
@@ -306,11 +381,39 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             v = false;
           }
         }
+        if (ageCont.text.trim().isEmpty) {
+          fieldErrors['age'] = 'Âge requis';
+          v = false;
+        } else if (int.tryParse(ageCont.text.trim()) == null) {
+          fieldErrors['age'] = 'Âge invalide';
+          v = false;
+        } else if (int.parse(ageCont.text.trim()) < 18 ||
+            int.parse(ageCont.text.trim()) > 100) {
+          fieldErrors['age'] = 'Âge invalide';
+          v = false;
+        }
+        if (selectedNationalityCountry == null) {
+          fieldErrors['nationality'] = 'Nationalité requise';
+          v = false;
+        }
+        if (selectedEducationLevel == null || selectedEducationLevel!.isEmpty) {
+          fieldErrors['educationLevel'] = "Niveau d'instruction requis";
+          v = false;
+        }
+        if (selectedDepartment == null || selectedDepartment!.isEmpty) {
+          fieldErrors['department'] = 'Département requis';
+          v = false;
+        }
         if (mobileCont.text.trim().isEmpty) {
           fieldErrors['mobile'] = 'Téléphone requis';
           v = false;
         } else if (mobileCont.text.trim().length < 6) {
           fieldErrors['mobile'] = 'Numéro trop court';
+          v = false;
+        }
+        if (selectedMobileMoneyAccounts.isEmpty) {
+          fieldErrors['mobileMoney'] =
+              'Sélectionnez au moins un compte Mobile Money';
           v = false;
         }
         setState(() {});
@@ -319,14 +422,11 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       case 1:
         bool v = true;
         if (selectedServiceId == null || selectedServiceId!.isEmpty) {
-          fieldErrors['service'] = 'Veuillez sélectionner un service';
+          fieldErrors['service'] = 'Veuillez sélectionner un métier';
           v = false;
-        }
-        if (bioCont.text.trim().isEmpty) {
-          fieldErrors['bio'] = 'Bio requise';
-          v = false;
-        } else if (bioCont.text.length < 20) {
-          fieldErrors['bio'] = 'Minimum 20 caractères';
+        } else if (selectedServiceId == otherServiceValue &&
+            customMetierCont.text.trim().isEmpty) {
+          fieldErrors['customMetier'] = 'Veuillez préciser votre métier';
           v = false;
         }
         if (experienceCont.text.trim().isEmpty) {
@@ -335,6 +435,19 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         } else if (int.tryParse(experienceCont.text.trim()) == null) {
           fieldErrors['experience'] = 'Valeur invalide';
           v = false;
+        }
+        if (hasOtherProfessions == null) {
+          fieldErrors['hasOtherProfessions'] = 'Merci de répondre à cette question';
+          v = false;
+        } else if (hasOtherProfessions == true) {
+          if (selectedOtherProfessions.isEmpty) {
+            fieldErrors['otherProfessions'] = 'Sélectionnez au moins un métier';
+            v = false;
+          } else if (selectedOtherProfessions.contains('Autre') &&
+              otherProfessionCustomCont.text.trim().isEmpty) {
+            fieldErrors['otherProfessionCustom'] = 'Veuillez préciser le métier';
+            v = false;
+          }
         }
         if (addressCont.text.trim().isEmpty) {
           fieldErrors['address'] = 'Adresse requise';
@@ -425,20 +538,38 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     if (formKey.currentState!.validate()) {
       formKey.currentState!.save();
       appStore.setLoading(true);
+      final String metierPrincipal = selectedServiceId == otherServiceValue
+          ? customMetierCont.text.trim()
+          : professionCont.text.trim();
+      final List<String> otherProfessionsList = selectedOtherProfessions
+          .map((p) => p == 'Autre' ? otherProfessionCustomCont.text.trim() : p)
+          .where((p) => p.isNotEmpty)
+          .toList();
       Map<String, dynamic> request = {
         'email': emailCont.text.trim(),
         'password': passwordCont.text.trim(),
         'phone': buildMobileNumber(),
         'first_name': fNameCont.text.trim(),
         'last_name': lNameCont.text.trim(),
-        'service': selectedServiceId != null && selectedServiceId!.isNotEmpty
-            ? selectedServiceId!.trim()
-            : professionCont.text.trim(),
-        'bio': bioCont.text.trim(),
+        'service': selectedServiceId == otherServiceValue
+            ? metierPrincipal
+            : (selectedServiceId != null && selectedServiceId!.isNotEmpty
+                ? selectedServiceId!.trim()
+                : professionCont.text.trim()),
+        'bio': metierPrincipal,
         'experience_years': int.parse(experienceCont.text.trim()),
+        'has_other_professions': hasOtherProfessions ?? false,
+        'other_professions': otherProfessionsList.join(','),
         'address': addressCont.text.trim(),
         'latitude': addressLat!.toString(),
         'longitude': addressLon!.toString(),
+        'age': int.parse(ageCont.text.trim()),
+        'nationality': selectedNationalityCountry?.name ?? '',
+        'education_level': selectedEducationLevel ?? '',
+        'region': selectedRegion,
+        'department': selectedDepartment ?? '',
+        'mobile_money_accounts': selectedMobileMoneyAccounts.join(','),
+        'join_whatsapp_community': joinWhatsappCommunity,
       };
       File? profilePictureFile;
       if (!kIsWeb && profileImageFile != null) {
@@ -512,6 +643,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     return InputDecoration(
       labelText: label,
       hintText: hint,
+      floatingLabelBehavior: FloatingLabelBehavior.auto,
       labelStyle: secondaryTextStyle(size: 13),
       hintStyle: secondaryTextStyle(size: 13),
       prefixIcon: prefix,
@@ -540,6 +672,78 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.red, width: 1.5),
       ),
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String hint,
+    required String? value,
+    required List<String> options,
+    required String errorKey,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Theme(
+      data: Theme.of(context).copyWith(canvasColor: context.cardColor),
+      child: DropdownButtonFormField<String>(
+        initialValue: value,
+        isExpanded: true,
+        icon: Icon(Icons.keyboard_arrow_down_rounded,
+            color: textSecondaryColorGlobal),
+        dropdownColor: context.cardColor,
+        style: primaryTextStyle(size: 14),
+        decoration: _dec(hint),
+        items: options
+            .map((o) => DropdownMenuItem<String>(
+                  value: o,
+                  child: Text(o,
+                      style: primaryTextStyle(size: 14),
+                      overflow: TextOverflow.ellipsis),
+                ))
+            .toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildYesNoField({
+    required bool? value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    Widget option(String label, bool optionValue) {
+      final selected = value == optionValue;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onChanged(optionValue);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? primaryColor : context.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected
+                    ? primaryColor
+                    : Colors.grey.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Text(label,
+                style: boldTextStyle(
+                    size: 14,
+                    color: selected ? Colors.white : textPrimaryColorGlobal)),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        option('Oui', true),
+        12.width,
+        option('Non', false),
+      ],
     );
   }
 
@@ -742,6 +946,105 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         _fieldError('password'),
         20.height,
 
+        // Age
+        TextField(
+          controller: ageCont,
+          focusNode: ageFocus,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.next,
+          onSubmitted: (_) => mobileFocus.requestFocus(),
+          style: primaryTextStyle(),
+          decoration: _dec('Age *'),
+          onChanged: (_) => setState(() => fieldErrors.remove('age')),
+        ),
+        _fieldError('age'),
+        20.height,
+
+        // Nationalité
+        GestureDetector(
+          onTap: changeNationality,
+          child: Container(
+            decoration: BoxDecoration(
+              color: context.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: fieldErrors['nationality'] != null
+                    ? Colors.red
+                    : Colors.grey.withValues(alpha: 0.15),
+                width: 1,
+              ),
+            ),
+            padding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: selectedNationalityCountry != null ? 10 : 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: selectedNationalityCountry != null
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Nationalité *',
+                                style: secondaryTextStyle(size: 11)),
+                            2.height,
+                            Row(
+                              children: [
+                                Text(selectedNationalityCountry!.flagEmoji,
+                                    style: const TextStyle(fontSize: 18)),
+                                8.width,
+                                Expanded(
+                                  child: Text(
+                                      selectedNationalityCountry!.name,
+                                      style: primaryTextStyle(size: 14),
+                                      overflow: TextOverflow.ellipsis),
+                                ),
+                              ],
+                            ),
+                          ],
+                        )
+                      : Text('Nationalité *',
+                          style: secondaryTextStyle(size: 13)),
+                ),
+                Icon(Icons.arrow_drop_down,
+                    size: 20, color: textSecondaryColorGlobal),
+              ],
+            ),
+          ),
+        ),
+        _fieldError('nationality'),
+        20.height,
+
+        // Niveau d'instruction
+        _buildDropdownField(
+          hint: "Niveau d'instruction *",
+          value: selectedEducationLevel,
+          options: educationLevelOptions,
+          errorKey: 'educationLevel',
+          onChanged: (val) => setState(() {
+            selectedEducationLevel = val;
+            fieldErrors.remove('educationLevel');
+          }),
+        ),
+        _fieldError('educationLevel'),
+        20.height,
+
+        // Région : valeur fixe (Dakar), non affichée mais envoyée au backend
+
+        // Département
+        _buildDropdownField(
+          hint: 'Département *',
+          value: selectedDepartment,
+          options: dakarDepartmentOptions,
+          errorKey: 'department',
+          onChanged: (val) => setState(() {
+            selectedDepartment = val;
+            fieldErrors.remove('department');
+          }),
+        ),
+        _fieldError('department'),
+        20.height,
+
         // Téléphone
         Container(
           decoration: BoxDecoration(
@@ -798,6 +1101,115 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           ),
         ),
         _fieldError('mobile'),
+        20.height,
+
+        // Comptes Mobile Money disponibles
+        Text('Comptes Mobile Money disponibles *',
+            style: secondaryTextStyle(size: 13)),
+        8.height,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: mobileMoneyOptions.map((option) {
+            final selected = selectedMobileMoneyAccounts.contains(option);
+            void toggle() {
+              HapticFeedback.selectionClick();
+              setState(() {
+                if (selected) {
+                  selectedMobileMoneyAccounts.remove(option);
+                } else {
+                  selectedMobileMoneyAccounts.add(option);
+                }
+                fieldErrors.remove('mobileMoney');
+              });
+            }
+
+            return Expanded(
+              child: GestureDetector(
+                onTap: toggle,
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Transform.scale(
+                      scale: 0.9,
+                      child: Checkbox(
+                        value: selected,
+                        onChanged: (_) => toggle(),
+                        activeColor: primaryColor,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    4.width,
+                    Flexible(
+                      child: Text(option,
+                          style: secondaryTextStyle(
+                              size: 11,
+                              color: selected ? primaryColor : textPrimaryColorGlobal),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        _fieldError('mobileMoney'),
+        20.height,
+
+        // Communauté WhatsApp
+        GestureDetector(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() {
+              joinWhatsappCommunity = !joinWhatsappCommunity;
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: context.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: joinWhatsappCommunity
+                    ? Colors.green.withValues(alpha: 0.4)
+                    : Colors.grey.withValues(alpha: 0.15),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: joinWhatsappCommunity ? Colors.green : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: joinWhatsappCommunity
+                          ? Colors.green
+                          : Colors.grey.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: joinWhatsappCommunity
+                      ? const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 16)
+                      : null,
+                ),
+                14.width,
+                Expanded(
+                  child: Text(
+                    'Acceptez-vous de rejoindre notre communauté de prestataires sur WhatsApp ?',
+                    style: secondaryTextStyle(size: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -809,7 +1221,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Service
-        Text('Votre métier *', style: secondaryTextStyle(size: 13)),
+        Text('Métier principal *', style: secondaryTextStyle(size: 13)),
         8.height,
         isLoadingServices
             ? Center(
@@ -844,54 +1256,55 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     style: primaryTextStyle(size: 14),
                     dropdownColor: context.cardColor,
                     iconEnabledColor: textSecondaryColorGlobal,
-                    hint: Text('Sélectionnez un service',
+                    hint: Text('Sélectionnez un métier',
                         style: secondaryTextStyle(size: 14)),
-                    items: serviceOptions.map((s) {
-                      return DropdownMenuItem<String>(
-                        value: s['id'],
-                        child: Text(s['name'] ?? '',
-                            style: primaryTextStyle(size: 14),
-                            overflow: TextOverflow.ellipsis),
-                      );
-                    }).toList(),
+                    items: [
+                      ...serviceOptions.map((s) {
+                        return DropdownMenuItem<String>(
+                          value: s['id'],
+                          child: Text(s['name'] ?? '',
+                              style: primaryTextStyle(size: 14),
+                              overflow: TextOverflow.ellipsis),
+                        );
+                      }),
+                      DropdownMenuItem<String>(
+                        value: otherServiceValue,
+                        child: Text('Autre', style: primaryTextStyle(size: 14)),
+                      ),
+                    ],
                     onChanged: (val) {
                       setState(() {
                         selectedServiceId = val;
                         fieldErrors.remove('service');
-                        final sel = serviceOptions.firstWhere(
-                            (e) => e['id'] == val,
-                            orElse: () => {});
-                        professionCont.text =
-                            sel.isNotEmpty ? (sel['name'] ?? '') : '';
+                        if (val == otherServiceValue) {
+                          professionCont.text = '';
+                        } else {
+                          final sel = serviceOptions.firstWhere(
+                              (e) => e['id'] == val,
+                              orElse: () => {});
+                          professionCont.text =
+                              sel.isNotEmpty ? (sel['name'] ?? '') : '';
+                          customMetierCont.clear();
+                          fieldErrors.remove('customMetier');
+                        }
                       });
                     },
                   ),
                 ),
               ),
         _fieldError('service'),
-        20.height,
-
-        // Bio
-        Text('Décrivez votre activité *', style: secondaryTextStyle(size: 13)),
-        8.height,
-        TextField(
-          controller: bioCont,
-          focusNode: bioFocus,
-          maxLines: 5,
-          minLines: 4,
-          textInputAction: TextInputAction.next,
-          onSubmitted: (_) => experienceFocus.requestFocus(),
-          style: primaryTextStyle(),
-          keyboardType: TextInputType.multiline,
-          decoration: _dec('Expérience, compétences, spécialités...',).copyWith(
-            labelText: null,
-            hintText: 'Décrivez votre expérience, vos compétences... (min. 20 caractères)',
-            hintStyle: secondaryTextStyle(size: 13),
-            alignLabelWithHint: true,
+        if (selectedServiceId == otherServiceValue) ...[
+          12.height,
+          TextField(
+            controller: customMetierCont,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
+            style: primaryTextStyle(),
+            decoration: _dec('Précisez votre métier *'),
+            onChanged: (_) => setState(() => fieldErrors.remove('customMetier')),
           ),
-          onChanged: (_) => setState(() => fieldErrors.remove('bio')),
-        ),
-        _fieldError('bio'),
+          _fieldError('customMetier'),
+        ],
         20.height,
 
         // Années d'expérience
@@ -912,6 +1325,97 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           onChanged: (_) => setState(() => fieldErrors.remove('experience')),
         ),
         _fieldError('experience'),
+        20.height,
+
+        // Autres métiers maîtrisés
+        Text("Avez-vous d'autres métiers en parallèle que vous maîtrisez ? *",
+            style: secondaryTextStyle(size: 13)),
+        8.height,
+        _buildYesNoField(
+          value: hasOtherProfessions,
+          onChanged: (val) => setState(() {
+            hasOtherProfessions = val;
+            fieldErrors.remove('hasOtherProfessions');
+            if (val == false) {
+              selectedOtherProfessions.clear();
+              otherProfessionCustomCont.clear();
+              fieldErrors.remove('otherProfessions');
+              fieldErrors.remove('otherProfessionCustom');
+            }
+          }),
+        ),
+        _fieldError('hasOtherProfessions'),
+
+        if (hasOtherProfessions == true) ...[
+          20.height,
+          Text('Sélectionnez les autres métiers que vous maîtrisez *',
+              style: secondaryTextStyle(size: 13)),
+          8.height,
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: secondaryProfessionOptions.map((option) {
+              final selected = selectedOtherProfessions.contains(option);
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    if (selected) {
+                      selectedOtherProfessions.remove(option);
+                      if (option == 'Autre') otherProfessionCustomCont.clear();
+                    } else {
+                      selectedOtherProfessions.add(option);
+                    }
+                    fieldErrors.remove('otherProfessions');
+                  });
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected ? primaryColor : context.cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: selected
+                          ? primaryColor
+                          : Colors.grey.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (selected) ...[
+                        const Icon(Icons.check_rounded,
+                            color: Colors.white, size: 14),
+                        6.width,
+                      ],
+                      Text(option,
+                          style: boldTextStyle(
+                              size: 13,
+                              color: selected
+                                  ? Colors.white
+                                  : textPrimaryColorGlobal)),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          _fieldError('otherProfessions'),
+          if (selectedOtherProfessions.contains('Autre')) ...[
+            12.height,
+            TextField(
+              controller: otherProfessionCustomCont,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => FocusScope.of(context).unfocus(),
+              style: primaryTextStyle(),
+              decoration: _dec('Précisez le métier *'),
+              onChanged: (_) =>
+                  setState(() => fieldErrors.remove('otherProfessionCustom')),
+            ),
+            _fieldError('otherProfessionCustom'),
+          ],
+        ],
         20.height,
 
         // Adresse
