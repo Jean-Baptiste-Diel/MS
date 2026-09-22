@@ -716,7 +716,7 @@ class _OrderDetailBody extends StatelessWidget {
 
                 // ── Ouvrier section — client uniquement ──────────────────────
                 if (_isClient && order.artisan != null) ...[
-                  if (order.canTrack)
+                  if (order.canTrack && !order.isAwaitingAnyPayment)
                     _LiveTrackingCard(
                       order: order,
                       artisan: order.artisan!,
