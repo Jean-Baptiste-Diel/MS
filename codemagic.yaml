@@ -10,9 +10,6 @@ workflows:
         - firebase_config
       vars:
         BUNDLE_ID: "com.mison.serviceuser"
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.mison.serviceuser
       flutter: stable
       xcode: latest
       cocoapods: default
