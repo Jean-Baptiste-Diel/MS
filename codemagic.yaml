@@ -8,8 +8,12 @@ workflows:
     environment:
       groups:
         - firebase_config
+        - code_signing
       vars:
         BUNDLE_ID: "com.mison.serviceuser"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.mison.serviceuser
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -24,15 +28,6 @@ workflows:
       - name: Restore firebase_options.dart
         script: |
           echo "$FIREBASE_OPTIONS_B64" | base64 --decode > lib/firebase_options.dart
-      - name: Set up keychain
-        script: keychain initialize
-      - name: Fetch signing files
-        script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
-      - name: Add certificates to keychain
-        script: keychain add-certificates
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
       - name: Get Flutter packages
