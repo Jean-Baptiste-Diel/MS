@@ -36,6 +36,8 @@ workflows:
         script: keychain add-certificates
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
+      - name: Disable Swift Package Manager
+        script: flutter config --no-enable-swift-package-manager
       - name: Get Flutter packages
         script: flutter pub get
       - name: Install CocoaPods dependencies
