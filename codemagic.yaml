@@ -38,6 +38,13 @@ workflows:
         script: xcode-project use-profiles
       - name: Disable Swift Package Manager
         script: flutter config --no-enable-swift-package-manager
+      - name: Increment build number
+        script: |
+          #!/usr/bin/env bash
+          set -e
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID")
+          cd ios
+          agvtool new-version -all $(($LATEST_BUILD_NUMBER + 1))
       - name: Get Flutter packages
         script: flutter pub get
       - name: Install CocoaPods dependencies
