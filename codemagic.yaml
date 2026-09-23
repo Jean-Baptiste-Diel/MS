@@ -11,6 +11,7 @@ workflows:
         - code_signing
       vars:
         BUNDLE_ID: "com.mison.serviceuser"
+        APP_STORE_APPLE_ID: 6777843890
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -42,7 +43,11 @@ workflows:
         script: |
           #!/usr/bin/env bash
           set -e
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID")
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID")
+          if [ -z "$LATEST_BUILD_NUMBER" ]; then
+            echo "Could not determine latest TestFlight build number" >&2
+            exit 1
+          fi
           cd ios
           agvtool new-version -all $(($LATEST_BUILD_NUMBER + 1))
       - name: Get Flutter packages
