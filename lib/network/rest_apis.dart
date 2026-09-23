@@ -74,8 +74,11 @@ Future<BaseResponseModel> createUser(
   MultipartRequest multiPartRequest =
       await getMultiPartRequest('auth/register');
 
+  // Email optionnel : n'est envoyé que s'il est renseigné
+  final String email = request['email']?.toString().trim() ?? '';
+  if (email.isNotEmpty) multiPartRequest.fields['email'] = email;
+
   // Champs requis
-  multiPartRequest.fields['email'] = request['email']?.toString() ?? '';
   multiPartRequest.fields['password'] = request['password']?.toString() ?? '';
   multiPartRequest.fields['phone'] =
       request['contact_number']?.toString() ?? '';
@@ -136,8 +139,8 @@ Future<BaseResponseModel> createUser(
 
 /// Inscription d'un ouvrier via l'API Mison
 /// POST /api/auth/register/artisan (multipart/form-data)
-/// Champs requis: email, password, phone, first_name, last_name, service, profession_name, address
-/// Champs optionnels: profile_picture (File ou bytes), experience_years, hourly_rate, daily_rate, city
+/// Champs requis: password, phone, first_name, last_name, service, profession_name, address
+/// Champs optionnels: email, profile_picture (File ou bytes), experience_years, hourly_rate, daily_rate, city
 /// Retourne un message, l'ouvrier doit vérifier son compte avec l'OTP
 Future<BaseResponseModel> createArtisan(
   Map request, {
@@ -157,7 +160,7 @@ Future<BaseResponseModel> createArtisan(
       await getMultiPartRequest('auth/register/artisan');
 
   // Récupération des champs avec les bons noms
-  String email = request['email']?.toString() ?? '';
+  String email = request['email']?.toString().trim() ?? '';
   String password = request['password']?.toString() ?? '';
   String phone =
       request['phone']?.toString() ?? ''; // ✅ Changé: contact_number → phone
@@ -169,8 +172,7 @@ Future<BaseResponseModel> createArtisan(
   String address = request['address']?.toString() ?? '';
 
   // Validation des champs requis
-  if (email.isEmpty ||
-      password.isEmpty ||
+  if (password.isEmpty ||
       phone.isEmpty ||
       firstName.isEmpty ||
       lastName.isEmpty ||
@@ -200,7 +202,7 @@ Future<BaseResponseModel> createArtisan(
   }
 
   // Remplir les champs requis avec les bons noms
-  multiPartRequest.fields['email'] = email;
+  if (email.isNotEmpty) multiPartRequest.fields['email'] = email;
   multiPartRequest.fields['password'] = password;
   multiPartRequest.fields['phone'] = phone;
   multiPartRequest.fields['first_name'] = firstName;
