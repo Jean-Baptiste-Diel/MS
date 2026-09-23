@@ -364,10 +364,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['lastName'] = 'Nom requis';
           v = false;
         }
-        if (emailCont.text.trim().isEmpty) {
-          fieldErrors['email'] = 'Email requis';
-          v = false;
-        } else if (!emailCont.text.trim().validateEmail()) {
+        if (emailCont.text.trim().isNotEmpty &&
+            !emailCont.text.trim().validateEmail()) {
           fieldErrors['email'] = 'Email invalide';
           v = false;
         }
@@ -647,7 +645,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         appStore.setLoading(false);
         TopToast.show(message: response.message.validate());
         OTPVerificationScreen(
-          email: emailCont.text.trim(),
+          email: emailCont.text.trim().isNotEmpty ? emailCont.text.trim() : null,
+          phone: emailCont.text.trim().isEmpty ? buildMobileNumber() : null,
           isFromSignUp: true,
         ).launch(context);
       }).catchError((e) {

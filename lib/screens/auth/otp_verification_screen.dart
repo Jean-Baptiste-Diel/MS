@@ -15,14 +15,23 @@ import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
-  final String email;
+  final String? email;
+  final String? phone;
   final bool isFromSignUp;
 
   const OTPVerificationScreen({
     Key? key,
-    required this.email,
+    this.email,
+    this.phone,
     this.isFromSignUp = true,
-  }) : super(key: key);
+  })  : assert(email != null || phone != null,
+            'email ou phone doit être fourni'),
+        super(key: key);
+
+  /// Identifiant utilisé pour envoyer/vérifier l'OTP : email si disponible,
+  /// sinon téléphone (inscription sans email).
+  bool get _usesEmail => email != null && email!.trim().isNotEmpty;
+  String get _target => _usesEmail ? email!.trim() : phone!.trim();
 
   @override
   State<OTPVerificationScreen> createState() => _OTPVerificationScreenState();
@@ -76,7 +85,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     appStore.setLoading(true);
 
     Map<String, dynamic> request = {
-      'email': widget.email,
+      (widget._usesEmail ? 'email' : 'phone'): widget._target,
       'otp_code': otpController.text.trim(),
     };
 
@@ -101,7 +110,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     appStore.setLoading(true);
 
     Map<String, dynamic> request = {
-      'email': widget.email,
+      (widget._usesEmail ? 'email' : 'phone'): widget._target,
     };
 
     await api.resendOtp(request, purpose: 'verification').then((response) {
@@ -148,7 +157,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      Icons.email_outlined,
+                      widget._usesEmail
+                          ? Icons.email_outlined
+                          : Icons.sms_outlined,
                       size: 40,
                       color: primaryColor,
                     ),
@@ -169,7 +180,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                         TextSpan(text: language.enterTheCodeSentTo),
                         TextSpan(text: '\n'),
                         TextSpan(
-                          text: widget.email,
+                          text: widget._target,
                           style: boldTextStyle(color: primaryColor),
                         ),
                       ],

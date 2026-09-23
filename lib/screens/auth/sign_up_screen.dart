@@ -291,7 +291,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
     ).then((registerResponse) async {
       appStore.setLoading(false);
       TopToast.show(message: registerResponse.message.validate());
-      OTPVerificationScreen(email: emailCont.text.trim(), isFromSignUp: true).launch(context);
+      OTPVerificationScreen(
+        email: emailCont.text.trim().isNotEmpty ? emailCont.text.trim() : null,
+        phone: emailCont.text.trim().isEmpty ? buildMobileNumber() : null,
+        isFromSignUp: true,
+      ).launch(context);
     }).catchError((e) {
       appStore.setLoading(false);
       TopToast.show(message: e.toString(), type: TopToastType.error);
