@@ -184,7 +184,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ..password = widget.phoneNumber.validate().trim()
           ..userAccountType = selectedAccountType
           ..companyName = selectedAccountType == 'ENTREPRISE' ? companyNameCont.text.trim() : null;
-        if (widget.tokenForOTPCredentials != null) {
+        if (widget.tokenForOTPCredentials != null && emailCont.text.trim().isNotEmpty) {
           try {
             AuthCredential credential =
                 PhoneAuthProvider.credentialFromToken(widget.tokenForOTPCredentials!);
@@ -566,6 +566,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
             hintStyle: TextStyle(color: appTextSecondaryColor.withValues(alpha: 0.6), fontSize: 16),
           ),
           maxLength: 15,
+          isValidationRequired: true,
+          validator: (val) {
+            if (val == null || val.trim().isEmpty) return language.requiredText;
+            if (selectedCountry.countryCode == 'SN' &&
+                !RegExp(r'^(70|71|75|76|77|78|79)\d{7}$').hasMatch(val.trim())) {
+              return 'Numéro invalide (9 chiffres, ex: 77 123 45 67)';
+            }
+            return null;
+          },
           suffix: Icon(Icons.phone_outlined, size: 18, color: appTextSecondaryColor)
               .paddingAll(14),
         ).expand(),

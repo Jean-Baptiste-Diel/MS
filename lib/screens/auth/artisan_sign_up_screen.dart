@@ -414,6 +414,12 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         if (mobileCont.text.trim().isEmpty) {
           fieldErrors['mobile'] = 'Téléphone requis';
           v = false;
+        } else if (selectedCountry.countryCode == 'SN' &&
+            !RegExp(r'^(70|71|75|76|77|78|79)\d{7}$')
+                .hasMatch(mobileCont.text.trim())) {
+          fieldErrors['mobile'] =
+              'Numéro invalide (9 chiffres, ex: 77 123 45 67)';
+          v = false;
         } else if (mobileCont.text.trim().length < 6) {
           fieldErrors['mobile'] = 'Numéro trop court';
           v = false;
@@ -644,9 +650,15 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         isRegistering = false;
         appStore.setLoading(false);
         TopToast.show(message: response.message.validate());
+        final String email = emailCont.text.trim();
+        if (email.isEmpty) {
+          // Sans email, le compte artisan est créé déjà vérifié (pas d'OTP).
+          SignInScreen().launch(context,
+              isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
+          return;
+        }
         OTPVerificationScreen(
-          email: emailCont.text.trim().isNotEmpty ? emailCont.text.trim() : null,
-          phone: emailCont.text.trim().isEmpty ? buildMobileNumber() : null,
+          email: email,
           isFromSignUp: true,
         ).launch(context);
       }).catchError((e) {
@@ -962,7 +974,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           textInputAction: TextInputAction.next,
           onSubmitted: (_) => passwordFocus.requestFocus(),
           style: primaryTextStyle(),
-          decoration: _dec('Adresse email *',
+          decoration: _dec('Adresse email (optionnel)',
               prefix: Icon(Icons.mail_outline_rounded,
                   size: 20, color: textSecondaryColorGlobal)),
           onChanged: (_) => setState(() => fieldErrors.remove('email')),
