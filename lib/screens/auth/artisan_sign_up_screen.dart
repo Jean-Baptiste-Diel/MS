@@ -219,7 +219,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       if (appStore.token.isNotEmpty) {
         headers['Authorization'] = 'Bearer ${appStore.token}';
       }
-      final uri = Uri.parse('https://api.mison.app/api/services');
+      final uri = Uri.parse('${BASE_URL}services');
       final response = await http.get(uri, headers: headers);
       if (response.statusCode == 200) {
         final Map<String, dynamic> body = json.decode(response.body);

@@ -5,6 +5,7 @@ import 'package:booking_system_flutter/component/view_all_label_component.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
+import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -41,7 +42,7 @@ class MisonCategoryComponentState extends State<MisonCategoryComponent> {
 
       final token = getStringAsync(TOKEN);
       final response = await http.get(
-        Uri.parse('https://api.mison.app/api/services'),
+        Uri.parse('${BASE_URL}services'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
