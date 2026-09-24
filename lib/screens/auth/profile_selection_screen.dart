@@ -7,6 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
 
+// Couleurs de la marque (logo)
+const Color _kBrandGold = Color(0xFFC49716);
+const Color _kBrandDark = Color(0xFF3A3A3A);
+
 class ProfileSelectionScreen extends StatefulWidget {
   const ProfileSelectionScreen({Key? key}) : super(key: key);
 
@@ -56,7 +60,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                             'Gérez vos chantiers',
                             'Développez votre activité',
                           ],
-                          accentColor: const Color(0xFFF4BB16),
+                          accentColor: _kBrandGold,
                           bgColors: const [Color(0xFFFFF8E1), Colors.white],
                           onTap: () => setState(() => _selected = 'WORKER'),
                         ),
@@ -75,8 +79,8 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                             'Ouvriers vérifiés',
                             'Paiement sécurisé',
                           ],
-                          accentColor: const Color(0xFF5AADFF),
-                          bgColors: const [Color(0xFFEFF6FF), Colors.white],
+                          accentColor: _kBrandDark,
+                          bgColors: const [Color(0xFFF2F2F2), Colors.white],
                           onTap: () => setState(() => _selected = 'INDIVIDUAL'),
                         ),
                       ]),
@@ -172,15 +176,15 @@ class _HeaderBackground extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
           gradient: LinearGradient(
-              colors: [primaryColor, primaryColor.withValues(alpha: 0.65)]),
+              colors: [_kBrandGold, _kBrandGold.withValues(alpha: 0.65)]),
           boxShadow: [
             BoxShadow(
-                color: primaryColor.withValues(alpha: 0.4),
+                color: _kBrandGold.withValues(alpha: 0.4),
                 blurRadius: 12,
                 offset: const Offset(0, 4))
           ],
         ),
-        child: const Icon(Icons.home_work_rounded, color: Colors.black, size: 18),
+        child: const Icon(Icons.home_work_rounded, color: Colors.white, size: 18),
       );
 
   Widget _brand() => RichText(
@@ -188,7 +192,7 @@ class _HeaderBackground extends StatelessWidget {
           TextSpan(
             text: 'Mi',
             style: TextStyle(
-                color: appTextPrimaryColor,
+                color: _kBrandDark,
                 fontSize: 21,
                 fontWeight: FontWeight.w900,
                 letterSpacing: -0.5),
@@ -196,7 +200,7 @@ class _HeaderBackground extends StatelessWidget {
           TextSpan(
             text: 'son',
             style: TextStyle(
-                color: primaryColor,
+                color: _kBrandGold,
                 fontSize: 21,
                 fontWeight: FontWeight.w900,
                 letterSpacing: -0.5),
@@ -327,31 +331,22 @@ class _ProfileCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Tag pill
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                color: accentColor.withValues(
-                                    alpha: isSelected ? 0.16 : 0.07),
-                              ),
-                              child: Text(
-                                tag,
-                                style: TextStyle(
-                                  color: accentColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.1,
-                                ),
+                            // Tag (sans fond arrondi)
+                            Text(
+                              tag,
+                              style: TextStyle(
+                                color: accentColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.1,
                               ),
                             ),
-                            7.height,
+                            6.height,
                             Text(
                               title,
                               style: TextStyle(
                                 color: appTextPrimaryColor,
-                                fontSize: 17,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w700,
                                 height: 1.1,
                               ),
@@ -388,9 +383,7 @@ class _ProfileCard extends StatelessWidget {
                             ? Icon(
                                 Icons.check_rounded,
                                 size: 15,
-                                color: type == 'WORKER'
-                                    ? Colors.black
-                                    : Colors.white,
+                                color: Colors.white,
                               )
                             : null,
                       ),
@@ -446,16 +439,19 @@ class _ProfileCard extends StatelessWidget {
           ),
         ),
         14.height,
-        // Feature pills
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: features
-              .map((f) => _FeaturePill(
-                    label: f,
-                    accentColor: accentColor,
-                  ))
-              .toList(),
+        // Feature pills : côte à côte, un tiers de largeur chacune
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < features.length; i++) ...[
+                if (i > 0) 6.width,
+                Expanded(
+                  child: _FeaturePill(label: features[i], accentColor: accentColor),
+                ),
+              ],
+            ],
+          ),
         ),
       ],
     );
@@ -471,24 +467,27 @@ class _FeaturePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(14),
         color: accentColor.withValues(alpha: 0.12),
         border: Border.all(color: accentColor.withValues(alpha: 0.28)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.check_circle_rounded,
-              size: 11, color: accentColor.withValues(alpha: 0.85)),
-          5.width,
+              size: 18, color: accentColor.withValues(alpha: 0.85)),
+          4.height,
           Text(
             label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
             style: TextStyle(
-              color: accentColor.withValues(alpha: 0.85),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+              color: accentColor.withValues(alpha: 0.9),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              height: 1.2,
             ),
           ),
         ],
@@ -518,14 +517,14 @@ class _ContinueButtonState extends State<_ContinueButton> {
   bool _pressed = false;
 
   Color get _accent {
-    if (widget.selectedType == 'WORKER') return const Color(0xFFF4BB16);
-    if (widget.selectedType == 'INDIVIDUAL') return const Color(0xFF5AADFF);
+    if (widget.selectedType == 'WORKER') return _kBrandGold;
+    if (widget.selectedType == 'INDIVIDUAL') return _kBrandDark;
     return Colors.black.withValues(alpha: 0.06);
   }
 
   Color get _labelColor {
     if (!widget.enabled) return appTextSecondaryColor.withValues(alpha: 0.5);
-    return widget.selectedType == 'WORKER' ? Colors.black : Colors.white;
+    return Colors.white;
   }
 
   @override

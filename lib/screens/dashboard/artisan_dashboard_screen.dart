@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
@@ -16,6 +17,7 @@ import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
@@ -23,6 +25,12 @@ import 'package:nb_utils/nb_utils.dart';
 
 import '../../component/app_empty_state.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
+
+// Couleurs de la marque (logo)
+const Color _brandGold = Color(0xFFC49716);
+
+// Texte / icônes de l'en-tête blanc
+const Color _headerDark = Color(0xFF3A3A3A);
 
 class ArtisanDashboardScreen extends StatefulWidget {
   const ArtisanDashboardScreen({Key? key}) : super(key: key);
@@ -63,7 +71,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
         bottomNavigationBar: NavigationBarTheme(
           data: NavigationBarThemeData(
             backgroundColor: context.scaffoldBackgroundColor,
-            indicatorColor: context.primaryColor.withValues(alpha: 0.1),
+            indicatorColor: _brandGold.withValues(alpha: 0.1),
             labelTextStyle: WidgetStateProperty.all(primaryTextStyle(size: 12)),
             surfaceTintColor: Colors.transparent,
             shadowColor: Colors.transparent,
@@ -73,17 +81,17 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
             destinations: [
               NavigationDestination(
                 icon: const Icon(Icons.dashboard_outlined, color: Colors.grey),
-                selectedIcon: Icon(Icons.dashboard_rounded, color: context.primaryColor),
+                selectedIcon: Icon(Icons.dashboard_rounded, color: _brandGold),
                 label: 'Accueil',
               ),
               NavigationDestination(
                 icon: ic_ticket.iconImage(color: appTextSecondaryColor),
-                selectedIcon: ic_ticket.iconImage(color: context.primaryColor),
+                selectedIcon: ic_ticket.iconImage(color: _brandGold),
                 label: 'Commandes',
               ),
               NavigationDestination(
                 icon: ic_chat.iconImage(color: appTextSecondaryColor),
-                selectedIcon: ic_chat.iconImage(color: context.primaryColor),
+                selectedIcon: ic_chat.iconImage(color: _brandGold),
                 label: 'Support',
               ),
               NavigationDestination(
@@ -95,7 +103,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
                 selectedIcon: Observer(
                   builder: (_) => (appStore.isLoggedIn && appStore.userProfileImage.isNotEmpty)
                       ? CircleAvatar(radius: 13, backgroundImage: CachedNetworkImageProvider(appStore.userProfileImage))
-                      : ic_profile2.iconImage(color: context.primaryColor),
+                      : ic_profile2.iconImage(color: _brandGold),
                 ),
                 label: language.profile,
               ),
@@ -132,7 +140,8 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   Timer? _bgLocationTimer;
   String? _bgTrackedOrderId;
 
-  static const double _expandedHeight = 140.0;
+  static const double _expandedHeight = 184.0;
+  static const double _toolbarHeight = 72.0;
 
   @override
   void initState() {
@@ -142,7 +151,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
     _fetchPosition();
     _scrollController.addListener(() {
       final collapsed = _scrollController.hasClients &&
-          _scrollController.offset > (_expandedHeight - kToolbarHeight);
+          _scrollController.offset > (_expandedHeight - _toolbarHeight);
       if (collapsed != _isCollapsed) setState(() => _isCollapsed = collapsed);
     });
     LiveStream().on(LIVESTREAM_ARTISAN_HOME_REFRESH, (_) {
@@ -267,7 +276,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
-        color: primaryColor,
+        color: _brandGold,
         onRefresh: () async { setState(() => _load()); },
         child: CustomScrollView(
           controller: _scrollController,
@@ -276,19 +285,26 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
               expandedHeight: _expandedHeight,
               floating: false,
               pinned: true,
-              backgroundColor: primaryColor,
+              // Même fond que la page : l'en-tête se fond dans la grille de points
+              backgroundColor: const Color(0xFFF1F2F4),
+              toolbarHeight: _toolbarHeight,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              systemOverlayStyle: SystemUiOverlayStyle.dark,
               automaticallyImplyLeading: false,
-              centerTitle: false,
-              title: _isCollapsed
-                  ? Observer(
+              // Logo centré en haut (salutation à gauche une fois replié)
+              centerTitle: !_isCollapsed,
+              title: !_isCollapsed
+                  ? Image.asset('assets/logo/logo_transparent.png', height: 58)
+                  : Observer(
                       builder: (_) => Text(
-                        '$_greeting, ${appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'} 👋',
-                        style: boldTextStyle(color: Colors.white, size: 16),
+                        '$_greeting, ${appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'}',
+                        style: boldTextStyle(color: _headerDark, size: 16),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    )
-                  : null,
+                    ),
               actions: [
                 ValueListenableBuilder<int>(
                   valueListenable: artisanNotifBadge,
@@ -296,7 +312,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                     clipBehavior: Clip.none,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 26),
+                        icon: const Icon(Icons.notifications_outlined, color: _headerDark, size: 26),
                         onPressed: () {
                           artisanNotifBadge.value = 0;
                           setValue(ARTISAN_NOTIF_BADGE_KEY, 0);
@@ -331,73 +347,39 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
               ],
               flexibleSpace: FlexibleSpaceBar(
                 background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [primaryColor, primaryColor.withValues(alpha: 0.75)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(20, 56, 20, 16),
+                  color: Colors.transparent,
+                  padding: const EdgeInsets.fromLTRB(20, _toolbarHeight, 20, 16),
                   child: Observer(
                     builder: (_) => Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '$_greeting, ${appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'} 👋',
-                                    style: boldTextStyle(color: Colors.white, size: 19),
+                                    '$_greeting, ${appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'}',
+                                    style: boldTextStyle(color: _headerDark, size: 24),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   4.height,
                                   Text(
                                     DateFormat('EEEE dd MMMM yyyy', 'fr_FR').format(DateTime.now()),
-                                    style: secondaryTextStyle(color: Colors.white.withValues(alpha: 0.75), size: 14),
+                                    style: secondaryTextStyle(size: 14),
                                   ),
                                 ],
                               ),
                             ),
                             12.width,
-                            // Disponibilité toggle
-                            GestureDetector(
-                              onTap: () => setState(() => _isAvailable = !_isAvailable),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: _isAvailable
-                                      ? Colors.green.withValues(alpha: 0.25)
-                                      : Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: _isAvailable ? Colors.greenAccent : Colors.white38,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 8, height: 8,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: _isAvailable ? Colors.greenAccent : Colors.white54,
-                                      ),
-                                    ),
-                                    6.width,
-                                    Text(
-                                      _isAvailable ? 'Disponible' : 'Indisponible',
-                                      style: boldTextStyle(color: Colors.white, size: 11),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            // Disponibilité : bouton on / off à droite de la salutation
+                            _AvailabilityToggle(
+                              value: _isAvailable,
+                              onChanged: (v) => setState(() => _isAvailable = v),
                             ),
                           ],
                         ),
@@ -438,10 +420,130 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   }
 }
 
-class _DashboardBody extends StatelessWidget {
+// ── Bouton de disponibilité on / off ─────────────────────────────────────────
+
+/// Pilule qui s'enfonce à l'appui, avec un rond qui glisse (icône marche/arrêt).
+class _AvailabilityToggle extends StatefulWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _AvailabilityToggle({required this.value, required this.onChanged});
+
+  @override
+  State<_AvailabilityToggle> createState() => _AvailabilityToggleState();
+}
+
+class _AvailabilityToggleState extends State<_AvailabilityToggle> {
+  bool _pressed = false;
+
+  static const double _width = 112;
+  static const double _height = 30;
+  static const double _knob = 22;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = widget.value;
+    final Color base = on ? Colors.green.shade600 : Colors.grey.shade500;
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        HapticFeedback.mediumImpact();
+        widget.onChanged(!on);
+      },
+      child: AnimatedScale(
+        scale: _pressed ? 0.95 : 1,
+        duration: const Duration(milliseconds: 100),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          width: _width,
+          height: _height,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(_height / 2),
+            // Relief : dégradé clair en haut, plus foncé en bas
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color.lerp(base, Colors.white, 0.18)!, base],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: base.withValues(alpha: _pressed ? 0.25 : 0.45),
+                blurRadius: _pressed ? 3 : 8,
+                offset: Offset(0, _pressed ? 1 : 4),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Texte du côté opposé au rond
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+                alignment: on ? Alignment.centerLeft : Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    on ? 'Disponible' : 'Indisponible',
+                    style: boldTextStyle(color: Colors.white, size: 10),
+                  ),
+                ),
+              ),
+              // Rond qui glisse
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutBack,
+                alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  width: _knob,
+                  height: _knob,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(Icons.power_settings_new_rounded, color: base, size: 13),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Filtre appliqué à l'historique en touchant une carte de statistiques.
+enum _StatFilter { total, enCours, terminees, refusees }
+
+class _DashboardBody extends StatefulWidget {
   final List<MisonOrder> orders;
   final Position? artisanPosition;
   const _DashboardBody({required this.orders, this.artisanPosition});
+
+  @override
+  State<_DashboardBody> createState() => _DashboardBodyState();
+}
+
+class _DashboardBodyState extends State<_DashboardBody> {
+  /// null = historique récent (5 dernières missions)
+  _StatFilter? _filter;
+
+  List<MisonOrder> get orders => widget.orders;
+  Position? get artisanPosition => widget.artisanPosition;
+
+  void _toggleFilter(_StatFilter f) =>
+      setState(() => _filter = _filter == f ? null : f);
 
   double? _distanceTo(MisonOrder order) {
     if (artisanPosition == null) return null;
@@ -465,7 +567,36 @@ class _DashboardBody extends StatelessWidget {
     final terminees = missions.where((o) => o.isCompleted).length;
     final refusees  = missions.where((o) => o.isRejected).length;
 
-    final recent = missions.take(5).toList();
+    // Historique : filtré selon la carte touchée
+    final List<MisonOrder> history;
+    final String historyTitle;
+    final String emptySubtitle;
+    switch (_filter) {
+      case _StatFilter.total:
+        history = missions;
+        historyTitle = 'Toutes les commandes';
+        emptySubtitle = 'Aucune commande ne vous a été assignée pour le moment.';
+        break;
+      case _StatFilter.enCours:
+        history = missions.where((o) => o.isActiveWithArtisan).toList();
+        historyTitle = 'Commandes en cours';
+        emptySubtitle = "Vous n'avez aucune commande en cours.";
+        break;
+      case _StatFilter.terminees:
+        history = missions.where((o) => o.isCompleted).toList();
+        historyTitle = 'Commandes terminées';
+        emptySubtitle = "Vous n'avez encore terminé aucune commande.";
+        break;
+      case _StatFilter.refusees:
+        history = missions.where((o) => o.isRejected).toList();
+        historyTitle = 'Commandes refusées';
+        emptySubtitle = "Vous n'avez refusé aucune commande.";
+        break;
+      case null:
+        history = missions.take(5).toList();
+        historyTitle = 'Historique récent';
+        emptySubtitle = 'Aucune commande ne vous a été assignée pour le moment.';
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -478,16 +609,25 @@ class _DashboardBody extends StatelessWidget {
             children: [
               _SectionTitle(title: 'Statistiques'),
               16.height,
+              // Chaque carte filtre l'historique ci-dessous (re-toucher = annuler)
               Row(children: [
-                _StatCard(label: 'Total', value: total, color: primaryColor, icon: Icons.receipt_long_rounded),
+                _StatCard(label: 'Total', value: total, color: _brandGold, icon: Icons.receipt_long_rounded,
+                    isSelected: _filter == _StatFilter.total,
+                    onTap: () => _toggleFilter(_StatFilter.total)),
                 12.width,
-                _StatCard(label: 'En cours', value: enCours, color: in_progress, icon: Icons.timelapse_rounded),
+                _StatCard(label: 'En cours', value: enCours, color: in_progress, icon: Icons.timelapse_rounded,
+                    isSelected: _filter == _StatFilter.enCours,
+                    onTap: () => _toggleFilter(_StatFilter.enCours)),
               ]),
               12.height,
               Row(children: [
-                _StatCard(label: 'Terminées', value: terminees, color: completed, icon: Icons.check_circle_rounded),
+                _StatCard(label: 'Terminées', value: terminees, color: completed, icon: Icons.check_circle_rounded,
+                    isSelected: _filter == _StatFilter.terminees,
+                    onTap: () => _toggleFilter(_StatFilter.terminees)),
                 12.width,
-                _StatCard(label: 'Refusées', value: refusees, color: rejected, icon: Icons.cancel_rounded),
+                _StatCard(label: 'Refusées', value: refusees, color: rejected, icon: Icons.cancel_rounded,
+                    isSelected: _filter == _StatFilter.refusees,
+                    onTap: () => _toggleFilter(_StatFilter.refusees)),
               ]),
             ],
           ),
@@ -504,7 +644,7 @@ class _DashboardBody extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.orange,
+                    color: _brandGold,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${urgentes.length}', style: boldTextStyle(color: Colors.white, size: 11)),
@@ -525,26 +665,40 @@ class _DashboardBody extends StatelessWidget {
           ),
         ],
 
-        // ── Dernières commandes
+        // ── Historique (récent ou filtré par une carte)
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
-          child: _SectionTitle(title: 'Historique récent'),
+          child: Row(
+            children: [
+              Expanded(
+                child: _SectionTitle(
+                  title: _filter == null ? historyTitle : '$historyTitle (${history.length})',
+                ),
+              ),
+              if (_filter != null)
+                GestureDetector(
+                  onTap: () => setState(() => _filter = null),
+                  child: Text('Voir récent',
+                      style: boldTextStyle(size: 13, color: _brandGold)),
+                ),
+            ],
+          ),
         ),
 
-        if (recent.isEmpty)
-          const AppEmptyState(
+        if (history.isEmpty)
+          AppEmptyState(
             type: AppEmptyStateType.empty,
             title: 'Aucune commande',
-            subtitle: 'Aucune commande ne vous a été assignée pour le moment.',
+            subtitle: emptySubtitle,
           )
         else
           ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: recent.length,
+            itemCount: history.length,
             separatorBuilder: (_, __) => 12.height,
-            itemBuilder: (ctx, i) => _RecentOrderTile(order: recent[i]),
+            itemBuilder: (ctx, i) => _RecentOrderTile(order: history[i]),
           ),
       ],
     );
@@ -579,19 +733,19 @@ class _UrgentOrderTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.orange.withValues(alpha: 0.07),
+          color: _brandGold.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+          border: Border.all(color: _brandGold.withValues(alpha: 0.35)),
         ),
         child: Row(
           children: [
             Container(
               width: 42, height: 42,
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.15),
+                color: _brandGold.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.assignment_late_rounded, color: Colors.orange, size: 22),
+              child: Icon(Icons.assignment_late_rounded, color: _brandGold, size: 22),
             ),
             12.width,
             Expanded(
@@ -624,7 +778,7 @@ class _UrgentOrderTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.orange,
+                color: _brandGold,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text('Voir', style: boldTextStyle(color: Colors.white, size: 13)),
@@ -641,16 +795,33 @@ class _StatCard extends StatelessWidget {
   final int value;
   final Color color;
   final IconData icon;
-  const _StatCard({required this.label, required this.value, required this.color, required this.icon});
+  final bool isSelected;
+  final VoidCallback? onTap;
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+    this.isSelected = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: context.cardColor,
+          color: isSelected ? color.withValues(alpha: 0.08) : context.cardColor,
           borderRadius: BorderRadius.circular(16),
+          // Carte active : bordure de sa couleur
+          border: Border.all(
+            color: isSelected ? color : Colors.transparent,
+            width: 1.5,
+          ),
           boxShadow: [
             BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
           ],
@@ -679,6 +850,7 @@ class _StatCard extends StatelessWidget {
             ),
           ],
         ),
+        ),
       ),
     );
   }
@@ -698,9 +870,9 @@ class _RecentOrderTile extends StatelessWidget {
     switch (s) {
       case 'PENDING':                      return pending;
       case 'ACCEPTED':                     return accept;
-      case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
+      case 'AWAITING_TRAVEL_PAYMENT':      return _brandGold;
       case 'IN_PROGRESS':                  return in_progress;
-      case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
+      case 'AWAITING_REALIZATION_PAYMENT': return _brandGold;
       case 'COMPLETED':                    return completed;
       case 'CANCELLED':                    return cancelled;
       default:                             return defaultStatus;
@@ -740,13 +912,13 @@ class _RecentOrderTile extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: primaryColor.withValues(alpha: 0.1),
+                color: _brandGold.withValues(alpha: 0.1),
                 image: order.service?.imageUrl != null
                     ? DecorationImage(image: CachedNetworkImageProvider(order.service!.imageUrl!), fit: BoxFit.cover)
                     : null,
               ),
               child: order.service?.imageUrl == null
-                  ? Icon(Icons.handyman, color: primaryColor, size: 20)
+                  ? Icon(Icons.handyman, color: _brandGold, size: 20)
                   : null,
             ),
             12.width,
@@ -1006,17 +1178,17 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: context.primaryColor,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Text('Mes Commandes', style: boldTextStyle(color: Colors.white, size: 18)),
+      // Logo centré + fond de la page, comme l'accueil
+      appBar: MisonAppBar(
+        title: 'Mes Commandes',
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
+          indicatorColor: _brandGold,
           indicatorWeight: 3,
-          labelStyle: boldTextStyle(size: 14, color: Colors.white),
-          unselectedLabelStyle: secondaryTextStyle(size: 13, color: Colors.white70),
+          labelColor: _headerDark,
+          unselectedLabelColor: Colors.grey,
+          labelStyle: boldTextStyle(size: 14, color: _headerDark),
+          unselectedLabelStyle: secondaryTextStyle(size: 13),
           tabs: const [
             Tab(text: 'À traiter'),
             Tab(text: 'Mes missions'),
@@ -1102,7 +1274,7 @@ class _OrderTabState extends State<_OrderTab> with AutomaticKeepAliveClientMixin
         final all = snapshot.data?.data ?? [];
         final filtered = all.where(widget.filter).toList();
         return RefreshIndicator(
-          color: primaryColor,
+          color: _brandGold,
           onRefresh: () async => widget.onReload(),
           child: filtered.isEmpty
               ? CustomScrollView(
@@ -1166,9 +1338,9 @@ class _ArtisanOrderCard extends StatelessWidget {
     switch (s) {
       case 'PENDING':                      return pending;
       case 'ACCEPTED':                     return accept;
-      case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
+      case 'AWAITING_TRAVEL_PAYMENT':      return _brandGold;
       case 'IN_PROGRESS':                  return in_progress;
-      case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
+      case 'AWAITING_REALIZATION_PAYMENT': return _brandGold;
       case 'COMPLETED':                    return completed;
       case 'CANCELLED':                    return cancelled;
       default:                             return defaultStatus;
@@ -1208,7 +1380,7 @@ class _ArtisanOrderCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: BoxDecoration(
-              color: context.primaryColor.withValues(alpha: 0.06),
+              color: _brandGold.withValues(alpha: 0.06),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
@@ -1219,12 +1391,12 @@ class _ArtisanOrderCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.person_outline, size: 16, color: context.primaryColor),
+                    Icon(Icons.person_outline, size: 16, color: _brandGold),
                     6.width,
                     Expanded(
                       child: Text(
                         clientName,
-                        style: boldTextStyle(size: 16, color: context.primaryColor),
+                        style: boldTextStyle(size: 16, color: _brandGold),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1259,13 +1431,13 @@ class _ArtisanOrderCard extends StatelessWidget {
                   height: 48,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: primaryColor.withValues(alpha: 0.1),
+                    color: _brandGold.withValues(alpha: 0.1),
                     image: order.service?.imageUrl != null
                         ? DecorationImage(image: CachedNetworkImageProvider(order.service!.imageUrl!), fit: BoxFit.cover)
                         : null,
                   ),
                   child: order.service?.imageUrl == null
-                      ? Icon(Icons.handyman, color: primaryColor, size: 22)
+                      ? Icon(Icons.handyman, color: _brandGold, size: 22)
                       : null,
                 ),
                 12.width,
@@ -1315,17 +1487,17 @@ class _ArtisanOrderCard extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.08),
+                  color: _brandGold.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+                  border: Border.all(color: _brandGold.withValues(alpha: 0.25)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.near_me_rounded, size: 14, color: Colors.orange),
+                    Icon(Icons.near_me_rounded, size: 14, color: _brandGold),
                     6.width,
                     Text(
                       'Prestation demandée à ${distanceKm! < 1 ? '${(distanceKm! * 1000).round()} m' : '${distanceKm!.toStringAsFixed(1)} km'} de vous',
-                      style: boldTextStyle(size: 14, color: Colors.orange),
+                      style: boldTextStyle(size: 14, color: _brandGold),
                     ),
                   ],
                 ),
@@ -1449,14 +1621,14 @@ class _FeeBottomSheet extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: primaryColor, width: 1.5),
+                borderSide: BorderSide(color: _brandGold, width: 1.5),
               ),
             ),
           ),
           20.height,
           AppButton(
             text: 'Confirmer',
-            color: primaryColor,
+            color: _brandGold,
             textColor: Colors.white,
             width: double.infinity,
             height: 50,

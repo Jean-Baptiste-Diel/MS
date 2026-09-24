@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'dart:async';
 
 import 'package:booking_system_flutter/component/back_widget.dart';
@@ -38,6 +39,9 @@ class OTPVerificationScreen extends StatefulWidget {
 }
 
 class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
+  // Mêmes couleurs que les pages connexion / inscription
+  static const Color _brandGold = Color(0xFFC49716);
+
   TextEditingController otpController = TextEditingController();
 
   Timer? _timer;
@@ -153,7 +157,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     height: 80,
                     width: 80,
                     decoration: BoxDecoration(
-                      color: primaryColor.withValues(alpha: 0.1),
+                      color: _brandGold.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -161,7 +165,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                           ? Icons.email_outlined
                           : Icons.sms_outlined,
                       size: 40,
-                      color: primaryColor,
+                      color: _brandGold,
                     ),
                   ),
                   24.height,
@@ -181,7 +185,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                         TextSpan(text: '\n'),
                         TextSpan(
                           text: widget._target,
-                          style: boldTextStyle(color: primaryColor),
+                          style: boldTextStyle(color: _brandGold),
                         ),
                       ],
                     ),
@@ -196,7 +200,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     textInputAction: TextInputAction.done,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     textStyle: boldTextStyle(size: 20),
-                    cursorColor: primaryColor,
+                    cursorColor: _brandGold,
                     pinTheme: PinTheme(
                       shape: PinCodeFieldShape.box,
                       borderRadius: BorderRadius.circular(12),
@@ -205,9 +209,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       activeFillColor: context.cardColor,
                       inactiveFillColor: context.cardColor,
                       selectedFillColor: context.cardColor,
-                      activeColor: primaryColor,
+                      activeColor: _brandGold,
                       inactiveColor: borderColor,
-                      selectedColor: primaryColor,
+                      selectedColor: _brandGold,
                     ),
                     enableActiveFill: true,
                     onCompleted: (value) {
@@ -219,7 +223,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                   // Verify Button
                   AppButton(
                     text: language.verify,
-                    color: primaryColor,
+                    color: _brandGold,
                     textColor: Colors.white,
                     width: context.width(),
                     onTap: verifyOtp,
@@ -239,13 +243,13 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                           onPressed: () => resendOtpCode(),
                           child: Text(
                             language.resendOTP,
-                            style: boldTextStyle(color: primaryColor),
+                            style: boldTextStyle(color: _brandGold),
                           ),
                         )
                       else
                         Text(
                           '${language.resendIn} $_remainingSeconds s',
-                          style: secondaryTextStyle(color: primaryColor),
+                          style: secondaryTextStyle(color: _brandGold),
                         ),
                     ],
                   ),
@@ -256,7 +260,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
               Container(
                 color: Colors.black26,
                 child: Center(
-                  child: CircularProgressIndicator(color: primaryColor),
+                  child: LoaderWidget(colors: const [Color(0xFF3A3A3A), _brandGold]),
                 ),
               ),
           ],

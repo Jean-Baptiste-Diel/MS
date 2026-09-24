@@ -6,6 +6,7 @@ import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/model_keys.dart';
+import 'package:booking_system_flutter/utils/pin_utils.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -96,6 +97,7 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 focus: oldPasswordFocus,
                 nextFocus: newPasswordFocus,
                 obscureText: true,
+                keyboardType: pinKeyboardType,
                 suffixPasswordVisibleWidget: ic_show.iconImage(size: 10).paddingAll(14),
                 suffixPasswordInvisibleWidget: ic_hide.iconImage(size: 10).paddingAll(14),
                 decoration: inputDecoration(
@@ -103,11 +105,10 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   labelText: language.hintOldPasswordTxt,
                 ),
                 isValidationRequired: true,
+                // Pas de limite à 4 chiffres : l'ancien mot de passe peut être plus long
                 validator: (val) {
                   if (val == null || val.isEmpty) {
                     return language.requiredText;
-                  } else if (val.length < 8) {
-                    return language.passwordLengthShouldBe;
                   }
                   return null;
                 },
@@ -119,18 +120,13 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 focus: newPasswordFocus,
                 obscureText: true,
                 nextFocus: reenterPasswordFocus,
+                keyboardType: pinKeyboardType,
+                inputFormatters: pinInputFormatters,
                 suffixPasswordVisibleWidget: ic_show.iconImage(size: 10).paddingAll(14),
                 suffixPasswordInvisibleWidget: ic_hide.iconImage(size: 10).paddingAll(14),
-                decoration: inputDecoration(context, labelText: language.hintNewPasswordTxt),
+                decoration: inputDecoration(context, labelText: 'Nouveau code PIN (4 chiffres)'),
                 isValidationRequired: true,
-                validator: (val) {
-                  if (val == null || val.isEmpty) {
-                    return language.requiredText;
-                  } else if (val.length < 8) {
-                    return language.passwordLengthShouldBe;
-                  }
-                  return null;
-                },
+                validator: validatePin,
               ),
               16.height,
               AppTextField(
@@ -138,26 +134,18 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 controller: reenterPasswordCont,
                 obscureText: true,
                 focus: reenterPasswordFocus,
+                keyboardType: pinKeyboardType,
+                inputFormatters: pinInputFormatters,
                 suffixPasswordVisibleWidget: ic_show.iconImage(size: 10).paddingAll(14),
                 suffixPasswordInvisibleWidget: ic_hide.iconImage(size: 10).paddingAll(14),
-                validator: (v) {
-                  if (v == null || v.isEmpty) {
-                    return errorThisFieldRequired;
-                  } else if (v.length < 8) {
-                    return language.passwordLengthShouldBe;
-                  } else if (newPasswordCont.text != v) {
-                    return language.passwordNotMatch;
-                  } else if (reenterPasswordCont.text.isEmpty) {
-                    return errorThisFieldRequired;
-                  }
-                  return null;
-                },
+                validator: (v) =>
+                    validatePinConfirmation(v, newPasswordCont.text),
                 onFieldSubmitted: (s) {
                   ifNotTester(() {
                     changePassword();
                   });
                 },
-                decoration: inputDecoration(context, labelText: language.hintReenterPasswordTxt),
+                decoration: inputDecoration(context, labelText: 'Confirmer le code PIN'),
               ),
               24.height,
               AppButton(

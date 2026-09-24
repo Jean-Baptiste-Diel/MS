@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
@@ -241,33 +242,28 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       onTap: () => hideKeyboard(context),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: context.primaryColor,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        // Logo centré + fond de la page, comme l'accueil
+        appBar: MisonAppBar(
+          title: widget.title,
+          subtitle: Row(
             children: [
-              Text(widget.title, style: boldTextStyle(color: Colors.white, size: 16)),
-              Row(
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _wsConnected ? Colors.greenAccent : Colors.orange,
-                    ),
-                  ),
-                  4.width,
-                  Text(
-                    _wsConnected ? 'Connecté' : 'Reconnexion...',
-                    style: secondaryTextStyle(color: Colors.white70, size: 13),
-                  ),
-                ],
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _wsConnected ? Colors.green : kMisonGold,
+                ),
+              ),
+              4.width,
+              Text(
+                _wsConnected ? 'Connecté' : 'Reconnexion...',
+                style: secondaryTextStyle(size: 13),
               ),
             ],
           ),
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            icon: const Icon(Icons.arrow_back, color: kMisonDark),
             onPressed: () => finish(context),
           ),
         ),

@@ -364,7 +364,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
                               controller: mobileCont,
                               focus: mobileFocus,
                               isValidationRequired: false,
-                              maxLength: 15,
+                              maxLength: selectedCountryCode.phoneCode == '221' ? 9 : 15, // 9 chiffres au Sénégal
                               decoration: inputDecoration(context,
                                       hintText:
                                           language.hintContactNumberTxt)

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:booking_system_flutter/component/animated_dropdown.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
@@ -12,6 +13,8 @@ import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/utils/phone_utils.dart';
+import 'package:booking_system_flutter/utils/pin_utils.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -47,6 +50,10 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
+  // Mêmes couleurs que la page connexion
+  static const Color _brandGold = Color(0xFFC49716);
+  static const Color _brandDark = Color(0xFF3A3A3A);
+
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
   Country selectedCountry = defaultCountry();
   final ImagePicker _picker = ImagePicker();
@@ -78,36 +85,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool isFirstTimeValidation = true;
   bool _submitPressed = false;
 
-  ValueNotifier _valueNotifier = ValueNotifier(true);
   bool? isReferralValid;
   String? referralValidationMessage;
 
-  // ── Password strength ──────────────────────────────────────────────────────
-
-  bool get _hasMinChars => passwordCont.text.trim().length >= 8;
-  bool get _hasSpecialChar =>
-      RegExp(r'[!@#$%^&*(),.?":{}|<>_\-\\/\[\]`~+=;]').hasMatch(passwordCont.text);
-  bool get _hasDigit => RegExp(r'\d').hasMatch(passwordCont.text);
-  bool get _hasUppercase => RegExp(r'[A-Z]').hasMatch(passwordCont.text);
-  bool get _isPasswordStrong => _hasMinChars && _hasSpecialChar && _hasDigit && _hasUppercase;
-
-  int get _passwordStrength {
-    int s = 0;
-    if (_hasMinChars) s++;
-    if (_hasDigit) s++;
-    if (_hasUppercase) s++;
-    if (_hasSpecialChar) s++;
-    return s;
-  }
-
-  Color _strengthColor(int s) {
-    switch (s) {
-      case 1: return Colors.redAccent;
-      case 2: return Colors.orange;
-      case 3: return Colors.amber;
-      case 4: return const Color(0xFF4CAF50);
-      default: return Colors.transparent;
-    }
+  /// True dès que la confirmation saisie ne peut plus correspondre au PIN.
+  bool get _pinMismatch {
+    final pin = passwordCont.text;
+    final confirm = confirmPasswordCont.text;
+    if (confirm.isEmpty) return false;
+    return confirm.length >= pin.length ? confirm != pin : !pin.startsWith(confirm);
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -200,23 +186,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
-  Future<void> changeCountry() async {
-    showCountryPicker(
-      context: context,
-      countryListTheme: CountryListThemeData(
-        textStyle: secondaryTextStyle(color: textSecondaryColorGlobal),
-        searchTextStyle: primaryTextStyle(),
-        inputDecoration: InputDecoration(
-          labelText: language.search,
-          prefixIcon: const Icon(Icons.search),
-          border: OutlineInputBorder(
-              borderSide: BorderSide(color: const Color(0xFF8C98A8).withValues(alpha: 0.2))),
-        ),
-      ),
-      showPhoneCode: true,
-      onSelect: (Country country) { selectedCountry = country; setState(() {}); },
-    );
-  }
+  /// Tous les pays, Sénégal en premier (menu Indicatif).
+  late final List<Country> _allCountries = () {
+    final list = CountryService().getAll();
+    final sn = list.where((c) => c.countryCode == 'SN').toList();
+    return [...sn, ...list.where((c) => c.countryCode != 'SN')];
+  }();
+
+  String _countryName(Country c) => c.getTranslatedName(context) ?? c.name;
 
   void registerUser() async {
     hideKeyboard(context);
@@ -372,7 +349,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           border: Border.all(color: borderColor),
         ),
         child: Row(children: [
-          Icon(icon, color: primaryColor, size: 22),
+          Icon(icon, color: _brandGold, size: 22),
           14.width,
           Text(label,
               style: TextStyle(color: appTextPrimaryColor, fontSize: 14, fontWeight: FontWeight.w500)),
@@ -392,6 +369,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       labelStyle: TextStyle(color: appTextSecondaryColor, fontSize: 16),
       hintStyle: TextStyle(color: appTextSecondaryColor.withValues(alpha: 0.6), fontSize: 16),
       errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 15),
+      errorMaxLines: 3, // message affiché en entier
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -400,7 +378,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           borderSide: BorderSide(color: borderColor)),
       focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: primaryColor, width: 1.5)),
+          borderSide: BorderSide(color: _brandGold, width: 1.5)),
       errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Colors.redAccent)),
@@ -417,7 +395,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         Container(
           width: 3, height: 13,
           decoration: BoxDecoration(
-              color: primaryColor, borderRadius: BorderRadius.circular(2)),
+              color: _brandGold, borderRadius: BorderRadius.circular(2)),
         ),
         8.width,
         Text(label,
@@ -427,36 +405,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.8)),
       ]),
-    );
-  }
-
-  Widget _strengthBar() {
-    final s = _passwordStrength;
-    final color = _strengthColor(s);
-    final label = ['', 'Très faible', 'Faible', 'Moyen', 'Fort'][s];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          for (int i = 0; i < 4; i++)
-            Expanded(
-              child: Container(
-                margin: EdgeInsets.only(right: i < 3 ? 4 : 0),
-                height: 3,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(2),
-                  color: i < s ? color : Colors.black.withValues(alpha: 0.08),
-                ),
-              ),
-            ),
-        ]),
-        if (s > 0) ...[
-          5.height,
-          Text(label,
-              style: TextStyle(
-                  color: color, fontSize: 13, fontWeight: FontWeight.w500)),
-        ],
-      ],
     );
   }
 
@@ -474,12 +422,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(colors: [
-                primaryColor.withValues(alpha: hasImage ? 0.3 : 0.12),
+                _brandGold.withValues(alpha: hasImage ? 0.3 : 0.12),
                 Colors.transparent,
               ]),
               border: Border.all(
                 color: hasImage
-                    ? primaryColor.withValues(alpha: 0.6)
+                    ? _brandGold.withValues(alpha: 0.6)
                     : borderColor,
                 width: 1.5,
               ),
@@ -501,10 +449,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
               width: 28, height: 28,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: primaryColor,
+                color: _brandGold,
                 border: Border.all(color: Colors.white, width: 2),
               ),
-              child: const Icon(Icons.camera_alt_rounded, color: Colors.black, size: 14),
+              child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
             ),
           ),
         ]),
@@ -516,37 +464,59 @@ class _SignUpScreenState extends State<SignUpScreen> {
       4.height,
       Text('Optionnel',
           style: TextStyle(
-              color: primaryColor.withValues(alpha: 0.6), fontSize: 13)),
+              color: _brandGold.withValues(alpha: 0.6), fontSize: 13)),
     ]);
   }
 
+  /// Indicatif (liste animée qui se déplie sous la ligne) + numéro sur la même ligne.
   Widget _buildPhoneRow() {
+    return AnimatedDropdown<String>(
+      hint: 'Indicatif',
+      value: selectedCountry.countryCode,
+      options: _allCountries
+          .map((c) => DropdownOption(
+              c.countryCode, '${c.flagEmoji}  +${c.phoneCode}  ${_countryName(c)}'))
+          .toList(),
+      accentColor: _brandGold,
+      searchable: true,
+      searchHint: 'Rechercher un pays ou un indicatif',
+      onChanged: (code) => setState(() {
+        selectedCountry = CountryService().findByCode(code) ?? selectedCountry;
+      }),
+      triggerBuilder: (context, _, isOpen, toggle) => _buildPhoneFields(isOpen, toggle),
+    );
+  }
+
+  Widget _buildPhoneFields(bool isOpen, VoidCallback toggle) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         GestureDetector(
-          onTap: changeCountry,
-          child: ValueListenableBuilder(
-            valueListenable: _valueNotifier,
-            builder: (context, _, __) => Container(
-              height: 58,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: borderColor),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('+${selectedCountry.phoneCode}',
-                      style: TextStyle(
-                          color: appTextPrimaryColor, fontSize: 14, fontWeight: FontWeight.w500)),
-                  4.width,
-                  Icon(Icons.expand_more_rounded,
-                      color: appTextSecondaryColor, size: 18),
-                ],
-              ),
+          onTap: toggle,
+          child: Container(
+            height: 58,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: isOpen ? _brandGold : borderColor,
+                  width: isOpen ? 1.5 : 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('${selectedCountry.flagEmoji} +${selectedCountry.phoneCode}',
+                    style: TextStyle(
+                        color: appTextPrimaryColor, fontSize: 14, fontWeight: FontWeight.w500)),
+                2.width,
+                AnimatedRotation(
+                  turns: isOpen ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(Icons.expand_more_rounded,
+                      color: isOpen ? _brandGold : appTextSecondaryColor, size: 20),
+                ),
+              ],
             ),
           ),
         ),
@@ -565,13 +535,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
             hintText: '${language.lblExample}: ${selectedCountry.example}',
             hintStyle: TextStyle(color: appTextSecondaryColor.withValues(alpha: 0.6), fontSize: 16),
           ),
-          maxLength: 15,
+          maxLength: selectedCountry.countryCode == 'SN' ? 9 : 15, // 9 chiffres au Sénégal
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           isValidationRequired: true,
           validator: (val) {
             if (val == null || val.trim().isEmpty) return language.requiredText;
-            if (selectedCountry.countryCode == 'SN' &&
-                !RegExp(r'^(70|71|75|76|77|78|79)\d{7}$').hasMatch(val.trim())) {
-              return 'Numéro invalide (9 chiffres, ex: 77 123 45 67)';
+            if (selectedCountry.countryCode == 'SN') {
+              return validateSenegalPhone(val.trim());
             }
             return null;
           },
@@ -598,13 +568,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
           child: Row(children: [
             Icon(
               showPromoCodeField ? Icons.expand_less_rounded : Icons.local_offer_outlined,
-              color: primaryColor, size: 16,
+              color: _brandGold, size: 16,
             ),
             8.width,
             Text(
               showPromoCodeField ? 'Masquer le code promo' : 'J\'ai un code promo',
               style: TextStyle(
-                  color: primaryColor,
+                  color: _brandGold,
                   fontSize: 15,
                   fontWeight: FontWeight.w600),
             ),
@@ -666,16 +636,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
             width: 20, height: 20,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(5),
-              color: isAcceptedTc ? primaryColor : Colors.transparent,
+              color: isAcceptedTc ? _brandGold : Colors.transparent,
               border: Border.all(
                 color: isAcceptedTc
-                    ? primaryColor
+                    ? _brandGold
                     : Colors.black.withValues(alpha: 0.2),
                 width: 1.5,
               ),
             ),
             child: isAcceptedTc
-                ? const Icon(Icons.check_rounded, color: Colors.black, size: 13)
+                ? const Icon(Icons.check_rounded, color: Colors.white, size: 13)
                 : null,
           ),
           12.width,
@@ -688,7 +658,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               TextSpan(
                 text: language.lblTermsOfService,
                 style: TextStyle(
-                    color: primaryColor,
+                    color: _brandGold,
                     fontSize: 15,
                     fontWeight: FontWeight.w600),
                 recognizer: TapGestureRecognizer()
@@ -703,7 +673,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               TextSpan(
                 text: language.privacyPolicy,
                 style: TextStyle(
-                    color: primaryColor,
+                    color: _brandGold,
                     fontSize: 15,
                     fontWeight: FontWeight.w600),
                 recognizer: TapGestureRecognizer()
@@ -733,10 +703,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
           height: 56,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            color: primaryColor,
+            color: _brandGold,
             boxShadow: [
               BoxShadow(
-                  color: primaryColor.withValues(alpha: 0.38),
+                  color: _brandGold.withValues(alpha: 0.38),
                   blurRadius: 18,
                   offset: const Offset(0, 7))
             ],
@@ -745,7 +715,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             child: Text(
               language.signUp,
               style: const TextStyle(
-                  color: Colors.black, fontSize: 16, fontWeight: FontWeight.w700),
+                  color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
         ),
@@ -770,7 +740,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 TextSpan(
                   text: language.signIn,
                   style: TextStyle(
-                      color: primaryColor,
+                      color: _brandGold,
                       fontSize: 16,
                       fontWeight: FontWeight.w800),
                 ),
@@ -785,9 +755,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget _buildForm() {
     return Form(
       key: formKey,
-      autovalidateMode: isFirstTimeValidation
-          ? AutovalidateMode.disabled
-          : AutovalidateMode.onUserInteraction,
+      autovalidateMode: AutovalidateMode.disabled, // erreurs affichées seulement au clic sur le bouton
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
         child: Column(
@@ -869,6 +837,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 focus: passwordFocus,
                 nextFocus: confirmPasswordFocus,
                 obscureText: true,
+                keyboardType: pinKeyboardType,
+                inputFormatters: pinInputFormatters,
                 onChanged: (_) => setState(() {}),
                 suffixPasswordVisibleWidget:
                     Icon(Icons.visibility_outlined, size: 18,
@@ -879,18 +849,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             color: appTextSecondaryColor)
                         .paddingAll(14),
                 errorThisFieldRequired: language.requiredText,
-                decoration: _fieldDecoration(label: language.hintPasswordTxt),
+                decoration: _fieldDecoration(label: 'Code PIN (4 chiffres)'),
                 isValidationRequired: true,
-                validator: (val) {
-                  if (val == null || val.isEmpty) return language.requiredText;
-                  if (!_isPasswordStrong) return 'Le mot de passe ne respecte pas les critères';
-                  return null;
-                },
+                validator: validatePin,
               ),
-              if (passwordCont.text.isNotEmpty) ...[
-                10.height,
-                _strengthBar(),
-              ],
               14.height,
               AppTextField(
                 textFieldType: TextFieldType.PASSWORD,
@@ -898,6 +860,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 focus: confirmPasswordFocus,
                 nextFocus: showPromoCodeField ? referralCodeFocus : null,
                 obscureText: true,
+                keyboardType: pinKeyboardType,
+                inputFormatters: pinInputFormatters,
                 onChanged: (_) => setState(() {}),
                 suffixPasswordVisibleWidget:
                     Icon(Icons.visibility_outlined, size: 18,
@@ -908,13 +872,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             color: appTextSecondaryColor)
                         .paddingAll(14),
                 errorThisFieldRequired: language.requiredText,
-                decoration: _fieldDecoration(label: 'Confirmer le mot de passe'),
+                // Seule erreur affichée pendant la saisie : PIN différents
+                decoration: _fieldDecoration(label: 'Confirmer le code PIN').copyWith(
+                  errorText: _pinMismatch ? 'Les codes PIN ne correspondent pas' : null,
+                ),
                 isValidationRequired: true,
-                validator: (val) {
-                  if (val == null || val.isEmpty) return language.requiredText;
-                  if (val != passwordCont.text) return 'Les mots de passe ne correspondent pas';
-                  return null;
-                },
+                validator: (val) =>
+                    validatePinConfirmation(val, passwordCont.text),
               ),
               26.height,
             ],
@@ -972,18 +936,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
                         gradient: LinearGradient(colors: [
-                          primaryColor,
-                          primaryColor.withValues(alpha: 0.65)
+                          _brandGold,
+                          _brandGold.withValues(alpha: 0.65)
                         ]),
                         boxShadow: [
                           BoxShadow(
-                              color: primaryColor.withValues(alpha: 0.4),
+                              color: _brandGold.withValues(alpha: 0.4),
                               blurRadius: 12,
                               offset: const Offset(0, 4))
                         ],
                       ),
                       child: const Icon(Icons.home_work_rounded,
-                          color: Colors.black, size: 18),
+                          color: Colors.white, size: 18),
                     ),
                     12.width,
                     RichText(
@@ -991,7 +955,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         TextSpan(
                           text: 'Mi',
                           style: TextStyle(
-                              color: appTextPrimaryColor,
+                              color: _brandDark,
                               fontSize: 21,
                               fontWeight: FontWeight.w900,
                               letterSpacing: -0.5),
@@ -999,7 +963,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         TextSpan(
                           text: 'son',
                           style: TextStyle(
-                              color: primaryColor,
+                              color: _brandGold,
                               fontSize: 21,
                               fontWeight: FontWeight.w900,
                               letterSpacing: -0.5),
@@ -1056,7 +1020,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               ),
               Observer(
                 builder: (_) =>
-                    LoaderWidget().center().visible(appStore.isLoading),
+                    LoaderWidget(colors: const [_brandDark, _brandGold]).center().visible(appStore.isLoading),
               ),
             ],
           ),

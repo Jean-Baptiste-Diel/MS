@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:booking_system_flutter/component/animated_dropdown.dart';
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
@@ -9,9 +10,10 @@ import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/auth/otp_verification_screen.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/services/location_service.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
+import 'package:booking_system_flutter/utils/phone_utils.dart';
+import 'package:booking_system_flutter/utils/pin_utils.dart';
 import 'package:booking_system_flutter/component/nominatim_address_field.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/gestures.dart';
@@ -24,6 +26,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
+
+// Mêmes couleurs que les pages connexion / inscription client
+const Color _brandGold = Color(0xFFC49716);
+const Color _brandDark = Color(0xFF3A3A3A);
 
 class ArtisanSignUpScreen extends StatefulWidget {
   const ArtisanSignUpScreen({Key? key}) : super(key: key);
@@ -120,23 +126,18 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   final TextEditingController customMetierCont = TextEditingController();
 
   // Autres métiers maîtrisés
-  bool? hasOtherProfessions;
+  bool? hasOtherProfessions = false; // case décochée = non
   final Set<String> selectedOtherProfessions = {};
   final TextEditingController otherProfessionCustomCont = TextEditingController();
 
-  final List<String> secondaryProfessionOptions = const [
-    'Maçon',
-    'Ferrailleur',
-    'Coffreur',
-    'Plombier',
-    'Électricien',
-    'Menuisier bois-aluminium',
-    'Menuisier métallique',
-    'Peintre-Décorateur',
-    'Carreleur',
-    "Conducteur d'engins",
-    'Autre',
-  ];
+  // Liste issue de la BD (services), sans le métier principal, + "Autre"
+  List<String> get secondaryProfessionOptions => [
+        ...serviceOptions
+            .where((s) => s['id'] != selectedServiceId)
+            .map((s) => s['name'] ?? '')
+            .where((name) => name.isNotEmpty && name != 'Autre'),
+        'Autre',
+      ];
 
   double? addressLat;
   double? addressLon;
@@ -245,48 +246,17 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     return '+${selectedCountry.phoneCode}${mobileCont.text.trim().replaceAll(' ', '')}';
   }
 
-  Future<void> changeCountry() async {
-    showCountryPicker(
-      context: context,
-      countryListTheme: CountryListThemeData(
-        textStyle: secondaryTextStyle(color: textSecondaryColorGlobal),
-        searchTextStyle: primaryTextStyle(),
-        inputDecoration: InputDecoration(
-          labelText: language.search,
-          prefixIcon: const Icon(Icons.search),
-          border: OutlineInputBorder(
-            borderSide:
-                BorderSide(color: const Color(0xFF8C98A8).withValues(alpha: 0.2)),
-          ),
-        ),
-      ),
-      showPhoneCode: true,
-      onSelect: (Country country) => setState(() => selectedCountry = country),
-    );
-  }
+  /// Tous les pays, Sénégal en premier (menus Nationalité et Indicatif).
+  late final List<Country> _allCountries = () {
+    final list = CountryService().getAll();
+    final sn = list.where((c) => c.countryCode == 'SN').toList();
+    return [...sn, ...list.where((c) => c.countryCode != 'SN')];
+  }();
 
-  Future<void> changeNationality() async {
-    showCountryPicker(
-      context: context,
-      countryListTheme: CountryListThemeData(
-        textStyle: secondaryTextStyle(color: textSecondaryColorGlobal),
-        searchTextStyle: primaryTextStyle(),
-        inputDecoration: InputDecoration(
-          labelText: language.search,
-          prefixIcon: const Icon(Icons.search),
-          border: OutlineInputBorder(
-            borderSide:
-                BorderSide(color: const Color(0xFF8C98A8).withValues(alpha: 0.2)),
-          ),
-        ),
-      ),
-      showPhoneCode: false,
-      onSelect: (Country country) => setState(() {
-        selectedNationalityCountry = country;
-        fieldErrors.remove('nationality');
-      }),
-    );
-  }
+  /// 9 chiffres au Sénégal, 15 max ailleurs.
+  int get _phoneMaxLength => selectedCountry.countryCode == 'SN' ? 9 : 15;
+
+  String _countryName(Country c) => c.getTranslatedName(context) ?? c.name;
 
   // ── Image pickers ─────────────────────────────────────────────────────────
 
@@ -369,24 +339,10 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['email'] = 'Email invalide';
           v = false;
         }
-        if (passwordCont.text.isEmpty) {
-          fieldErrors['password'] = 'Mot de passe requis';
+        final pinError = validatePin(passwordCont.text);
+        if (pinError != null) {
+          fieldErrors['password'] = pinError;
           v = false;
-        } else {
-          final p = passwordCont.text;
-          if (p.length < 8) {
-            fieldErrors['password'] = '8 caractères minimum';
-            v = false;
-          } else if (!RegExp(r'[A-Z]').hasMatch(p)) {
-            fieldErrors['password'] = 'Au moins 1 majuscule requise';
-            v = false;
-          } else if (!RegExp(r'[0-9]').hasMatch(p)) {
-            fieldErrors['password'] = 'Au moins 1 chiffre requis';
-            v = false;
-          } else if (!RegExp(r'[!@#$%^&*()\-_=+\[\]{};:,.<>?/\\|~]').hasMatch(p)) {
-            fieldErrors['password'] = 'Au moins 1 caractère spécial requis (!@#...)';
-            v = false;
-          }
         }
         if (ageCont.text.trim().isEmpty) {
           fieldErrors['age'] = 'Âge requis';
@@ -415,10 +371,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['mobile'] = 'Téléphone requis';
           v = false;
         } else if (selectedCountry.countryCode == 'SN' &&
-            !RegExp(r'^(70|71|75|76|77|78|79)\d{7}$')
-                .hasMatch(mobileCont.text.trim())) {
-          fieldErrors['mobile'] =
-              'Numéro invalide (9 chiffres, ex: 77 123 45 67)';
+            validateSenegalPhone(mobileCont.text.trim()) != null) {
+          fieldErrors['mobile'] = validateSenegalPhone(mobileCont.text.trim());
           v = false;
         } else if (mobileCont.text.trim().length < 6) {
           fieldErrors['mobile'] = 'Numéro trop court';
@@ -450,7 +404,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           v = false;
         }
         if (hasOtherProfessions == null) {
-          fieldErrors['hasOtherProfessions'] = 'Merci de répondre à cette question';
+          hasOtherProfessions = false;
           v = false;
         } else if (hasOtherProfessions == true) {
           if (selectedOtherProfessions.isEmpty) {
@@ -691,10 +645,14 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     return Padding(
       padding: const EdgeInsets.only(top: 5, left: 2),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.error_outline, size: 13, color: Colors.red),
           4.width,
-          Text(e, style: const TextStyle(color: Colors.red, fontSize: 11.5)),
+          // Expanded : le message passe à la ligne au lieu d'être coupé
+          Expanded(
+            child: Text(e, style: const TextStyle(color: Colors.red, fontSize: 11.5)),
+          ),
         ],
       ),
     );
@@ -723,7 +681,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: primaryColor, width: 1.5),
+        borderSide: BorderSide(color: _brandGold, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -743,72 +701,65 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     required String errorKey,
     required ValueChanged<String?> onChanged,
   }) {
-    return Theme(
-      data: Theme.of(context).copyWith(canvasColor: context.cardColor),
-      child: DropdownButtonFormField<String>(
-        initialValue: value,
-        isExpanded: true,
-        icon: Icon(Icons.keyboard_arrow_down_rounded,
-            color: textSecondaryColorGlobal),
-        dropdownColor: context.cardColor,
-        style: primaryTextStyle(size: 14),
-        decoration: _dec(hint),
-        items: options
-            .map((o) => DropdownMenuItem<String>(
-                  value: o,
-                  child: Text(o,
-                      style: primaryTextStyle(size: 14),
-                      overflow: TextOverflow.ellipsis),
-                ))
-            .toList(),
-        onChanged: onChanged,
-      ),
-    );
-  }
-
-  Widget _buildYesNoField({
-    required bool? value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    Widget option(String label, bool optionValue) {
-      final selected = value == optionValue;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onChanged(optionValue);
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? primaryColor : context.cardColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: selected
-                    ? primaryColor
-                    : Colors.grey.withValues(alpha: 0.2),
-              ),
-            ),
-            child: Text(label,
-                style: boldTextStyle(
-                    size: 14,
-                    color: selected ? Colors.white : textPrimaryColorGlobal)),
-          ),
-        ),
-      );
-    }
-
-    return Row(
-      children: [
-        option('Oui', true),
-        12.width,
-        option('Non', false),
-      ],
+    return AnimatedDropdown<String>(
+      hint: hint,
+      value: value,
+      options: options.map((o) => DropdownOption(o, o)).toList(),
+      accentColor: _brandGold,
+      hasError: fieldErrors[errorKey] != null,
+      onChanged: onChanged,
     );
   }
 
   // ── Step indicator ────────────────────────────────────────────────────────
+
+  /// Icône maison + « Mison », comme sur l'inscription client.
+  Widget _buildBrandRow() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 34, height: 34,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            gradient: LinearGradient(colors: [
+              _brandGold,
+              _brandGold.withValues(alpha: 0.65)
+            ]),
+            boxShadow: [
+              BoxShadow(
+                  color: _brandGold.withValues(alpha: 0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4))
+            ],
+          ),
+          child: const Icon(Icons.home_work_rounded,
+              color: Colors.white, size: 18),
+        ),
+        12.width,
+        RichText(
+          text: const TextSpan(children: [
+            TextSpan(
+              text: 'Mi',
+              style: TextStyle(
+                  color: _brandDark,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5),
+            ),
+            TextSpan(
+              text: 'son',
+              style: TextStyle(
+                  color: _brandGold,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5),
+            ),
+          ]),
+        ),
+      ],
+    );
+  }
 
   Widget _buildStepIndicator() {
     return Container(
@@ -829,6 +780,12 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       ),
       child: Column(
         children: [
+          // Icône + « Mison » sous la flèche retour
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _buildBrandRow(),
+          ),
+          18.height,
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             transitionBuilder: (child, anim) => FadeTransition(
@@ -843,7 +800,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             child: Text(
               'Étape ${currentStep + 1}/$totalSteps · ${_getStepTitle(currentStep)}',
               key: ValueKey(currentStep),
-              style: boldTextStyle(size: 15, color: primaryColor),
+              style: boldTextStyle(size: 15, color: _brandGold),
             ),
           ),
           14.height,
@@ -867,11 +824,11 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                           height: current ? 34 : 26,
                           decoration: BoxDecoration(
                             color: done || current
-                                ? primaryColor
+                                ? _brandGold
                                 : Colors.grey.withValues(alpha: 0.18),
                             shape: BoxShape.circle,
                             boxShadow: current
-                                ? [BoxShadow(color: primaryColor.withValues(alpha: 0.35), blurRadius: 8)]
+                                ? [BoxShadow(color: _brandGold.withValues(alpha: 0.35), blurRadius: 8)]
                                 : null,
                           ),
                           child: Center(
@@ -891,7 +848,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                           height: 3,
                           decoration: BoxDecoration(
                             color: done || current
-                                ? primaryColor
+                                ? _brandGold
                                 : Colors.grey.withValues(alpha: 0.18),
                             borderRadius: BorderRadius.circular(2),
                           ),
@@ -901,7 +858,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                             style: secondaryTextStyle(
                                 size: 10,
                                 color: done || current
-                                    ? primaryColor
+                                    ? _brandGold
                                     : textSecondaryColorGlobal),
                             textAlign: TextAlign.center,
                             maxLines: 1,
@@ -987,10 +944,12 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           controller: passwordCont,
           focusNode: passwordFocus,
           obscureText: _obscurePassword,
+          keyboardType: pinKeyboardType,
+          inputFormatters: pinInputFormatters,
           textInputAction: TextInputAction.next,
           onSubmitted: (_) => mobileFocus.requestFocus(),
           style: primaryTextStyle(),
-          decoration: _dec('Mot de passe *',
+          decoration: _dec('Code PIN (4 chiffres) *',
               prefix: Icon(Icons.lock_outline_rounded,
                   size: 20, color: textSecondaryColorGlobal)).copyWith(
             suffixIcon: IconButton(
@@ -1022,56 +981,20 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         20.height,
 
         // Nationalité
-        GestureDetector(
-          onTap: changeNationality,
-          child: Container(
-            decoration: BoxDecoration(
-              color: context.cardColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: fieldErrors['nationality'] != null
-                    ? Colors.red
-                    : Colors.grey.withValues(alpha: 0.15),
-                width: 1,
-              ),
-            ),
-            padding: EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: selectedNationalityCountry != null ? 10 : 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: selectedNationalityCountry != null
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('Nationalité *',
-                                style: secondaryTextStyle(size: 11)),
-                            2.height,
-                            Row(
-                              children: [
-                                Text(selectedNationalityCountry!.flagEmoji,
-                                    style: const TextStyle(fontSize: 18)),
-                                8.width,
-                                Expanded(
-                                  child: Text(
-                                      selectedNationalityCountry!.name,
-                                      style: primaryTextStyle(size: 14),
-                                      overflow: TextOverflow.ellipsis),
-                                ),
-                              ],
-                            ),
-                          ],
-                        )
-                      : Text('Nationalité *',
-                          style: secondaryTextStyle(size: 13)),
-                ),
-                Icon(Icons.arrow_drop_down,
-                    size: 20, color: textSecondaryColorGlobal),
-              ],
-            ),
-          ),
+        AnimatedDropdown<String>(
+          hint: 'Nationalité *',
+          value: selectedNationalityCountry?.countryCode,
+          options: _allCountries
+              .map((c) => DropdownOption(c.countryCode, '${c.flagEmoji}  ${_countryName(c)}'))
+              .toList(),
+          accentColor: _brandGold,
+          hasError: fieldErrors['nationality'] != null,
+          searchable: true,
+          searchHint: 'Rechercher un pays',
+          onChanged: (code) => setState(() {
+            selectedNationalityCountry = CountryService().findByCode(code);
+            fieldErrors.remove('nationality');
+          }),
         ),
         _fieldError('nationality'),
         20.height,
@@ -1106,62 +1029,106 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         _fieldError('department'),
         20.height,
 
-        // Téléphone
-        Container(
-          decoration: BoxDecoration(
-            color: context.cardColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: fieldErrors['mobile'] != null
-                  ? Colors.red
-                  : Colors.grey.withValues(alpha: 0.15),
-              width: fieldErrors['mobile'] != null ? 1 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: changeCountry,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      right: BorderSide(color: Colors.grey.withValues(alpha: 0.18)),
+        // Téléphone : indicatif (liste animée) + numéro sur la même ligne
+        AnimatedDropdown<String>(
+          hint: 'Indicatif *',
+          value: selectedCountry.countryCode,
+          options: _allCountries
+              .map((c) => DropdownOption(
+                  c.countryCode, '${c.flagEmoji}  +${c.phoneCode}  ${_countryName(c)}'))
+              .toList(),
+          accentColor: _brandGold,
+          searchable: true,
+          searchHint: 'Rechercher un pays ou un indicatif',
+          onChanged: (code) => setState(() {
+            selectedCountry = CountryService().findByCode(code) ?? selectedCountry;
+            fieldErrors.remove('mobile');
+          }),
+          triggerBuilder: (context, _, isOpen, toggle) =>
+              Container(
+              decoration: BoxDecoration(
+                color: context.cardColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: fieldErrors['mobile'] != null
+                      ? Colors.red
+                      : isOpen
+                          ? _brandGold
+                          : Colors.grey.withValues(alpha: 0.15),
+                  width: fieldErrors['mobile'] != null ? 1 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Indicatif : ouvre la liste des pays sous le champ
+                  GestureDetector(
+                    onTap: toggle,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          right: BorderSide(color: Colors.grey.withValues(alpha: 0.18)),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${selectedCountry.flagEmoji} +${selectedCountry.phoneCode}',
+                              style: primaryTextStyle(size: 14)),
+                          2.width,
+                          AnimatedRotation(
+                            turns: isOpen ? 0.5 : 0,
+                            duration: const Duration(milliseconds: 200),
+                            child: Icon(Icons.keyboard_arrow_down_rounded,
+                                size: 20,
+                                color: isOpen ? _brandGold : textSecondaryColorGlobal),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('+${selectedCountry.phoneCode}',
-                          style: primaryTextStyle(size: 14)),
-                      4.width,
-                      Icon(Icons.arrow_drop_down,
-                          size: 18, color: textSecondaryColorGlobal),
-                    ],
+                  Expanded(
+                    child: TextField(
+                      controller: mobileCont,
+                      focusNode: mobileFocus,
+                      keyboardType: TextInputType.phone,
+                      // Chiffres uniquement, 9 max au Sénégal
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(_phoneMaxLength),
+                      ],
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                      style: primaryTextStyle(),
+                      decoration: InputDecoration(
+                        hintText: selectedCountry.countryCode == 'SN'
+                            ? 'Téléphone * (ex: 77 123 45 67)'
+                            : 'Numéro de téléphone *',
+                        hintStyle: secondaryTextStyle(size: 14),
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                      ),
+                      onChanged: (_) => setState(() => fieldErrors.remove('mobile')),
+                    ),
                   ),
-                ),
+                ],
               ),
-              Expanded(
-                child: TextField(
-                  controller: mobileCont,
-                  focusNode: mobileFocus,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                  style: primaryTextStyle(),
-                  decoration: const InputDecoration(
-                    hintText: 'Numéro de téléphone *',
-                    border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                  ),
-                  onChanged: (_) => setState(() => fieldErrors.remove('mobile')),
-                ),
-              ),
-            ],
-          ),
+            ),
         ),
-        _fieldError('mobile'),
+
+        // Erreur à gauche, compteur de chiffres à droite
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _fieldError('mobile')),
+            Padding(
+              padding: const EdgeInsets.only(top: 5, right: 4),
+              child: Text('${mobileCont.text.length}/$_phoneMaxLength',
+                  style: secondaryTextStyle(size: 12)),
+            ),
+          ],
+        ),
         20.height,
 
         // Comptes Mobile Money disponibles
@@ -1196,7 +1163,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                       child: Checkbox(
                         value: selected,
                         onChanged: (_) => toggle(),
-                        activeColor: primaryColor,
+                        activeColor: _brandGold,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         visualDensity: VisualDensity.compact,
                       ),
@@ -1206,7 +1173,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                       child: Text(option,
                           style: secondaryTextStyle(
                               size: 11,
-                              color: selected ? primaryColor : textPrimaryColorGlobal),
+                              color: selected ? _brandGold : textPrimaryColorGlobal),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis),
                     ),
@@ -1288,70 +1255,37 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2),
+                  child: CircularProgressIndicator(color: _brandGold, strokeWidth: 2),
                 ),
               )
-            : Theme(
-                data: Theme.of(context).copyWith(
-                  canvasColor: context.cardColor,
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: context.cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: fieldErrors['service'] != null
-                          ? Colors.red
-                          : primaryColor.withValues(alpha:
-                              selectedServiceId != null ? 0.5 : 0),
-                      width: selectedServiceId != null || fieldErrors['service'] != null
-                          ? 1.5
-                          : 0,
-                    ),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: DropdownButton<String>(
-                    value: selectedServiceId,
-                    isExpanded: true,
-                    underline: const SizedBox.shrink(),
-                    style: primaryTextStyle(size: 14),
-                    dropdownColor: context.cardColor,
-                    iconEnabledColor: textSecondaryColorGlobal,
-                    hint: Text('Sélectionnez un métier',
-                        style: secondaryTextStyle(size: 14)),
-                    items: [
-                      ...serviceOptions.map((s) {
-                        return DropdownMenuItem<String>(
-                          value: s['id'],
-                          child: Text(s['name'] ?? '',
-                              style: primaryTextStyle(size: 14),
-                              overflow: TextOverflow.ellipsis),
-                        );
-                      }),
-                      DropdownMenuItem<String>(
-                        value: otherServiceValue,
-                        child: Text('Autre', style: primaryTextStyle(size: 14)),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      setState(() {
-                        selectedServiceId = val;
-                        fieldErrors.remove('service');
-                        if (val == otherServiceValue) {
-                          professionCont.text = '';
-                        } else {
-                          final sel = serviceOptions.firstWhere(
-                              (e) => e['id'] == val,
-                              orElse: () => {});
-                          professionCont.text =
-                              sel.isNotEmpty ? (sel['name'] ?? '') : '';
-                          customMetierCont.clear();
-                          fieldErrors.remove('customMetier');
-                        }
-                      });
-                    },
-                  ),
-                ),
+            : AnimatedDropdown<String>(
+                hint: 'Sélectionnez un métier',
+                value: selectedServiceId,
+                options: [
+                  ...serviceOptions.map((s) => DropdownOption(s['id'] ?? '', s['name'] ?? '')),
+                  DropdownOption(otherServiceValue, 'Autre'),
+                ],
+                accentColor: _brandGold,
+                hasError: fieldErrors['service'] != null,
+                onChanged: (val) {
+                  setState(() {
+                    selectedServiceId = val;
+                    fieldErrors.remove('service');
+                    if (val == otherServiceValue) {
+                      professionCont.text = '';
+                    } else {
+                      final sel = serviceOptions.firstWhere(
+                          (e) => e['id'] == val,
+                          orElse: () => {});
+                      professionCont.text =
+                          sel.isNotEmpty ? (sel['name'] ?? '') : '';
+                      // Le métier principal ne peut pas être aussi secondaire
+                      selectedOtherProfessions.remove(sel['name']);
+                      customMetierCont.clear();
+                      fieldErrors.remove('customMetier');
+                    }
+                  });
+                },
               ),
         _fieldError('service'),
         if (selectedServiceId == otherServiceValue) ...[
@@ -1388,95 +1322,152 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         _fieldError('experience'),
         20.height,
 
-        // Autres métiers maîtrisés
-        Text("Avez-vous d'autres métiers en parallèle que vous maîtrisez ? *",
+        // Autres métiers maîtrisés : case à cocher = oui, ouvre la liste
+        Text("Avez-vous d'autres métiers en parallèle que vous maîtrisez ?",
             style: secondaryTextStyle(size: 13)),
         8.height,
-        _buildYesNoField(
-          value: hasOtherProfessions,
-          onChanged: (val) => setState(() {
-            hasOtherProfessions = val;
-            fieldErrors.remove('hasOtherProfessions');
-            if (val == false) {
-              selectedOtherProfessions.clear();
-              otherProfessionCustomCont.clear();
-              fieldErrors.remove('otherProfessions');
-              fieldErrors.remove('otherProfessionCustom');
-            }
-          }),
-        ),
-        _fieldError('hasOtherProfessions'),
-
-        if (hasOtherProfessions == true) ...[
-          20.height,
-          Text('Sélectionnez les autres métiers que vous maîtrisez *',
-              style: secondaryTextStyle(size: 13)),
-          8.height,
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: secondaryProfessionOptions.map((option) {
-              final selected = selectedOtherProfessions.contains(option);
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() {
-                    if (selected) {
-                      selectedOtherProfessions.remove(option);
-                      if (option == 'Autre') otherProfessionCustomCont.clear();
-                    } else {
-                      selectedOtherProfessions.add(option);
-                    }
-                    fieldErrors.remove('otherProfessions');
-                  });
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        GestureDetector(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() {
+              hasOtherProfessions = !(hasOtherProfessions ?? false);
+              if (hasOtherProfessions == false) {
+                selectedOtherProfessions.clear();
+                otherProfessionCustomCont.clear();
+                fieldErrors.remove('otherProfessions');
+                fieldErrors.remove('otherProfessionCustom');
+              }
+            });
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: hasOtherProfessions == true
+                  ? _brandGold.withValues(alpha: 0.08)
+                  : context.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: hasOtherProfessions == true
+                    ? _brandGold
+                    : Colors.grey.withValues(alpha: 0.15),
+                width: hasOtherProfessions == true ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 22,
+                  height: 22,
                   decoration: BoxDecoration(
-                    color: selected ? primaryColor : context.cardColor,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(6),
+                    color: hasOtherProfessions == true
+                        ? _brandGold
+                        : Colors.transparent,
                     border: Border.all(
-                      color: selected
-                          ? primaryColor
-                          : Colors.grey.withValues(alpha: 0.25),
+                      color: hasOtherProfessions == true
+                          ? _brandGold
+                          : _brandDark,
+                      width: 1.5,
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (selected) ...[
-                        const Icon(Icons.check_rounded,
-                            color: Colors.white, size: 14),
-                        6.width,
-                      ],
-                      Text(option,
-                          style: boldTextStyle(
-                              size: 13,
-                              color: selected
-                                  ? Colors.white
-                                  : textPrimaryColorGlobal)),
-                    ],
-                  ),
+                  child: hasOtherProfessions == true
+                      ? const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 16)
+                      : null,
                 ),
-              );
-            }).toList(),
-          ),
-          _fieldError('otherProfessions'),
-          if (selectedOtherProfessions.contains('Autre')) ...[
-            12.height,
-            TextField(
-              controller: otherProfessionCustomCont,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => FocusScope.of(context).unfocus(),
-              style: primaryTextStyle(),
-              decoration: _dec('Précisez le métier *'),
-              onChanged: (_) =>
-                  setState(() => fieldErrors.remove('otherProfessionCustom')),
+                12.width,
+                Expanded(
+                  child: Text("Oui, j'ai d'autres métiers",
+                      style: boldTextStyle(size: 14, color: _brandDark)),
+                ),
+              ],
             ),
-            _fieldError('otherProfessionCustom'),
-          ],
-        ],
+          ),
+        ),
+
+        // Liste des métiers : s'ouvre en douceur quand la case est cochée
+        AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: hasOtherProfessions == true
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                  20.height,
+                  Text('Sélectionnez les autres métiers que vous maîtrisez *',
+                      style: secondaryTextStyle(size: 13)),
+                  8.height,
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: secondaryProfessionOptions.map((option) {
+                      final selected = selectedOtherProfessions.contains(option);
+                      return GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() {
+                            if (selected) {
+                              selectedOtherProfessions.remove(option);
+                              if (option == 'Autre') otherProfessionCustomCont.clear();
+                            } else {
+                              selectedOtherProfessions.add(option);
+                            }
+                            fieldErrors.remove('otherProfessions');
+                          });
+                        },
+                        child: Container(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: selected ? _brandGold : context.cardColor,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: selected
+                                  ? _brandGold
+                                  : Colors.grey.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (selected) ...[
+                                const Icon(Icons.check_rounded,
+                                    color: Colors.white, size: 14),
+                                6.width,
+                              ],
+                              Text(option,
+                                  style: boldTextStyle(
+                                      size: 13,
+                                      color: selected
+                                          ? Colors.white
+                                          : textPrimaryColorGlobal)),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  _fieldError('otherProfessions'),
+                  if (selectedOtherProfessions.contains('Autre')) ...[
+                    12.height,
+                    TextField(
+                      controller: otherProfessionCustomCont,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                      style: primaryTextStyle(),
+                      decoration: _dec('Précisez le métier *'),
+                      onChanged: (_) =>
+                          setState(() => fieldErrors.remove('otherProfessionCustom')),
+                    ),
+                    _fieldError('otherProfessionCustom'),
+                  ],
+                  ],
+                )
+              : const SizedBox(width: double.infinity),
+        ),
         20.height,
 
         // Adresse
@@ -1494,16 +1485,16 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                       width: 14,
                       height: 14,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: primaryColor),
+                          strokeWidth: 2, color: _brandGold),
                     )
                   : Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.my_location_rounded,
-                            size: 15, color: primaryColor),
+                            size: 15, color: _brandGold),
                         4.width,
                         Text('Ma position',
-                            style: boldTextStyle(size: 12, color: primaryColor)),
+                            style: boldTextStyle(size: 12, color: _brandGold)),
                       ],
                     ),
             ),
@@ -1518,7 +1509,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
               color: fieldErrors['address'] != null
                   ? Colors.red
                   : addressCont.text.isNotEmpty
-                      ? primaryColor.withValues(alpha: 0.4)
+                      ? _brandGold.withValues(alpha: 0.4)
                       : Colors.grey.withValues(alpha: 0.15),
               width: fieldErrors['address'] != null || addressCont.text.isNotEmpty
                   ? 1.5
@@ -1538,7 +1529,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
               hintStyle: secondaryTextStyle(size: 13),
               prefixIcon: Icon(Icons.location_on_outlined,
                   color: addressCont.text.isNotEmpty
-                      ? primaryColor
+                      ? _brandGold
                       : textSecondaryColorGlobal,
                   size: 20),
               border: InputBorder.none,
@@ -1586,7 +1577,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           isUploaded: profileImageFile != null,
           previewBytes: profileImageBytes,
           isCircle: true,
-          accentColor: primaryColor,
+          accentColor: _brandGold,
           icon: Icons.person_rounded,
           onTap: () {
             pickImage();
@@ -1609,7 +1600,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           isUploaded: identityFile != null,
           previewBytes: identityBytes,
           isCircle: false,
-          accentColor: const Color(0xFF3B82F6),
+          accentColor: _brandGold,
           icon: Icons.badge_outlined,
           hint: 'CNI · Passeport · Permis',
           onTap: () {
@@ -1633,7 +1624,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           isUploaded: professionProofFile != null,
           previewBytes: professionProofBytes,
           isCircle: false,
-          accentColor: const Color(0xFFF59E0B),
+          accentColor: _brandGold,
           icon: Icons.workspace_premium_outlined,
           hint: 'Diplôme · Certificat · Recommandation',
           onTap: pickProfessionProof,
@@ -1699,7 +1690,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                         TextSpan(text: '${language.lblAgree} '),
                         TextSpan(
                           text: language.lblTermsOfService,
-                          style: boldTextStyle(color: primaryColor, size: 13),
+                          style: boldTextStyle(color: _brandGold, size: 13),
                           recognizer: TapGestureRecognizer()
                             ..onTap = () => checkIfLink(
                                 context, appConfigurationStore.termConditions,
@@ -1708,7 +1699,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                         const TextSpan(text: ' & '),
                         TextSpan(
                           text: language.privacyPolicy,
-                          style: boldTextStyle(color: primaryColor, size: 13),
+                          style: boldTextStyle(color: _brandGold, size: 13),
                           recognizer: TapGestureRecognizer()
                             ..onTap = () => checkIfLink(
                                 context, appConfigurationStore.privacyPolicy,
@@ -1919,11 +1910,11 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                 child: Container(
                   height: 52,
                   decoration: BoxDecoration(
-                    color: primaryColor,
+                    color: _brandGold,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: primaryColor.withValues(alpha: 0.3),
+                        color: _brandGold.withValues(alpha: 0.3),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -1974,7 +1965,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                   TextSpan(text: '${language.alreadyHaveAccountTxt} '),
                   TextSpan(
                     text: language.signIn,
-                    style: boldTextStyle(color: primaryColor, size: 16),
+                    style: boldTextStyle(color: _brandGold, size: 16),
                   ),
                 ],
               ),
@@ -2068,7 +2059,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            LoaderWidget(),
+                            LoaderWidget(colors: const [_brandDark, _brandGold]),
                             if (isRegistering) ...[
                               14.height,
                               Text('Inscription en cours...',
@@ -2171,7 +2162,7 @@ class _SheetOption extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, size: 22, color: primaryColor),
+            Icon(icon, size: 22, color: _brandGold),
             14.width,
             Text(label, style: boldTextStyle(size: 14)),
           ],
