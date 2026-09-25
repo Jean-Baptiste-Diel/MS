@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
+import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
@@ -103,7 +104,14 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
       if (!mounted) return;
       setState(() => _isAccepting = false);
       FlutterCallkitIncoming.endCall(widget.orderId).catchError((_) {});
-      TopToast.show(message: 'Impossible de rejoindre l\'appel');
+      if (isNotFoundError(e)) {
+        // Appel destiné à un autre compte (ex. ancien compte de ce téléphone) :
+        // inutile de rester sur l'écran d'appel.
+        TopToast.show(message: kOrderUnavailableMessage, type: TopToastType.error);
+        Navigator.pop(context);
+      } else {
+        TopToast.show(message: 'Impossible de rejoindre l\'appel');
+      }
     }
   }
 
@@ -130,7 +138,7 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F2F4),
+      backgroundColor: const Color(0xFFFFFFFF),
       body: DotGridBackground(
         child: SafeArea(
           child: Column(

@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:booking_system_flutter/component/mison_view_all_button.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
@@ -70,23 +71,9 @@ class _MisonArtisanListComponentState extends State<MisonArtisanListComponent> {
                   Text('Choisissez votre expert', style: secondaryTextStyle(size: 14)),
                 ],
               ),
-              GestureDetector(
+              // Bouton « Voir tout › » doré de l'accueil
+              MisonViewAllButton(
                 onTap: () => const MisonArtisanListScreen().launch(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: kMisonGold.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: kMisonGold.withValues(alpha: 0.18),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Text('Voir tout', style: boldTextStyle(color: kMisonGold, size: 14)),
-                ),
               ),
             ],
           ),
@@ -110,6 +97,14 @@ class _MisonArtisanListComponentState extends State<MisonArtisanListComponent> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Card partagée (utilisée aussi dans MisonArtisanListScreen)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Initiale du prénom de l'ouvrier, en doré (quand il n'y a pas de photo).
+Widget _initial(MisonArtisanInfo artisan) => Center(
+      child: Text(
+        artisan.fullName.isNotEmpty ? artisan.fullName[0].toUpperCase() : '?',
+        style: boldTextStyle(color: kMisonGold, size: 24),
+      ),
+    );
 
 class ArtisanCard extends StatelessWidget {
   final MisonArtisanInfo artisan;
@@ -136,6 +131,7 @@ class ArtisanCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Avatar
+            // Photo (initiale dorée si absente ou en erreur)
             Container(
               width: 62,
               height: 62,
@@ -143,18 +139,15 @@ class ArtisanCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: kMisonGold.withValues(alpha: 0.07),
                 border: Border.all(color: kMisonGold.withValues(alpha: 0.18), width: 2),
-                image: artisan.profilePictureUrl != null
-                    ? DecorationImage(image: CachedNetworkImageProvider(artisan.profilePictureUrl!), fit: BoxFit.cover)
-                    : null,
               ),
-              child: artisan.profilePictureUrl == null
-                  ? Center(
-                      child: Text(
-                        artisan.fullName.isNotEmpty ? artisan.fullName[0].toUpperCase() : '?',
-                        style: boldTextStyle(color: kMisonGold, size: 24),
-                      ),
+              clipBehavior: Clip.antiAlias,
+              child: (artisan.profilePictureUrl ?? '').trim().isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: artisan.profilePictureUrl!.trim(),
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => _initial(artisan),
                     )
-                  : null,
+                  : _initial(artisan),
             ),
             10.height,
 

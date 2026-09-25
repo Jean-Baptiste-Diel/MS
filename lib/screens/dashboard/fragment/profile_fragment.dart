@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
@@ -11,7 +12,6 @@ import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/screens/setting_screen.dart';
 import 'package:booking_system_flutter/screens/support_chat/support_chat_screen.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
@@ -29,13 +29,16 @@ class ProfileFragment extends StatefulWidget {
 class ProfileFragmentState extends State<ProfileFragment> {
   final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
 
+  /// Métier principal (prestataire uniquement), lu depuis /api/auth/me.
+  String _profession = '';
+
   @override
   void initState() {
     super.initState();
     init();
     afterBuildCreated(() {
       appStore.setLoading(false);
-      setStatusBarColor(context.primaryColor);
+      setStatusBarColor(Colors.transparent, statusBarIconBrightness: Brightness.dark);
     });
   }
 
@@ -76,6 +79,10 @@ class ProfileFragmentState extends State<ProfileFragment> {
     if (data.email.validate().isNotEmpty) {
       await appStore.setUserEmail(data.email.validate());
     }
+    if (data.contactNumber.validate().isNotEmpty) {
+      await appStore.setContactNumber(data.contactNumber.validate());
+    }
+    _profession = data.designation.validate();
 
     // /api/auth/me returns profile_picture_url; store it for all avatar widgets.
     await appStore.setUserProfile(data.profileImage.validate());
@@ -87,45 +94,34 @@ class ProfileFragmentState extends State<ProfileFragment> {
     setState(() {});
   }
 
+  /// Suppression du compte : panneau Mison (explications, code PIN,
+  /// messages clairs du serveur), puis nettoyage et retour à l'accueil.
   void _deleteAccount() {
-    showConfirmDialogCustom(
-      context,
-      negativeText: language.lblCancel,
-      positiveText: language.lblDelete,
-      onAccept: (_) {
-        ifNotTester(() {
-          appStore.setLoading(true);
+    ifNotTester(() async {
+      final message = await showMisonDeleteAccountSheet(context);
+      if (message == null) return; // annulé
 
-          deleteAccountCompletely().then((value) async {
-            try {
-              await userService.removeDocument(appStore.uid);
-              await userService.deleteUser();
-            } catch (_) {}
+      appStore.setLoading(true);
+      try {
+        await userService.removeDocument(appStore.uid);
+        await userService.deleteUser();
+      } catch (_) {}
+      await clearPreferences();
+      appStore.setLoading(false);
 
-            appStore.setLoading(false);
-            await clearPreferences();
-            TopToast.show(message: value.message.validate());
-
-            push(
-              DashboardScreen(),
-              isNewTask: true,
-              pageRouteAnimation: PageRouteAnimation.Fade,
-            );
-          }).catchError((e) {
-            appStore.setLoading(false);
-            TopToast.show(message: e.toString(), type: TopToastType.error);
-          });
-        });
-      },
-      dialogType: DialogType.DELETE,
-      title: language.lblDeleteAccountConformation,
-    );
+      TopToast.show(message: message, type: TopToastType.success);
+      push(
+        DashboardScreen(),
+        isNewTask: true,
+        pageRouteAnimation: PageRouteAnimation.Fade,
+      );
+    });
   }
 
   Widget _sectionTitle(String title, {Color? color}) {
     return Text(
       title,
-      style: boldTextStyle(size: 16, color: color ?? primaryColor),
+      style: boldTextStyle(size: 16, color: color ?? kMisonGold),
     ).paddingOnly(left: 4, bottom: 10, top: 20);
   }
 
@@ -158,7 +154,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
     Color? accent,
     Color? titleColor,
   }) {
-    final Color itemAccent = accent ?? context.primaryColor;
+    final Color itemAccent = accent ?? kMisonGold;
 
     return InkWell(
       onTap: onTap,
@@ -217,8 +213,8 @@ class ProfileFragmentState extends State<ProfileFragment> {
       decoration: boxDecorationWithRoundedCorners(
         borderRadius: radius(18),
         backgroundColor:
-            appStore.isDarkMode ? context.cardColor : lightPrimaryColor,
-        border: Border.all(color: primaryColor.withValues(alpha: 0.55)),
+            appStore.isDarkMode ? context.cardColor : kMisonGold.withValues(alpha: 0.08),
+        border: Border.all(color: kMisonGold.withValues(alpha: 0.45)),
       ),
       child: Column(
         children: [
@@ -234,7 +230,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: primaryColor.withValues(alpha: 0.2),
+                      color: kMisonGold.withValues(alpha: 0.2),
                       width: 1.5,
                     ),
                   ),
@@ -253,8 +249,8 @@ class ProfileFragmentState extends State<ProfileFragment> {
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [
-                                primaryColor.withValues(alpha: 0.22),
-                                primaryColor.withValues(alpha: 0.08),
+                                kMisonGold.withValues(alpha: 0.22),
+                                kMisonGold.withValues(alpha: 0.08),
                               ],
                             ),
                           ),
@@ -262,7 +258,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
                           child: Icon(
                             Icons.person_rounded,
                             size: 44,
-                            color: primaryColor.withValues(alpha: 0.72),
+                            color: kMisonGold.withValues(alpha: 0.72),
                           ),
                         ),
                 );
@@ -273,17 +269,56 @@ class ProfileFragmentState extends State<ProfileFragment> {
                 children: [
                   Text(
                     appStore.userFullName.validate(),
-                    style: boldTextStyle(size: 18, color: primaryColor),
+                    style: boldTextStyle(size: 18, color: kMisonDark),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  4.height,
-                  Text(
-                    appStore.userEmail.validate(),
-                    style: secondaryTextStyle(size: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  // Métier principal du prestataire
+                  if (_profession.isNotEmpty) ...[
+                    4.height,
+                    Row(children: [
+                      const Icon(Icons.handyman_rounded, size: 14, color: kMisonGold),
+                      4.width,
+                      Flexible(
+                        child: Text(
+                          _profession,
+                          style: boldTextStyle(size: 14, color: kMisonGold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ]),
+                  ],
+                  if (appStore.userContactNumber.validate().isNotEmpty) ...[
+                    4.height,
+                    Row(children: [
+                      const Icon(Icons.phone_rounded, size: 14, color: kMisonGold),
+                      4.width,
+                      Flexible(
+                        child: Text(
+                          appStore.userContactNumber.validate(),
+                          style: secondaryTextStyle(size: 14),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ]),
+                  ],
+                  if (appStore.userEmail.validate().isNotEmpty) ...[
+                    4.height,
+                    Row(children: [
+                      const Icon(Icons.mail_outline_rounded, size: 14, color: kMisonGold),
+                      4.width,
+                      Flexible(
+                        child: Text(
+                          appStore.userEmail.validate(),
+                          style: secondaryTextStyle(size: 14),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ]),
+                  ],
                 ],
               ).expand(),
             ],
@@ -314,7 +349,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
           AppButton(
             width: context.width(),
             text: 'Se connecter',
-            color: primaryColor,
+            color: kMisonGold,
             textStyle: boldTextStyle(color: white),
             onTap: () {
               const SignInScreen().launch(context);
@@ -366,7 +401,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
                         ),
                         _menuItem(
                           title: 'Sécurité',
-                          subtitle: 'Changer votre mot de passe',
+                          subtitle: 'Changer votre code PIN',
                           icon: ic_lock,
                           onTap: () {
                             ChangePasswordScreen().launch(context);
@@ -396,7 +431,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
                       ]),
                     ],
                     _sectionTitle('Session',
-                        color: appStore.isLoggedIn ? redColor : primaryColor),
+                        color: appStore.isLoggedIn ? redColor : kMisonGold),
                     _menuCard([
                       if (!appStore.isLoggedIn)
                         _menuItem(
@@ -453,7 +488,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
               ),
               Observer(
                   builder: (context) =>
-                      LoaderWidget().visible(appStore.isLoading)),
+                      LoaderWidget(colors: const [kMisonDark, kMisonGold]).visible(appStore.isLoading)),
             ],
           );
         },

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'package:booking_system_flutter/component/ongoing_call_banner.dart';
 import 'package:booking_system_flutter/app_theme.dart';
 import 'package:booking_system_flutter/firebase_options.dart';
 import 'package:booking_system_flutter/locale/app_localizations.dart';
@@ -416,7 +417,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 ],
                 builder: (context, child) {
                   return MediaQuery(
-                    child: child!,
+                    // Barre « Appel en cours » quand l'écran d'appel est réduit.
+                    child: OngoingCallBanner(child: child!),
                     data: MediaQuery.of(context)
                         .copyWith(textScaler: TextScaler.linear(1.0)),
                   );

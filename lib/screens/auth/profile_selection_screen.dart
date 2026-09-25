@@ -33,7 +33,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F2F4),
+      backgroundColor: const Color(0xFFFFFFFF),
       extendBodyBehindAppBar: true,
       body: DotGridBackground(
         child: Column(
@@ -104,7 +104,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
     return SliverAppBar(
       pinned: true,
       expandedHeight: 240,
-      backgroundColor: const Color(0xFFF1F2F4),
+      backgroundColor: const Color(0xFFFFFFFF),
       elevation: 0,
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,

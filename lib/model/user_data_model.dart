@@ -276,6 +276,13 @@ class UserData {
       userType: userType,
       apiToken: accessToken,
       profileImage: json['profile_picture_url'],
+      contactNumber: json['phone']?.toString(),
+      // Métier principal du prestataire (artisan.profession_name, sinon le service)
+      designation: (json['artisan'] is Map)
+          ? ((json['artisan']['profession_name']?.toString().isNotEmpty == true)
+              ? json['artisan']['profession_name'].toString()
+              : (json['artisan']['service'] is Map ? json['artisan']['service']['name']?.toString() : null))
+          : null,
       // If user can login, they are verified. Default to 1 (active) if not specified
       status: json['is_verified'] == false ? 0 : 1,
       emailVerified: json['is_verified'] == false ? 0 : 1,

@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/base_scaffold_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
@@ -75,6 +76,7 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Widget build(BuildContext context) {
     return AppScaffold(
       appBarTitle: language.changePassword,
+      useMisonHeader: true,
       child: SingleChildScrollView(
         padding: EdgeInsets.all(16),
         child: Form(
@@ -150,7 +152,7 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
               24.height,
               AppButton(
                 text: language.confirm,
-                color: primaryColor,
+                color: kMisonGold,
                 textColor: Colors.white,
                 width: context.width() - context.navigationBarHeight,
                 onTap: () {

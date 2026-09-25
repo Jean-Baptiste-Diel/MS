@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
@@ -5,7 +6,6 @@ import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 
@@ -37,47 +37,20 @@ class MisonArtisanDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
+      // Logo centré + fond de la page, comme les autres pages
+      appBar: MisonAppBar(
+        title: 'Profil prestataire',
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: kMisonDark),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: DotGridBackground(
         child: CustomScrollView(
         slivers: [
-          // ── Header ────────────────────────────────────────────────────────
-          SliverAppBar(
-            expandedHeight: 100,
-            pinned: true,
-            backgroundColor: primaryColor,
-            systemOverlayStyle: const SystemUiOverlayStyle(
-              statusBarIconBrightness: Brightness.light,
-              statusBarColor: Colors.transparent,
-            ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [primaryColor, primaryColor.withValues(alpha: 0.75)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                padding: const EdgeInsets.fromLTRB(20, 56, 20, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text('Profil prestataire',
-                        style: boldTextStyle(color: Colors.white, size: 20)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 40),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -97,26 +70,31 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        // Avatar
+                        // Photo de profil (icône dorée si absente ou en erreur)
                         Container(
-                          width: 72,
-                          height: 72,
+                          width: 80,
+                          height: 80,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: primaryColor.withValues(alpha: 0.1),
-                            border: Border.all(
-                                color: primaryColor.withValues(alpha: 0.25),
-                                width: 2),
-                            image: artisan.profilePictureUrl != null
-                                ? DecorationImage(
-                                    image: CachedNetworkImageProvider(artisan.profilePictureUrl!),
-                                    fit: BoxFit.cover)
-                                : null,
+                            color: kMisonGold.withValues(alpha: 0.1),
+                            border: Border.all(color: kMisonGold.withValues(alpha: 0.35), width: 2),
                           ),
-                          child: artisan.profilePictureUrl == null
-                              ? Icon(Icons.person_rounded,
-                                  color: primaryColor, size: 36)
-                              : null,
+                          clipBehavior: Clip.antiAlias,
+                          child: (artisan.profilePictureUrl ?? '').trim().isNotEmpty
+                              ? CachedNetworkImage(
+                                  imageUrl: artisan.profilePictureUrl!.trim(),
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => const Center(
+                                    child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: kMisonGold),
+                                    ),
+                                  ),
+                                  errorWidget: (_, __, ___) =>
+                                      const Icon(Icons.person_rounded, color: kMisonGold, size: 40),
+                                )
+                              : const Icon(Icons.person_rounded, color: kMisonGold, size: 40),
                         ),
                         16.width,
                         Expanded(
@@ -124,16 +102,18 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(artisan.fullName,
-                                  style: boldTextStyle(size: 18)),
+                                  style: boldTextStyle(size: 21, color: kMisonDark),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis),
                               if (artisan.service?.name != null) ...[
                                 4.height,
                                 Row(children: [
                                   Icon(Icons.handyman_rounded,
-                                      size: 13, color: primaryColor),
+                                      size: 13, color: kMisonGold),
                                   4.width,
                                   Text(artisan.service!.name!,
                                       style: primaryTextStyle(
-                                          size: 15, color: primaryColor)),
+                                          size: 15, color: kMisonGold)),
                                 ]),
                               ],
                               if (artisan.averageRating != null) ...[
@@ -209,7 +189,7 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                   // ── Bouton commander ─────────────────────────────────────
                   AppButton(
                     width: double.infinity,
-                    color: primaryColor,
+                    color: kMisonGold,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shapeBorder: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
@@ -283,10 +263,10 @@ class _InfoRow extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: primaryColor.withValues(alpha: 0.08),
+              color: kMisonGold.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: primaryColor, size: 18),
+            child: Icon(icon, color: kMisonGold, size: 18),
           ),
           12.width,
           Expanded(

@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/model/mison_notification_model.dart';
+import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_artisan_list_component.dart';
@@ -23,6 +25,8 @@ class _DashboardFragmentState extends State<DashboardFragment> {
   void initState() {
     super.initState();
     setStatusBarColorChange();
+    // Compteur de la cloche : notifications non lues (historique serveur)
+    if (appStore.isLoggedIn) getMisonNotifications().catchError((_) => const MisonNotificationResponse(unreadCount: 0, data: []));
     _scrollController.addListener(() {
       final collapsed =
           _scrollController.hasClients && _scrollController.offset > 4;

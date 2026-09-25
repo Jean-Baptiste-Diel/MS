@@ -1,16 +1,15 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' show min, max, sin, cos, sqrt, atan2, pi;
 import 'dart:ui' as ui;
 
+import 'package:booking_system_flutter/utils/artisan_eta_tracker.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
-import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
+import 'package:booking_system_flutter/utils/route_eta.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
 
 class MisonTrackingScreen extends StatefulWidget {
@@ -282,37 +281,20 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
     if (_fetchingRoute) return;
     final now = DateTime.now();
     if (_lastRouteFetch != null &&
-        now.difference(_lastRouteFetch!) < const Duration(seconds: 25)) return;
+        now.difference(_lastRouteFetch!) < ArtisanEtaTracker.refreshInterval) return; // 1 min 30 : limite la facturation Google
 
     _fetchingRoute = true;
     _lastRouteFetch = now;
     try {
-      final origin =
-          '${_artisanPosition!.latitude},${_artisanPosition!.longitude}';
-      final dest =
-          '${_destinationPosition!.latitude},${_destinationPosition!.longitude}';
-      final uri = Uri.parse(
-        'https://maps.googleapis.com/maps/api/directions/json'
-        '?origin=$origin&destination=$dest&mode=driving&key=$GOOGLE_PLACES_API_KEY',
-      );
-      final res = await http.get(uri).timeout(const Duration(seconds: 10));
-      if (res.statusCode == 200 && mounted) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        final routes = body['routes'] as List?;
-        if (routes != null && routes.isNotEmpty) {
-          final leg = routes[0]['legs'][0] as Map<String, dynamic>;
-          final encoded = routes[0]['overview_polyline']['points'] as String;
-          final points = _decodePolyline(encoded);
-
-          setState(() {
-            _routePoints = points;
-            _etaText = leg['duration']?['text'] as String?;
-            _distanceText = leg['distance']?['text'] as String?;
-            _etaSeconds = (leg['duration']?['value'] as num?)?.toInt();
-          });
-        }
+      final route = await fetchDrivingRoute(_artisanPosition!, _destinationPosition!);
+      if (route != null && mounted) {
+        setState(() {
+          _routePoints = _decodePolyline(route.encodedPolyline);
+          _etaText = route.durationText;
+          _distanceText = route.distanceText;
+          _etaSeconds = route.seconds;
+        });
       }
-    } catch (_) {
     } finally {
       _fetchingRoute = false;
     }
@@ -628,7 +610,7 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
                           // Arrivée estimée
                           if (_etaSeconds != null)
                             Text(
-                              'Arrivée ~${_arrivalTime(_etaSeconds!)}',
+                              'Arrivée ~${formatArrivalTime(_etaSeconds!)}',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.black45,
@@ -742,12 +724,6 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
     );
   }
 
-  String _arrivalTime(int etaSec) {
-    final arrival = DateTime.now().add(Duration(seconds: etaSec));
-    final h = arrival.hour.toString().padLeft(2, '0');
-    final m = arrival.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
 }
 
 // ── Info chip ─────────────────────────────────────────────────────────────────

@@ -3,8 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:booking_system_flutter/component/mison_account_sheets.dart';
+import 'package:booking_system_flutter/model/mison_notification_model.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/mock_data.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:booking_system_flutter/model/base_response_model.dart';
 import 'package:booking_system_flutter/model/booking_data_model.dart';
 import 'package:booking_system_flutter/model/booking_detail_model.dart';
@@ -31,10 +35,8 @@ import 'package:booking_system_flutter/model/user_wallet_history.dart';
 import 'package:booking_system_flutter/model/verify_transaction_response.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
-import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/model_keys.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -408,6 +410,16 @@ Future<void> clearPreferences() async {
   unsubscribeFirebaseTopic(appStore.userId);
   await removeKey(LOGIN_TYPE);
 
+  // Changement de compte : rien de l'ancien compte (appel qui sonne, notification
+  // non lue) ne doit rouvrir une de ses commandes une fois l'autre compte connecté.
+  try {
+    await FlutterCallkitIncoming.endAllCalls();
+  } catch (_) {}
+  try {
+    await FlutterLocalNotificationsPlugin().cancelAll();
+  } catch (_) {}
+  await removeKey('outgoing_call_order_id');
+
   await appStore.setLoggedIn(false);
   await appStore.setFirstName('');
   await appStore.setLastName('');
@@ -438,71 +450,25 @@ Future<void> clearPreferences() async {
 }
 
 Future<void> logout(BuildContext context) async {
-  return showInDialog(
-    context,
-    contentPadding: EdgeInsets.zero,
-    builder: (p0) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(logout_image, width: context.width(), fit: BoxFit.cover),
-          32.height,
-          Text(language.lblLogoutTitle, style: boldTextStyle(size: 18)),
-          16.height,
-          Text(language.lblLogoutSubTitle, style: secondaryTextStyle()),
-          28.height,
-          Row(
-            children: [
-              AppButton(
-                elevation: 0,
-                shapeBorder: RoundedRectangleBorder(
-                  borderRadius: radius(defaultAppButtonRadius),
-                  side: BorderSide(color: viewLineColor),
-                ),
-                child: Text(language.lblNo, style: boldTextStyle()),
-                onTap: () {
-                  finish(context);
-                },
-              ).expand(),
-              16.width,
-              AppButton(
-                child:
-                    Text(language.lblYes, style: boldTextStyle(color: white)),
-                color: primaryColor,
-                elevation: 0,
-                onTap: () async {
-                  finish(context);
+  // Confirmation aux couleurs Mison
+  if (!await showMisonLogoutSheet(context)) return;
 
-                  if (await isNetworkAvailable()) {
-                    appStore.setLoading(true);
+  if (!await isNetworkAvailable()) {
+    TopToast.show(message: errorInternetNotAvailable, type: TopToastType.error);
+    return;
+  }
 
-                    logoutApi().then((value) async {
-                      //
-                    }).catchError((e) {
-                      log(e.toString());
-                    });
+  appStore.setLoading(true);
+  logoutApi().catchError((e) => log(e.toString()));
 
-                    await clearPreferences();
-                    if (cachedWalletHistoryList != null &&
-                        cachedWalletHistoryList!.isNotEmpty)
-                      cachedWalletHistoryList!.clear();
+  await clearPreferences();
+  if (cachedWalletHistoryList != null && cachedWalletHistoryList!.isNotEmpty) {
+    cachedWalletHistoryList!.clear();
+  }
 
-                    appStore.setLoading(false);
-                    TopToast.show(message: "Your Account has logged out successfully", type: TopToastType.success);
-                    SignInScreen().launch(context,
-                        isNewTask: true,
-                        pageRouteAnimation: PageRouteAnimation.Fade);
-                  } else {
-                    TopToast.show(message: errorInternetNotAvailable, type: TopToastType.error);
-                  }
-                },
-              ).expand(),
-            ],
-          ),
-        ],
-      ).paddingSymmetric(horizontal: 16, vertical: 24);
-    },
-  );
+  appStore.setLoading(false);
+  TopToast.show(message: 'Vous êtes déconnecté.', type: TopToastType.success);
+  SignInScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
 }
 
 Future<void> logoutApi() async {
@@ -592,10 +558,12 @@ Future<UserData> getCurrentUserProfile() async {
   return UserData.fromMisonJson(response);
 }
 
-Future<BaseResponseModel> deleteAccountCompletely() async {
+/// POST /api/auth/delete-account avec { password: PIN }
+/// Anonymise le compte ; 409 si une commande est encore en cours.
+Future<BaseResponseModel> deleteAccountCompletely(String pin) async {
   return BaseResponseModel.fromJson(await handleResponse(
-      await buildHttpResponse('delete-user-account',
-          request: {}, method: HttpMethodType.POST)));
+      await buildHttpResponse('auth/delete-account',
+          request: {'password': pin}, method: HttpMethodType.POST)));
 }
 
 Future<VerificationModel> verifyUserEmail(String userEmail) async {
@@ -1289,6 +1257,24 @@ Future<List<PaymentData>> getPaymentList(int page, int id,
 //endregion
 
 //region Notification Api
+/// GET /api/notifications - Historique des notifications Mison (+ non lues)
+Future<MisonNotificationResponse> getMisonNotifications() async {
+  final response = await buildHttpResponse('notifications', method: HttpMethodType.GET);
+  final res = MisonNotificationResponse.fromJson(await handleResponse(response));
+  appStore.setUnreadCount(res.unreadCount);
+  return res;
+}
+
+/// POST /api/notifications/read - Marque une notification ([id]) ou toutes comme lues
+Future<void> markMisonNotificationsRead({String? id}) async {
+  final response = await buildHttpResponse(
+    'notifications/read',
+    method: HttpMethodType.POST,
+    request: id != null ? {'id': id} : {},
+  );
+  await handleResponse(response);
+}
+
 Future<List<NotificationData>> getNotification({Map? request}) async {
   try {
     NotificationListResponse res = NotificationListResponse.fromJson(
@@ -1871,9 +1857,14 @@ Future<MisonOrderDetailResponse> getMisonOrderDetail(String orderId) async {
 }
 
 /// POST /api/orders/{id}/cancel - Annuler une commande
-Future<void> cancelMisonOrder(String orderId) async {
+/// [reason] : motif facultatif choisi par le client (envoyé seulement s'il est renseigné).
+Future<void> cancelMisonOrder(String orderId, {String? reason}) async {
   try {
-    final response = await buildHttpResponse('orders/$orderId/cancel', method: HttpMethodType.POST);
+    final response = await buildHttpResponse(
+      'orders/$orderId/cancel',
+      method: HttpMethodType.POST,
+      request: (reason != null && reason.isNotEmpty) ? {'reason': reason} : null,
+    );
     await handleResponse(response);
   } catch (e) {
     throw e;

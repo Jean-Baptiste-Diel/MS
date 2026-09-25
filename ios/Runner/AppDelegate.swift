@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 import Flutter
 import GoogleMaps
 import Firebase
@@ -20,12 +21,36 @@ import flutter_callkit_incoming
       UNUserNotificationCenter.current().delegate = self
     }
     GeneratedPluginRegistrant.register(with: self)
+    registerAudioRouteChannel()
     GMSServices.provideAPIKey("AIzaSyBtos9vMzqgH_Z9USy6eYMBtftzvhDYZhI")
 
     // PushKit : seul canal qui reveille une app iOS terminee pour un appel.
     registerForVoIPPushes()
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // MARK: - Haut-parleur pendant un appel
+
+  /// CallKit possede la session audio (Agora configure pour ne pas y toucher) :
+  /// setEnableSpeakerphone d'Agora est alors sans effet. La sortie est basculee
+  /// ici, directement sur la session audio.
+  private func registerAudioRouteChannel() {
+    guard let registrar = self.registrar(forPlugin: "MisonAudioRoute") else { return }
+    let channel = FlutterMethodChannel(name: "mison/audio_route", binaryMessenger: registrar.messenger())
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "setSpeaker" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let speakerOn = (call.arguments as? Bool) ?? true
+      do {
+        try AVAudioSession.sharedInstance().overrideOutputAudioPort(speakerOn ? .speaker : .none)
+        result(nil)
+      } catch {
+        result(FlutterError(code: "AUDIO_ROUTE", message: error.localizedDescription, details: nil))
+      }
+    }
   }
 
   // MARK: - PushKit (VoIP)

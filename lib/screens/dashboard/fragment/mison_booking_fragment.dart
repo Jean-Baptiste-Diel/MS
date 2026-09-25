@@ -1,5 +1,6 @@
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
+import 'package:booking_system_flutter/component/mison_cancel_order_sheet.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
@@ -14,7 +15,6 @@ import 'package:nb_utils/nb_utils.dart';
 
 import '../../../component/app_empty_state.dart';
 import '../../../utils/constant.dart';
-import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class MisonBookingFragment extends StatelessWidget {
   const MisonBookingFragment({Key? key}) : super(key: key);
@@ -122,24 +122,10 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
     _key = UniqueKey();
   }
 
-  void _showCancelDialog(MisonOrder order) {
-    showConfirmDialogCustom(
-      context,
-      title: 'Annuler la commande',
-      subTitle: 'Êtes-vous sûr de vouloir annuler cette commande ?',
-      positiveText: 'Oui, annuler',
-      negativeText: 'Non',
-      dialogType: DialogType.DELETE,
-      onAccept: (_) async {
-        try {
-          await cancelMisonOrder(order.id ?? '');
-          TopToast.show(message: 'Commande annulée');
-          setState(() => _load());
-        } catch (e) {
-          TopToast.show(message: 'Erreur: ${e.toString()}', type: TopToastType.error);
-        }
-      },
-    );
+  /// Panneau d'annulation Mison (motif, confirmation, chargement).
+  Future<void> _showCancelDialog(MisonOrder order) async {
+    final cancelled = await showMisonCancelOrderSheet(context, orderId: order.id ?? '');
+    if (cancelled && mounted) setState(() => _load());
   }
 
   /// Filtres de la ligne principale. Si le filtre choisi fait partie des
@@ -265,8 +251,9 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
           child: SnapHelperWidget<MisonOrderResponse>(
             key: _key,
             future: _future,
-            loadingWidget:
-                const Center(child: CircularProgressIndicator()),
+            // Loader Mison à la place du cercle de chargement par défaut
+            loadingWidget: Center(
+                child: LoaderWidget(colors: const [kMisonDark, kMisonGold])),
             errorBuilder: (error) => AppEmptyState(
               type: AppEmptyStateType.error,
               title: error,
@@ -358,8 +345,8 @@ class MisonOrderItemComponent extends StatelessWidget {
 
   Color _statusColor(String? s) {
     switch (s?.trim().toUpperCase()) {
-      case 'PENDING':                      return pending;
-      case 'ASSIGNED':                     return pending;
+      case 'PENDING':                      return kMisonGold; // Recherche d'ouvrier
+      case 'ASSIGNED':                     return kMisonGold;
       case 'REJECTED':                     return cancelled;
       case 'ACCEPTED':                     return accept;
       case 'AWAITING_TRAVEL_PAYMENT':      return kMisonGold;
@@ -374,7 +361,7 @@ class MisonOrderItemComponent extends StatelessWidget {
   String _statusLabel(String? s) {
     switch (s?.trim().toUpperCase()) {
       case 'PENDING':                      return 'Recherche d\'ouvrier';
-      case 'ASSIGNED':                     return 'Recherche d\'ouvrier';
+      case 'ASSIGNED':                     return 'Ouvrier proposé'; // affecté, pas encore accepté
       case 'REJECTED':                     return 'Commande refusée';
       case 'ACCEPTED':                     return 'Ouvrier trouvé';
       case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente de paiement';
@@ -386,7 +373,18 @@ class MisonOrderItemComponent extends StatelessWidget {
     }
   }
 
-  bool get _canCancel => order.status == 'PENDING';
+  /// Même règle que le détail : annulable tant que la prestation n'a pas commencé.
+  bool get _canCancel => order.canCancelByClient;
+
+  /// « Mise en relation avec : Prénom » dès qu'un ouvrier est rattaché,
+  /// y compris quand il est seulement proposé (ASSIGNED). Sans prénom, le nom.
+  String get _headerTitle {
+    final status = order.status?.trim().toUpperCase();
+    final firstName = order.artisan?.firstName?.trim() ?? '';
+    final name = firstName.isNotEmpty ? firstName : (order.artisan?.lastName?.trim() ?? '');
+    final found = name.isNotEmpty && status != 'PENDING';
+    return found ? 'Mise en relation avec : $name' : 'Mise en relation';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -420,30 +418,12 @@ class MisonOrderItemComponent extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // Le statut est affiché plus bas dans la carte
                 Expanded(
-                  child: Text('Mise en relation',
+                  child: Text(_headerTitle,
                       style: boldTextStyle(size: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
-                ),
-                8.width,
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _statusColor(order.status)
-                          .withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _statusLabel(order.status),
-                      style: boldTextStyle(
-                          size: 12, color: _statusColor(order.status)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -568,15 +548,22 @@ class MisonOrderItemComponent extends StatelessWidget {
             14.height,
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: AppButton(
+              // Bouton rempli en rouge, texte blanc
+              child: SizedBox(
                 width: double.infinity,
-                color: const Color.fromARGB(255, 248, 36, 32),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shapeBorder: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                onTap: onCancel,
-                child: Text('Annuler',
-                    style: boldTextStyle(color: Colors.white, size: 15)),
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: onCancel,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE53935),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: Text('Annuler la commande',
+                      style: boldTextStyle(color: Colors.white, size: 15)),
+                ),
               ),
             ),
           ],

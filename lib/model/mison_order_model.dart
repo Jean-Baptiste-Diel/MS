@@ -42,6 +42,7 @@ class MisonOrder {
   MisonArtisanInfo? artisan;
   String? description;
   String? serviceDate; // ISO8601
+  bool? serverIsImmediate; // is_immediate (null : ancienne version du serveur)
   String? serviceAddress;
   String? status; // PENDING, ASSIGNED, ACCEPTED, AWAITING_TRAVEL_PAYMENT, IN_PROGRESS, AWAITING_REALIZATION_PAYMENT, COMPLETED, CANCELLED, REJECTED
   String? paymentStatus; // PENDING, PAID, REFUNDED
@@ -106,7 +107,7 @@ class MisonOrder {
       clientReview: json['client_review']?.toString(),
       createdAt: json['created_at']?.toString(),
       updatedAt: json['updated_at']?.toString(),
-    );
+    )..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null;
   }
 
   Map<String, dynamic> toJson() {
@@ -143,6 +144,17 @@ class MisonOrder {
   bool get isCancelled => status == 'CANCELLED';
   bool get isRejected => status == 'REJECTED';
 
+  /// Commande "Tout de suite" (sinon "Plus tard", programmée par le client).
+  /// Le choix est enregistré par le serveur ; à défaut (ancien serveur), il est
+  /// déduit de l'écart création → heure prévue, que l'app fixait à +30 min.
+  bool get isImmediate {
+    if (serverIsImmediate != null) return serverIsImmediate!;
+    final created = DateTime.tryParse(createdAt ?? '');
+    final scheduled = DateTime.tryParse(serviceDate ?? '');
+    if (created == null || scheduled == null) return false;
+    return scheduled.difference(created) <= const Duration(minutes: 35);
+  }
+
   /// Le paiement des frais de déplacement a été retiré du parcours : seul le
   /// paiement de réalisation, en fin de prestation, reste dû.
   bool get isAwaitingAnyPayment => isAwaitingRealizationPayment;
@@ -163,11 +175,12 @@ class MisonOrder {
           isInProgress ||
           isAwaitingRealizationPayment);
 
-  /// Can call: artisan accepted and order is active
-  bool get canCall => isActiveWithArtisan;
+  /// Appel possible une fois que l'ouvrier a accepté : pas quand la commande
+  /// lui est seulement affectée par un admin (ASSIGNED, en attente de confirmation).
+  bool get canCall => isActiveWithArtisan && !isAssigned;
 
-  /// Chat privé client ↔ ouvrier : dès qu'un ouvrier a accepté.
-  bool get canChat => isActiveWithArtisan;
+  /// Chat privé client ↔ ouvrier : dès qu'un ouvrier a accepté (pas en ASSIGNED).
+  bool get canChat => isActiveWithArtisan && !isAssigned;
 
   /// L'ouvrier doit encore confirmer une commande que l'admin lui a affectée.
   bool get needsArtisanConfirmation => isAssigned && artisan != null;
@@ -177,8 +190,9 @@ class MisonOrder {
       artisan != null && (isAssigned || isAccepted || isAwaitingTravelPayment);
 
   /// Le client peut annuler définitivement sa commande.
+  /// Le client peut annuler tant que la prestation n'a pas commencé.
   bool get canCancelByClient =>
-      isPending || isAssigned || isAccepted || isAwaitingTravelPayment || isInProgress;
+      isPending || isAssigned || isAccepted || isAwaitingTravelPayment;
 
   /// L'ouvrier peut se désister — après avoir accepté lui-même comme après une
   /// affectation par l'admin. La commande retourne dans le pool.
@@ -336,8 +350,9 @@ class MisonCallTokenResponse {
 /// Request model for creating an order
 class MisonCreateOrderRequest {
   String service; // UUID
-  String description;
-  String serviceDate; // ISO8601
+  String? description; // facultative
+  String serviceDate; // ISO8601 — ignoré si isImmediate
+  bool isImmediate; // "Tout de suite" : le serveur fixe l'heure à maintenant
   String serviceAddress;
   double? latitude;
   double? longitude;
@@ -345,8 +360,9 @@ class MisonCreateOrderRequest {
 
   MisonCreateOrderRequest({
     required this.service,
-    required this.description,
+    this.description,
     required this.serviceDate,
+    this.isImmediate = false,
     required this.serviceAddress,
     this.latitude,
     this.longitude,
@@ -355,8 +371,8 @@ class MisonCreateOrderRequest {
 
   Map<String, dynamic> toJson() => {
         'service': service,
-        'description': description,
-        'service_date': serviceDate,
+        if (description != null && description!.trim().isNotEmpty) 'description': description!.trim(),
+        if (isImmediate) 'is_immediate': true else 'service_date': serviceDate,
         'service_address': serviceAddress,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
@@ -368,14 +384,14 @@ class MisonCreateOrderRequest {
 class MisonWorkerRequestModel {
   String service; // UUID
   int workerCount;
-  String description;
+  String? description; // facultative
   String serviceDate; // ISO8601
   String serviceAddress;
 
   MisonWorkerRequestModel({
     required this.service,
     required this.workerCount,
-    required this.description,
+    this.description,
     required this.serviceDate,
     required this.serviceAddress,
   });
@@ -383,7 +399,7 @@ class MisonWorkerRequestModel {
   Map<String, dynamic> toJson() => {
         'service': service,
         'worker_count': workerCount,
-        'description': description,
+        if (description != null && description!.trim().isNotEmpty) 'description': description!.trim(),
         'service_date': serviceDate,
         'service_address': serviceAddress,
       };

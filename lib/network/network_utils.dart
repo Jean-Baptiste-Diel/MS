@@ -132,6 +132,7 @@ const _authenticatedAuthEndpoints = {
   'auth/fcm-token',
   'auth/voip-token',
   'auth/change-password',
+  'auth/delete-account',
   // La déconnexion efface le token FCM côté serveur : elle doit aboutir même
   // si le jeton d'accès a expiré, sinon le téléphone reçoit encore les appels.
   'auth/logout',
@@ -199,6 +200,14 @@ Future<Response> buildHttpResponse(
     throw errorInternetNotAvailable;
   }
 }
+
+/// Vrai si l'erreur levée par [handleResponse] vient d'un 404 : la ressource
+/// n'existe plus ou n'est pas accessible depuis ce compte (ex. commande d'un
+/// autre compte, commande prise par un autre artisan).
+bool isNotFoundError(Object? error) => error?.toString() == language.pageNotFound;
+
+/// Message affiché quand une commande n'est plus accessible.
+const kOrderUnavailableMessage = 'Cette commande n\'est plus disponible pour ce compte.';
 
 Future handleResponse(Response response, {HttpResponseType httpResponseType = HttpResponseType.JSON}) async {
   if (!await isNetworkAvailable()) {

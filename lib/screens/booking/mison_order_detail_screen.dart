@@ -1,30 +1,35 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:ui' as ui;
 import 'dart:math' show sin, cos, sqrt, atan2;
 
+import 'package:booking_system_flutter/component/mison_account_sheets.dart';
+import 'package:booking_system_flutter/utils/artisan_eta_tracker.dart';
 import 'package:booking_system_flutter/component/app_empty_state.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
+import 'package:booking_system_flutter/component/mison_cancel_order_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
+import 'package:booking_system_flutter/component/artisan_arrival_eta.dart';
+import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:booking_system_flutter/utils/mison_call_utils.dart';
@@ -224,11 +229,12 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
 
   Color _statusColor(String? s) {
     switch (s) {
-      case 'PENDING':                      return pending;
+      case 'PENDING':                      return kMisonGold;
+      case 'ASSIGNED':                     return kMisonGold;
       case 'ACCEPTED':                     return accept;
-      case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
+      case 'AWAITING_TRAVEL_PAYMENT':      return kMisonGold;
       case 'IN_PROGRESS':                  return in_progress;
-      case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
+      case 'AWAITING_REALIZATION_PAYMENT': return kMisonGold;
       case 'COMPLETED':                    return completed;
       case 'CANCELLED':                    return cancelled;
       default:                             return defaultStatus;
@@ -238,6 +244,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   String _statusLabel(String? s) {
     switch (s) {
       case 'PENDING':                      return 'Recherche d\'ouvrier';
+      case 'ASSIGNED':                     return 'Ouvrier proposé';
       case 'ACCEPTED':                     return 'Ouvrier trouvé';
       case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente de paiement';
       case 'IN_PROGRESS':                  return 'Intervention en cours';
@@ -338,21 +345,22 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     finally { appStore.setLoading(false); }
   }
 
-  void _confirm({
+  /// Confirmation aux couleurs Mison (rouge pour une action destructive).
+  Future<void> _confirm({
     required String title,
     required String subtitle,
     required VoidCallback onConfirm,
     DialogType type = DialogType.CONFIRMATION,
-  }) {
-    showConfirmDialogCustom(
+  }) async {
+    final danger = type == DialogType.DELETE;
+    final ok = await showMisonConfirmSheet(
       context,
       title: title,
-      subTitle: subtitle,
-      positiveText: 'Confirmer',
-      negativeText: 'Annuler',
-      dialogType: type,
-      onAccept: (_) => onConfirm(),
+      subtitle: subtitle,
+      icon: danger ? Icons.event_busy_rounded : Icons.check_circle_outline_rounded,
+      danger: danger,
     );
+    if (ok) onConfirm();
   }
 
 
@@ -441,12 +449,23 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         children: [
           SnapHelperWidget<MisonOrderDetailResponse>(
             future: future,
-            loadingWidget: const Center(child: CircularProgressIndicator()),
-            errorBuilder: (error) => AppEmptyState(
-              type: AppEmptyStateType.error,
-              title: error,
-              onRetry: () { init(); setState(() {}); },
-            ),
+            loadingWidget: Center(child: LoaderWidget(colors: const [kMisonDark, kMisonGold])),
+            errorBuilder: (error) => isNotFoundError(error)
+                // Commande d'un autre compte, ou prise par un autre artisan :
+                // réessayer ne servirait à rien, on propose de revenir.
+                ? AppEmptyState(
+                    type: AppEmptyStateType.empty,
+                    title: kOrderUnavailableMessage,
+                    subtitle: 'Elle a peut-être été prise par un autre ouvrier, annulée, '
+                        'ou appartient à un autre compte.',
+                    retryLabel: 'Retour',
+                    onRetry: () => Navigator.of(context).maybePop(),
+                  )
+                : AppEmptyState(
+                    type: AppEmptyStateType.error,
+                    title: error,
+                    onRetry: () { init(); setState(() {}); },
+                  ),
             onSuccess: (response) {
               final order = response.data;
               if (order == null) {
@@ -482,16 +501,22 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                   title: 'Frais de prestation',
                   apiCall: (amount) => setRealizationFee(order.id!, amount),
                 ),
-                onCancel: () => _confirm(
-                  title: appStore.userType == USER_TYPE_PROVIDER
-                      ? 'Se désister de la commande'
-                      : 'Annuler la commande',
-                  subtitle: appStore.userType == USER_TYPE_PROVIDER
-                      ? 'La commande sera reproposée aux autres ouvriers. Confirmez-vous ?'
-                      : 'Êtes-vous sûr de vouloir annuler ?',
-                  type: DialogType.DELETE,
-                  onConfirm: () => _cancelOrder(order.id!),
-                ),
+                // Client : panneau d'annulation Mison (motif, chargement) ;
+                // ouvrier : confirmation de désistement inchangée
+                onCancel: appStore.userType == USER_TYPE_PROVIDER
+                    ? () => _confirm(
+                          title: 'Se désister de la commande',
+                          subtitle: 'La commande sera reproposée aux autres ouvriers. Confirmez-vous ?',
+                          type: DialogType.DELETE,
+                          onConfirm: () => _cancelOrder(order.id!),
+                        )
+                    : () async {
+                        final cancelled = await showMisonCancelOrderSheet(context, orderId: order.id!);
+                        if (cancelled && mounted) {
+                          init();
+                          setState(() {});
+                        }
+                      },
                 onPay: () => _showPaymentModal(order),
                 paymentVerifying: _paymentVerifying,
                 onRated: () { init(); setState(() {}); },
@@ -524,7 +549,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
               );
             },
           ),
-          Observer(builder: (_) => LoaderWidget().visible(appStore.isLoading)),
+          Observer(builder: (_) => LoaderWidget(colors: const [kMisonDark, kMisonGold]).visible(appStore.isLoading)),
         ],
         ),
       ),
@@ -605,7 +630,7 @@ class _OrderDetailBody extends StatelessWidget {
     if (showAcceptButton) {
       primaryActionLabel = order.needsArtisanConfirmation ? 'Confirmer cette commande' : 'Accepter cette commande';
       primaryActionIcon = Icons.check_circle_outline_rounded;
-      primaryActionColor = accept;
+      primaryActionColor = kMisonGold; // Accepter / Confirmer en doré
       primaryActionTap = onAccept;
     } else if (showStartButton) {
       primaryActionLabel = 'Démarrer la prestation';
@@ -625,12 +650,12 @@ class _OrderDetailBody extends StatelessWidget {
     } else if (_showPayButton) {
       primaryActionLabel = 'Payer la prestation';
       primaryActionIcon = Icons.payment_rounded;
-      primaryActionColor = primaryColor;
+      primaryActionColor = kMisonGold;
       primaryActionTap = onPay;
     } else if (showTrackButton) {
       primaryActionLabel = 'Suivre en direct';
       primaryActionIcon = Icons.open_in_full_rounded;
-      primaryActionColor = primaryColor;
+      primaryActionColor = kMisonGold;
       primaryActionTap = onTrack;
     }
 
@@ -638,86 +663,23 @@ class _OrderDetailBody extends StatelessWidget {
       children: [
       CustomScrollView(
       slivers: [
-        // ── Hero header ─────────────────────────────────────────────────────
+        // ── En-tête : logo centré sur le fond de la page (fixe) ─────────────
         SliverAppBar(
-          expandedHeight: 110,
           pinned: true,
-          backgroundColor: primaryColor,
-          systemOverlayStyle: const SystemUiOverlayStyle(
-            statusBarIconBrightness: Brightness.light,
-            statusBarColor: Colors.transparent,
-          ),
+          backgroundColor: kMisonHeaderBg,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          systemOverlayStyle: SystemUiOverlayStyle.dark,
+          toolbarHeight: 84,
+          centerTitle: true,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            icon: const Icon(Icons.arrow_back, color: kMisonDark),
             onPressed: () => Navigator.pop(context),
           ),
-          flexibleSpace: FlexibleSpaceBar(
-            background: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryColor, primaryColor.withValues(alpha: 0.75)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              padding: const EdgeInsets.fromLTRB(20, 56, 20, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    order.service?.name ?? 'Commande',
-                    style: boldTextStyle(color: Colors.white, size: 20),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                  ),
-                  6.height,
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(statusIcon(order.status), color: Colors.white, size: 13),
-                              5.width,
-                              Flexible(
-                                child: Text(
-                                  statusLabel(order.status),
-                                  style: boldTextStyle(color: Colors.white, size: 14),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (_isClient && order.artisan != null) ...[
-                        8.width,
-                        Flexible(
-                          child: Text(
-                            'Ouvrier : ${order.artisan!.fullName}',
-                            style: secondaryTextStyle(color: Colors.white70, size: 14),
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ] else if (order.id != null) ...[
-                        8.width,
-                        Text(
-                          '#${order.id!.length > 8 ? order.id!.substring(0, 8).toUpperCase() : order.id!.toUpperCase()}',
-                          style: secondaryTextStyle(color: Colors.white60, size: 14),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
+          title: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Image.asset('assets/logo/logo_transparent.png', height: 58),
           ),
         ),
 
@@ -743,49 +705,34 @@ class _OrderDetailBody extends StatelessWidget {
                       onTrack: onTrack,
                     )
                   else
-                    _ArtisanHeroCard(artisan: order.artisan!, statusColor: sColor, statusLabel: statusLabel(order.status)),
+                    _ArtisanHeroCard(
+                      artisan: order.artisan!,
+                      statusColor: sColor,
+                      statusLabel: statusLabel(order.status),
+                      serviceName: order.service?.name ?? '',
+                    ),
                   20.height,
                 ],
 
 
 
 
-                // ── Naviguer vers le client — ouvrier en déplacement ──────────
+                // ── Prestataire en déplacement : carte comme chez le client, avec
+                // les infos du client ; un appui ouvre la navigation ────────────
                 if (_isArtisan && order.canTrack) ...[
-                  GestureDetector(
-                    onTap: onNavigate,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.07),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.green.withValues(alpha: 0.25)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40, height: 40,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.green.withValues(alpha: 0.12),
-                            ),
-                            child: const Icon(Icons.navigation_rounded, color: Colors.green, size: 20),
-                          ),
-                          12.width,
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Naviguer vers le client', style: boldTextStyle(size: 16, color: Colors.green)),
-                                Text('Voir l\'itinéraire sur la carte', style: secondaryTextStyle(size: 13)),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right_rounded, color: Colors.green),
-                        ],
-                      ),
-                    ),
+                  _LiveTrackingCard(
+                    order: order,
+                    artisan: order.artisan ?? MisonArtisanInfo(),
+                    onTrack: onNavigate,
+                    forArtisan: true,
+                  ),
+                  16.height,
+                ] else if (_isArtisan && order.client != null) ...[
+                  // Infos du client, comme la carte de l'ouvrier chez le client
+                  _ClientHeroCard(
+                    order: order,
+                    statusColor: sColor,
+                    statusLabel: statusLabel(order.status),
                   ),
                   16.height,
                 ],
@@ -799,18 +746,18 @@ class _OrderDetailBody extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: primaryColor.withValues(alpha: 0.08),
+                        color: kMisonGold.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
+                        border: Border.all(color: kMisonGold.withValues(alpha: 0.25)),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.assignment_ind_rounded, size: 18, color: primaryColor),
+                          Icon(Icons.assignment_ind_rounded, size: 18, color: kMisonGold),
                           8.width,
                           Expanded(
                             child: Text(
                               'Cette commande vous a été affectée par Mison. Confirmez-la pour la démarrer.',
-                              style: secondaryTextStyle(size: 14, color: primaryColor),
+                              style: secondaryTextStyle(size: 14, color: kMisonGold),
                             ),
                           ),
                         ],
@@ -822,8 +769,14 @@ class _OrderDetailBody extends StatelessWidget {
                 // ── Infos commande ──────────────────────────────────────────
                 _InfoCard(children: [
                   _InfoRow(icon: Icons.calendar_today_rounded, label: 'Date', value: fmtDate(order.serviceDate)),
-                  _Divider(),
-                  _InfoRow(icon: Icons.access_time_rounded, label: 'Heure', value: fmtTime(order.serviceDate)),
+                  // Pas d'heure pour une prestation demandée « tout de suite »
+                  if (_isClient && _ArrivalRow.isShown(order)) ...[
+                    _Divider(),
+                    _ArrivalRow(order: order, fmtTime: fmtTime),
+                  ] else if (_isArtisan && !order.isImmediate) ...[
+                    _Divider(),
+                    _InfoRow(icon: Icons.access_time_rounded, label: 'Heure', value: fmtTime(order.serviceDate)),
+                  ],
                   if (_isArtisan && order.status != 'CANCELLED' && order.status != 'REJECTED') ...[
                     _Divider(),
                     _InfoRow(
@@ -850,17 +803,20 @@ class _OrderDetailBody extends StatelessWidget {
                 // ── Annulation — client et ouvrier ──────────────────────────
                 if (_canCancel) ...[
                   20.height,
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: rejected,
-                      side: BorderSide(color: rejected.withValues(alpha: 0.6)),
+                  // Bouton rempli en rouge, comme dans « Mes commandes »
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE53935),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
                       minimumSize: const Size(double.infinity, 52),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: onCancel,
-                    child: Text(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    label: Text(
                       _isArtisan ? 'Se désister de la commande' : 'Annuler la commande',
-                      style: boldTextStyle(color: rejected, size: 16),
+                      style: boldTextStyle(color: Colors.white, size: 16),
                     ),
                   ),
                   if (_isArtisan) ...[
@@ -962,10 +918,11 @@ class _OrderDetailBody extends StatelessWidget {
                       color: Colors.white,
                       shapeBorder: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
-                        side: const BorderSide(color: Colors.green, width: 1.5),
+                        side: const BorderSide(color: kMisonGold, width: 1.5),
                       ),
                       onTap: onCall,
-                      child: const Icon(Icons.call_rounded, color: Colors.green, size: 20),
+                      // Bouton appel : bordure et icône dorées
+                      child: const Icon(Icons.call_rounded, color: kMisonGold, size: 20),
                     ),
                   ),
                   if (order.canChat) ...[
@@ -977,7 +934,7 @@ class _OrderDetailBody extends StatelessWidget {
                         width: 52,
                         height: 52,
                         padding: EdgeInsets.zero,
-                        color: primaryColor,
+                        color: kMisonGold,
                         shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         onTap: onChat,
                         child: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 20),
@@ -999,12 +956,154 @@ class _OrderDetailBody extends StatelessWidget {
 // Ouvrier hero card
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Photo de profil de l'ouvrier dans un rond doré. Si le lien est vide ou
+/// que l'image ne se charge pas (lien expiré, réseau), affiche une icône.
+class _ArtisanAvatar extends StatelessWidget {
+  final String? url;
+  final double size;
+  const _ArtisanAvatar({required this.url, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Icon(Icons.person_rounded, color: kMisonGold, size: size * 0.5);
+    final hasUrl = url != null && url!.trim().isNotEmpty;
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: kMisonGold.withValues(alpha: 0.1),
+        border: Border.all(color: kMisonGold.withValues(alpha: 0.35), width: 2),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: hasUrl
+          ? CachedNetworkImage(
+              imageUrl: url!.trim(),
+              fit: BoxFit.cover,
+              width: size,
+              height: size,
+              placeholder: (_, __) => Center(
+                child: SizedBox(
+                  width: size * 0.35,
+                  height: size * 0.35,
+                  child: const CircularProgressIndicator(strokeWidth: 2, color: kMisonGold),
+                ),
+              ),
+              errorWidget: (_, __, ___) => fallback,
+            )
+          : fallback,
+    );
+  }
+}
+
+/// Carte du client vue par le prestataire : statut, nom, service, adresse.
+class _ClientHeroCard extends StatelessWidget {
+  final MisonOrder order;
+  final Color statusColor;
+  final String statusLabel;
+
+  const _ClientHeroCard({required this.order, required this.statusColor, required this.statusLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    final client = order.client;
+    final name = (client?.fullName ?? '').isNotEmpty ? client!.fullName : 'Client';
+    final service = order.service?.name ?? '';
+    final address = order.serviceAddress ?? '';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 16, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── Bandeau statut
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20), topRight: Radius.circular(20),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 8, height: 8,
+                  decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                ),
+                8.width,
+                Text(statusLabel, style: boldTextStyle(size: 15, color: statusColor)),
+              ],
+            ),
+          ),
+
+          // ── Client
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _ArtisanAvatar(url: null, size: 64),
+                16.width,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Client', style: secondaryTextStyle(size: 12)),
+                      2.height,
+                      Text(name, style: boldTextStyle(size: 20), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      if (service.isNotEmpty) ...[
+                        3.height,
+                        Text(service,
+                            style: boldTextStyle(size: 13, color: kMisonGold),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                      if (address.isNotEmpty) ...[
+                        6.height,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
+                            4.width,
+                            Expanded(
+                              child: Text(address,
+                                  style: secondaryTextStyle(size: 14),
+                                  maxLines: 2, overflow: TextOverflow.ellipsis),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ArtisanHeroCard extends StatelessWidget {
   final MisonArtisanInfo artisan;
   final Color statusColor;
   final String statusLabel;
+  final String serviceName;
 
-  const _ArtisanHeroCard({required this.artisan, required this.statusColor, required this.statusLabel});
+  const _ArtisanHeroCard({
+    required this.artisan,
+    required this.statusColor,
+    required this.statusLabel,
+    this.serviceName = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1045,27 +1144,23 @@ class _ArtisanHeroCard extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Avatar
-                Container(
-                  width: 64, height: 64,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: primaryColor.withValues(alpha: 0.1),
-                    border: Border.all(color: primaryColor.withValues(alpha: 0.2), width: 2),
-                    image: artisan.profilePictureUrl != null
-                        ? DecorationImage(image: CachedNetworkImageProvider(artisan.profilePictureUrl!), fit: BoxFit.cover)
-                        : null,
-                  ),
-                  child: artisan.profilePictureUrl == null
-                      ? Icon(Icons.person_rounded, color: primaryColor, size: 32)
-                      : null,
-                ),
+                // Photo de profil de l'ouvrier
+                _ArtisanAvatar(url: artisan.profilePictureUrl, size: 64),
                 16.width,
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(artisan.fullName, style: boldTextStyle(size: 17)),
+                      // Nom de l'ouvrier en premier, puis le service
+                      Text(artisan.fullName,
+                          style: boldTextStyle(size: 20),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      if (serviceName.isNotEmpty) ...[
+                        3.height,
+                        Text(serviceName,
+                            style: boldTextStyle(size: 13, color: kMisonGold),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
                       6.height,
                       if (artisan.experienceYears != null)
                         Row(children: [
@@ -1125,7 +1220,8 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _InfoRow({required this.icon, required this.label, required this.value});
+  final Widget? valueWidget;
+  const _InfoRow({required this.icon, required this.label, this.value = '', this.valueWidget});
 
   @override
   Widget build(BuildContext context) {
@@ -1137,10 +1233,10 @@ class _InfoRow extends StatelessWidget {
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
-              color: primaryColor.withValues(alpha: 0.08),
+              color: kMisonGold.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: primaryColor, size: 18),
+            child: Icon(icon, color: kMisonGold, size: 18),
           ),
           12.width,
           Expanded(
@@ -1149,13 +1245,65 @@ class _InfoRow extends StatelessWidget {
               children: [
                 Text(label, style: secondaryTextStyle(size: 14)),
                 4.height,
-                Text(value, style: boldTextStyle(size: 16), maxLines: 3, overflow: TextOverflow.ellipsis),
+                valueWidget ?? Text(value, style: boldTextStyle(size: 16), maxLines: 3, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// Côté client, à la place de l'heure prévue : où en est l'ouvrier.
+/// Recherche en cours → heure d'arrivée en direct (comme Google Maps) → sur place.
+class _ArrivalRow extends StatelessWidget {
+  final MisonOrder order;
+  final String Function(String?) fmtTime;
+  const _ArrivalRow({required this.order, required this.fmtTime});
+
+  /// Faux quand la ligne n'afficherait que l'heure d'une prestation « tout de suite ».
+  static bool isShown(MisonOrder order) {
+    final showsStatus = order.isPending ||
+        order.isAssigned ||
+        order.isAccepted ||
+        order.isAwaitingTravelPayment ||
+        order.isInProgress ||
+        order.isAwaitingRealizationPayment ||
+        order.isCompleted;
+    return showsStatus || !order.isImmediate;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const icon = Icons.access_time_rounded;
+    if (order.isPending) {
+      return const _InfoRow(icon: icon, label: 'Ouvrier', value: "Recherche d'un ouvrier en cours…");
+    }
+    if (order.isAssigned || order.isAccepted || order.isAwaitingTravelPayment) {
+      final lat = double.tryParse(order.latitude ?? '');
+      final lng = double.tryParse(order.longitude ?? '');
+      return _InfoRow(
+        icon: Icons.directions_car_rounded,
+        label: "Arrivée de l'ouvrier",
+        valueWidget: ArtisanArrivalEta(
+          orderId: order.id!,
+          destination: (lat != null && lng != null) ? gmaps.LatLng(lat, lng) : null,
+          // Position pas encore reçue : pour une commande programmée, l'heure
+          // prévue reste la meilleure indication.
+          fallback: order.isImmediate
+              ? "Ouvrier trouvé · calcul de l'arrivée…"
+              : 'Prévue à ${fmtTime(order.serviceDate)}',
+        ),
+      );
+    }
+    if (order.isInProgress || order.isAwaitingRealizationPayment) {
+      return const _InfoRow(icon: icon, label: 'Ouvrier', value: 'Sur place');
+    }
+    if (order.isCompleted) {
+      return const _InfoRow(icon: icon, label: 'Ouvrier', value: 'Prestation terminée');
+    }
+    return _InfoRow(icon: icon, label: 'Heure', value: fmtTime(order.serviceDate));
   }
 }
 
@@ -1214,7 +1362,7 @@ class _FeeBottomSheet extends StatelessWidget {
               hintText: 'Montant en FCFA',
               hintStyle: secondaryTextStyle(size: 14),
               suffixIcon: IconButton(
-                icon: Icon(Icons.check_circle_outline, color: primaryColor),
+                icon: Icon(Icons.check_circle_outline, color: kMisonGold),
                 onPressed: () => FocusScope.of(context).unfocus(),
                 tooltip: 'Fermer le clavier',
               ),
@@ -1226,14 +1374,14 @@ class _FeeBottomSheet extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: primaryColor, width: 1.5),
+                borderSide: BorderSide(color: kMisonGold, width: 1.5),
               ),
             ),
           ),
           20.height,
           AppButton(
             text: 'Confirmer',
-            color: primaryColor,
+            color: kMisonGold,
             textColor: Colors.white,
             width: double.infinity,
             height: 50,
@@ -1316,9 +1464,9 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFC99700).withValues(alpha: 0.07),
+              color: kMisonGold.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFC99700).withValues(alpha: 0.25)),
+              border: Border.all(color: kMisonGold.withValues(alpha: 0.25)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1326,7 +1474,7 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
                 Text(widget.desc, style: secondaryTextStyle(size: 14)),
                 8.height,
                 Text(widget.feeLabel,
-                    style: boldTextStyle(size: 20, color: const Color(0xFFC99700))),
+                    style: boldTextStyle(size: 20, color: kMisonGold)),
               ],
             ),
           ),
@@ -1680,10 +1828,15 @@ class _LiveTrackingCard extends StatefulWidget {
   final MisonArtisanInfo artisan;
   final VoidCallback onTrack;
 
+  /// Vue du prestataire : la carte montre le client (nom, service) au lieu de
+  /// l'ouvrier, et pas d'alertes « l'ouvrier approche ».
+  final bool forArtisan;
+
   const _LiveTrackingCard({
     required this.order,
     required this.artisan,
     required this.onTrack,
+    this.forArtisan = false,
   });
 
   @override
@@ -1691,7 +1844,8 @@ class _LiveTrackingCard extends StatefulWidget {
 }
 
 class _LiveTrackingCardState extends State<_LiveTrackingCard> {
-  final _mapController = MapController();
+  gmaps.GoogleMapController? _mapController;
+  gmaps.BitmapDescriptor? _artisanIcon;
   LatLng? _artisanPos;
   LatLng? _destPos;
   double _bearing = 0;
@@ -1700,9 +1854,9 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
   // Route OSRM
   List<LatLng> _routePoints    = [];
   double?      _roadDistanceM;
-  int?         _etaSeconds;
-  bool         _fetchingRoute  = false;
-  DateTime?    _lastRouteFetch;
+  // Suivi partagé avec la ligne « Arrivée de l'ouvrier » : un seul calcul
+  // Google Directions (trafic compris)
+  ArtisanEtaTracker? _etaTracker;
 
   // Alertes
   bool _hadFirstUpdate    = false;
@@ -1716,6 +1870,11 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
     final lat = double.tryParse(widget.order.latitude ?? '');
     final lng = double.tryParse(widget.order.longitude ?? '');
     if (lat != null && lng != null) _destPos = LatLng(lat, lng);
+    _buildArtisanIcon();
+    _etaTracker = ArtisanEtaTracker.acquire(
+      widget.order.id!,
+      _destPos != null ? gmaps.LatLng(_destPos!.latitude, _destPos!.longitude) : null,
+    )..addListener(_onEtaUpdate);
 
     _sub = FirebaseFirestore.instance
         .collection('artisan_locations')
@@ -1741,7 +1900,6 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
     }
     setState(() => _artisanPos = pos);
     WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
-    _fetchRoute();
     _checkNearby();
   }
 
@@ -1769,47 +1927,20 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
     return (deg + 360) % 360;
   }
 
-  Future<void> _fetchRoute() async {
-    if (_artisanPos == null || _destPos == null) return;
-    if (_fetchingRoute) return;
-    final now = DateTime.now();
-    if (_lastRouteFetch != null &&
-        now.difference(_lastRouteFetch!) < const Duration(seconds: 30)) return;
-
-    _fetchingRoute  = true;
-    _lastRouteFetch = now;
-    try {
-      final url = 'https://router.project-osrm.org/route/v1/driving/'
-          '${_artisanPos!.longitude},${_artisanPos!.latitude};'
-          '${_destPos!.longitude},${_destPos!.latitude}'
-          '?steps=false&geometries=geojson&overview=full';
-
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
-      if (res.statusCode != 200 || !mounted) return;
-
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      if (data['code'] != 'Ok') return;
-
-      final route = (data['routes'] as List).first as Map<String, dynamic>;
-      final coords = (route['geometry']['coordinates'] as List)
-          .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
-          .toList();
-
-      if (mounted) {
-        setState(() {
-          _routePoints   = coords;
-          _roadDistanceM = (route['distance'] as num).toDouble();
-          _etaSeconds    = (route['duration'] as num).toInt();
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
-      }
-    } catch (_) {
-    } finally {
-      _fetchingRoute = false;
-    }
+  /// Nouveau calcul Google Directions : tracé, distance, durée, heure d'arrivée.
+  void _onEtaUpdate() {
+    final eta = _etaTracker?.eta;
+    if (eta == null || !mounted) return;
+    setState(() {
+      _routePoints   = eta.points.map((p) => LatLng(p.latitude, p.longitude)).toList();
+      _roadDistanceM = eta.distanceMeters > 0 ? eta.distanceMeters.toDouble() : null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
+    _checkNearby();
   }
 
   void _checkNearby() {
+    if (widget.forArtisan) return; // alertes destinées au client
     if (_destPos == null || _artisanPos == null) return;
     final dist = _roadDistanceM ?? _haversineDist();
     if (dist == null) return;
@@ -1840,7 +1971,35 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
     _hadFirstUpdate = true;
   }
 
+  gmaps.LatLng _g(LatLng p) => gmaps.LatLng(p.latitude, p.longitude);
+
+  /// Point doré de l'ouvrier avec une flèche blanche (orientée via `rotation`).
+  Future<void> _buildArtisanIcon() async {
+    const double size = 96; // pixels, rendu net sur écrans haute densité
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    const center = Offset(size / 2, size / 2);
+    canvas.drawCircle(center, size / 2 - 4, Paint()..color = Colors.black26);
+    canvas.drawCircle(center, size / 2 - 8, Paint()..color = Colors.white);
+    canvas.drawCircle(center, size / 2 - 15, Paint()..color = kMisonGold);
+    final arrow = ui.Path()
+      ..moveTo(size / 2, size * 0.26)
+      ..lineTo(size * 0.68, size * 0.70)
+      ..lineTo(size / 2, size * 0.60)
+      ..lineTo(size * 0.32, size * 0.70)
+      ..close();
+    canvas.drawPath(arrow, Paint()..color = Colors.white);
+    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (bytes == null || !mounted) return;
+    setState(() {
+      _artisanIcon = gmaps.BitmapDescriptor.bytes(bytes.buffer.asUint8List(), width: 34, height: 34);
+    });
+  }
+
   void _fitMap() {
+    final controller = _mapController;
+    if (controller == null) return;
     final points = [
       if (_routePoints.isNotEmpty) ..._routePoints
       else ...[if (_artisanPos != null) _artisanPos!, if (_destPos != null) _destPos!],
@@ -1848,11 +2007,23 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
     if (points.isEmpty) return;
     try {
       if (points.length == 1) {
-        _mapController.move(points.first, 14);
+        controller.animateCamera(gmaps.CameraUpdate.newLatLngZoom(_g(points.first), 14));
       } else {
-        _mapController.fitCamera(
-          CameraFit.coordinates(coordinates: points, padding: const EdgeInsets.all(40)),
-        );
+        double minLat = points.first.latitude, maxLat = points.first.latitude;
+        double minLng = points.first.longitude, maxLng = points.first.longitude;
+        for (final p in points) {
+          if (p.latitude < minLat) minLat = p.latitude;
+          if (p.latitude > maxLat) maxLat = p.latitude;
+          if (p.longitude < minLng) minLng = p.longitude;
+          if (p.longitude > maxLng) maxLng = p.longitude;
+        }
+        controller.animateCamera(gmaps.CameraUpdate.newLatLngBounds(
+          gmaps.LatLngBounds(
+            southwest: gmaps.LatLng(minLat, minLng),
+            northeast: gmaps.LatLng(maxLat, maxLng),
+          ),
+          40,
+        ));
       }
     } catch (_) {}
   }
@@ -1870,15 +2041,10 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
   String _fmtDist(double m) =>
       m < 1000 ? '${m.round()} m' : '${(m / 1000).toStringAsFixed(1)} km';
 
-  String _fmtEta(int s) {
-    if (s < 60) return 'moins d\'1 min';
-    final min = s ~/ 60;
-    if (min < 60) return '$min min';
-    return '${min ~/ 60}h${(min % 60).toString().padLeft(2, '0')}';
-  }
-
   @override
   void dispose() {
+    _etaTracker?.removeListener(_onEtaUpdate);
+    _etaTracker?.release();
     _sub?.cancel();
     super.dispose();
   }
@@ -1912,70 +2078,47 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
               height: 200,
               child: Stack(
                 children: [
-                  FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: initialCenter,
-                      initialZoom: 14,
-                      interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.none,
-                      ),
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.misonservice.app',
-                      ),
+                  // Google Maps (au lieu d'OpenStreetMap), carte non interactive
+                  gmaps.GoogleMap(
+                    initialCameraPosition: gmaps.CameraPosition(target: _g(initialCenter), zoom: 14),
+                    onMapCreated: (c) {
+                      _mapController = c;
+                      WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
+                    },
+                    zoomGesturesEnabled: false,
+                    scrollGesturesEnabled: false,
+                    rotateGesturesEnabled: false,
+                    tiltGesturesEnabled: false,
+                    zoomControlsEnabled: false,
+                    myLocationButtonEnabled: false,
+                    mapToolbarEnabled: false,
+                    compassEnabled: false,
+                    polylines: {
                       if (_routePoints.isNotEmpty)
-                        PolylineLayer(
-                          polylines: [
-                            Polyline(
-                              points: _routePoints,
-                              color: primaryColor,
-                              strokeWidth: 4,
-                            ),
-                          ],
+                        gmaps.Polyline(
+                          polylineId: const gmaps.PolylineId('route'),
+                          points: _routePoints.map(_g).toList(),
+                          color: kMisonGold,
+                          width: 4,
                         ),
-                      MarkerLayer(
-                        markers: [
-                          if (_destPos != null)
-                            Marker(
-                              point: _destPos!,
-                              width: 36,
-                              height: 44,
-                              child: const Icon(
-                                Icons.location_on,
-                                color: Colors.redAccent,
-                                size: 36,
-                                shadows: [Shadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2))],
-                              ),
-                            ),
-                          if (_artisanPos != null)
-                            Marker(
-                              point: _artisanPos!,
-                              width: 34,
-                              height: 34,
-                              rotate: false,
-                              child: Transform.rotate(
-                                angle: _bearing * pi / 180,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: primaryColor,
-                                    border: Border.all(color: Colors.white, width: 2.5),
-                                    boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4)],
-                                  ),
-                                  child: const Icon(
-                                    Icons.navigation_rounded,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
+                    },
+                    markers: {
+                      if (_destPos != null)
+                        gmaps.Marker(
+                          markerId: const gmaps.MarkerId('destination'),
+                          position: _g(_destPos!),
+                        ),
+                      if (_artisanPos != null)
+                        gmaps.Marker(
+                          markerId: const gmaps.MarkerId('artisan'),
+                          position: _g(_artisanPos!),
+                          icon: _artisanIcon ?? gmaps.BitmapDescriptor.defaultMarkerWithHue(45),
+                          rotation: _artisanIcon != null ? _bearing : 0,
+                          anchor: const Offset(0.5, 0.5),
+                          flat: true,
+                          zIndexInt: 2,
+                        ),
+                    },
                   ),
 
                   // Badge LIVE / attente
@@ -2039,35 +2182,69 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
               children: [
                 Row(
                   children: [
-                    // Avatar
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: primaryColor.withValues(alpha: 0.1),
-                        border: Border.all(color: primaryColor.withValues(alpha: 0.2), width: 1.5),
-                        image: artisan.profilePictureUrl != null
-                            ? DecorationImage(
-                                image: CachedNetworkImageProvider(artisan.profilePictureUrl!),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
-                      child: artisan.profilePictureUrl == null
-                          ? Icon(Icons.person_rounded, color: primaryColor, size: 24)
-                          : null,
-                    ),
+                    // Photo de l'ouvrier (vue client) ; le client n'a pas de photo
+                    _ArtisanAvatar(url: widget.forArtisan ? null : artisan.profilePictureUrl, size: 50),
                     12.width,
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(artisan.fullName, style: boldTextStyle(size: 16)),
+                          // Nom (ouvrier côté client, client côté prestataire), puis le service
+                          if (widget.forArtisan) ...[
+                            // Prestataire : « Client : Nom » et « Prestation : Service »
+                            Text.rich(
+                              TextSpan(children: [
+                                TextSpan(text: 'Client : ', style: secondaryTextStyle(size: 14)),
+                                TextSpan(
+                                  text: (widget.order.client?.fullName ?? '').isNotEmpty
+                                      ? widget.order.client!.fullName
+                                      : '—',
+                                  style: boldTextStyle(size: 17),
+                                ),
+                              ]),
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                            ),
+                            if ((widget.order.service?.name ?? '').isNotEmpty) ...[
+                              3.height,
+                              Text.rich(
+                                TextSpan(children: [
+                                  TextSpan(text: 'Prestation : ', style: secondaryTextStyle(size: 14)),
+                                  TextSpan(
+                                    text: widget.order.service!.name!,
+                                    style: boldTextStyle(size: 14, color: kMisonGold),
+                                  ),
+                                ]),
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ] else ...[
+                            Text(artisan.fullName,
+                                style: boldTextStyle(size: 19),
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                            if ((widget.order.service?.name ?? '').isNotEmpty) ...[
+                              2.height,
+                              Text(widget.order.service!.name!,
+                                  style: boldTextStyle(size: 13, color: kMisonGold),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ],
+                          ],
+                          // Adresse du client (vue prestataire)
+                          if (widget.forArtisan && (widget.order.serviceAddress ?? '').isNotEmpty) ...[
+                            2.height,
+                            Row(children: [
+                              const Icon(Icons.location_on_outlined, size: 13, color: Colors.grey),
+                              3.width,
+                              Expanded(
+                                child: Text(widget.order.serviceAddress!,
+                                    style: secondaryTextStyle(size: 13),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                            ]),
+                          ],
                           4.height,
                           Row(
                             children: [
-                              if (artisan.averageRating != null) ...[
+                              if (!widget.forArtisan && artisan.averageRating != null) ...[
                                 Icon(Icons.star_rounded, size: 13, color: ratingBarColor),
                                 3.width,
                                 Text(artisan.rating.toStringAsFixed(1), style: secondaryTextStyle(size: 14)),
@@ -2080,7 +2257,7 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
-                                  'En route',
+                                  widget.forArtisan ? 'Vous êtes en route' : 'En route',
                                   style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600),
                                 ),
                               ),
@@ -2094,11 +2271,9 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         if (dist != null)
-                          Text(_fmtDist(dist), style: boldTextStyle(size: 16, color: primaryColor)),
-                        if (_etaSeconds != null)
-                          Text(_fmtEta(_etaSeconds!), style: secondaryTextStyle(size: 13, color: Colors.green.shade700)),
-                        if (dist == null && _etaSeconds == null)
-                          const SizedBox.shrink(),
+                          Text(_fmtDist(dist), style: boldTextStyle(size: 16, color: kMisonGold)),
+                        // Le temps d'arrivée est affiché une seule fois,
+                        // dans la ligne « Arrivée de l'ouvrier » plus bas
                       ],
                     ),
                   ],

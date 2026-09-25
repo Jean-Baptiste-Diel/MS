@@ -1,4 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:booking_system_flutter/component/mison_service_image_header.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
@@ -6,9 +7,7 @@ import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_success_screen.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -69,6 +68,7 @@ class _MisonConfirmBookingScreenState
         service: widget.service.id ?? '',
         description: widget.description,
         serviceDate: widget.serviceDate,
+        isImmediate: widget.isImmediate,
         serviceAddress: widget.zone,
         latitude: widget.latitude,
         longitude: widget.longitude,
@@ -103,57 +103,19 @@ class _MisonConfirmBookingScreenState
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+      // Logo centré + fond de la page, comme les autres pages
+      appBar: MisonAppBar(
+        title: 'Confirmer la commande',
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: kMisonDark),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: DotGridBackground(
         child: Stack(
         children: [
           CustomScrollView(
             slivers: [
-              // ── Header ──────────────────────────────────────────────────────
-              SliverAppBar(
-                expandedHeight: 130,
-                pinned: true,
-                backgroundColor: primaryColor,
-                systemOverlayStyle: const SystemUiOverlayStyle(
-                  statusBarIconBrightness: Brightness.light,
-                  statusBarColor: Colors.transparent,
-                ),
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [primaryColor, primaryColor.withValues(alpha: 0.75)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Confirmer la commande',
-                          style: boldTextStyle(color: Colors.white, size: 22),
-                        ),
-                        6.height,
-                        Text(
-                          widget.service.name ?? '',
-                          style: secondaryTextStyle(
-                              color: Colors.white70, size: 15),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
               SliverToBoxAdapter(
                 child: Padding(
                   padding:
@@ -162,9 +124,8 @@ class _MisonConfirmBookingScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // ── Service ────────────────────────────────────────────
-                      _SectionLabel(label: 'Service demandé'),
-                      12.height,
-                      _ServiceCard(service: widget.service),
+                      // Service : image arrondie avec son nom dessus
+                      MisonServiceImageHeader(service: widget.service),
 
                       24.height,
 
@@ -209,16 +170,16 @@ class _MisonConfirmBookingScreenState
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: primaryColor.withValues(alpha: 0.06),
+                          color: kMisonGold.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: primaryColor.withValues(alpha: 0.15)),
+                              color: kMisonGold.withValues(alpha: 0.15)),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(Icons.info_outline_rounded,
-                                color: primaryColor, size: 16),
+                                color: kMisonGold, size: 16),
                             10.width,
                             Expanded(
                               child: Text(
@@ -244,7 +205,7 @@ class _MisonConfirmBookingScreenState
             child: Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
               decoration: BoxDecoration(
-                color: context.scaffoldBackgroundColor,
+                color: kMisonHeaderBg, // même gris clair que la page
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.08),
@@ -255,7 +216,7 @@ class _MisonConfirmBookingScreenState
               ),
               child: AppButton(
                 text: 'Confirmer la commande',
-                color: _isLoading ? Colors.grey : primaryColor,
+                color: _isLoading ? Colors.grey : kMisonGold,
                 disabledColor: Colors.grey,
                 textColor: Colors.white,
                 width: double.infinity,
@@ -286,7 +247,7 @@ class _MisonConfirmBookingScreenState
 
           Observer(
             builder: (_) =>
-                LoaderWidget().visible(appStore.isLoading.validate()),
+                LoaderWidget(colors: const [kMisonDark, kMisonGold]).visible(appStore.isLoading.validate()),
           ),
         ],
         ),
@@ -306,70 +267,6 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Text(label, style: boldTextStyle(size: 16, color: Colors.grey));
-}
-
-class _ServiceCard extends StatelessWidget {
-  final MisonService service;
-  const _ServiceCard({required this.service});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 3)),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: primaryColor.withValues(alpha: 0.1),
-              border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
-              image: service.imageUrl != null && service.imageUrl!.isNotEmpty
-                  ? DecorationImage(
-                      image: CachedNetworkImageProvider(service.imageUrl!), fit: BoxFit.cover)
-                  : null,
-            ),
-            child: service.imageUrl == null || service.imageUrl!.isEmpty
-                ? Icon(Icons.handyman_rounded, color: primaryColor, size: 26)
-                : null,
-          ),
-          14.width,
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(service.name ?? '',
-                    style: boldTextStyle(size: 16),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: accept.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text('Sélectionné',
-                style: boldTextStyle(size: 13, color: accept)),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _InfoCard extends StatelessWidget {
@@ -414,10 +311,10 @@ class _InfoRow extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: primaryColor.withValues(alpha: 0.08),
+              color: kMisonGold.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: primaryColor, size: 18),
+            child: Icon(icon, color: kMisonGold, size: 18),
           ),
           12.width,
           Expanded(

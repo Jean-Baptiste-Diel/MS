@@ -17,6 +17,7 @@ class _SettingScreenState extends State<SettingScreen> {
   Widget build(BuildContext context) {
     return AppScaffold(
       appBarTitle: language.lblAppSetting,
+      useMisonHeader: true,
       child: AnimatedScrollView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         listAnimationType: ListAnimationType.FadeIn,

@@ -6,8 +6,12 @@ import 'package:nb_utils/nb_utils.dart';
 const Color kMisonGold = Color(0xFFC49716);
 const Color kMisonDark = Color(0xFF3A3A3A);
 
-/// Même gris clair que [DotGridBackground] : l'en-tête se fond dans la page.
-const Color kMisonHeaderBg = Color(0xFFF1F2F4);
+/// Fond blanc des pages (même couleur que [DotGridBackground]) : l'en-tête
+/// se fond dans la page.
+const Color kMisonHeaderBg = Color(0xFFFFFFFF);
+
+/// Gris clair des champs et options sur fond blanc (ex. panneaux).
+const Color kMisonFieldBg = Color(0xFFF1F2F4);
 
 /// En-tête commun : logo centré sur le fond de la page, titre de la page
 /// en dessous (et contenu optionnel, ex. onglets).

@@ -16,6 +16,10 @@ class VoiceNotePlayer extends StatefulWidget {
 }
 
 class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
+  /// Lecture sur le haut-parleur : sans ça, après un enregistrement (session
+  /// audio "voix") ou un appel, le son part dans l'écouteur, à peine audible.
+  static final _speakerContext = AudioContextConfig(route: AudioContextConfigRoute.speaker).build();
+
   final AudioPlayer _player = AudioPlayer();
   final List<StreamSubscription> _subs = [];
 
@@ -42,6 +46,7 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
         if (mounted) setState(() => _position = Duration.zero);
       }),
     ]);
+    _player.setAudioContext(_speakerContext).catchError((e) => log('VoiceNotePlayer context: $e'));
     // Charge la source sans jouer, pour afficher la durée tout de suite.
     _player.setSourceUrl(widget.url).catchError((e) {
       log('VoiceNotePlayer setSource: $e');
@@ -58,6 +63,9 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
         _loading = true;
         _error = false;
       });
+      // Réappliqué à chaque lecture : un enregistrement ou un appel entre-temps
+      // a pu rebasculer la sortie audio vers l'écouteur.
+      await _player.setAudioContext(_speakerContext);
       await _player.play(UrlSource(widget.url), position: _position);
     } catch (e) {
       log('VoiceNotePlayer play: $e');

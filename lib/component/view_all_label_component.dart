@@ -1,5 +1,5 @@
+import 'package:booking_system_flutter/component/mison_view_all_button.dart';
 import 'package:booking_system_flutter/main.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -43,25 +43,8 @@ class ViewAllLabel extends StatelessWidget {
         if (!showViewAll)
           const SizedBox()
         else if (usePillStyle)
-          GestureDetector(
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: primaryColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryColor.withValues(alpha: 0.18),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Text(language.lblViewAll,
-                  style: trailingTextStyle ?? boldTextStyle(color: primaryColor, size: 14)),
-            ),
-          )
+          // Bouton « Voir tout › » doré de l'accueil
+          MisonViewAllButton(onTap: onTap, label: language.lblViewAll)
         else
           TextButton(
             onPressed: onTap,

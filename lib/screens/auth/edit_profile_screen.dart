@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:booking_system_flutter/component/mison_country_code_dropdown.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/base_scaffold_widget.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:booking_system_flutter/component/custom_image_picker.dart';
 import 'package:booking_system_flutter/main.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
@@ -241,27 +242,6 @@ class EditProfileScreenState extends State<EditProfileScreen> {
     });
   }
 
-  void _changeCountryCode() {
-    showCountryPicker(
-      context: context,
-      showPhoneCode: true,
-      countryListTheme: CountryListThemeData(
-        textStyle: secondaryTextStyle(color: textSecondaryColorGlobal),
-        searchTextStyle: primaryTextStyle(),
-        inputDecoration: InputDecoration(
-          labelText: language.search,
-          prefixIcon: const Icon(Icons.search),
-          border: const OutlineInputBorder(),
-        ),
-      ),
-      onSelect: (Country country) {
-        selectedCountryCode = country;
-        valueNotifier.value = !valueNotifier.value;
-        setState(() {});
-      },
-    );
-  }
-
   @override
   void setState(fn) {
     if (mounted) super.setState(fn);
@@ -272,6 +252,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
     return AppScaffold(
       showLoader: false,
       appBarTitle: language.editProfile,
+      useMisonHeader: true,
       child: Observer(
         builder: (_) => Stack(
           children: [
@@ -317,7 +298,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
                               padding: const EdgeInsets.all(6),
                               decoration: boxDecorationWithRoundedCorners(
                                 boxShape: BoxShape.circle,
-                                backgroundColor: primaryColor,
+                                backgroundColor: kMisonGold,
                                 border: Border.all(color: Colors.white),
                               ),
                               child: const Icon(AntDesign.camera,
@@ -354,29 +335,22 @@ class EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                       16.height,
                       // Téléphone
-                      Row(
+                      // Indicatif : liste animée des pays, comme à l'inscription
+                      MisonCountryCodeDropdown(
+                        selected: selectedCountryCode,
+                        onChanged: (country) => setState(() => selectedCountryCode = country),
+                        fieldBuilder: (context, isOpen, toggle) => Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Container(
-                            height: 48,
-                            margin: EdgeInsets.only(
-                                bottom: context.height() * 0.032),
-                            decoration: BoxDecoration(
-                              color: context.cardColor,
-                              borderRadius: BorderRadius.circular(12),
+                          Padding(
+                            padding: EdgeInsets.only(bottom: context.height() * 0.032),
+                            child: MisonCountryCodeButton(
+                              country: selectedCountryCode,
+                              isOpen: isOpen,
+                              onTap: toggle,
+                              height: 48,
                             ),
-                            child: ValueListenableBuilder(
-                              valueListenable: valueNotifier,
-                              builder: (_, __, ___) => Row(
-                                children: [
-                                  Text(
-                                      '+${selectedCountryCode.phoneCode}',
-                                      style: primaryTextStyle(size: 16)),
-                                  const Icon(Icons.arrow_drop_down),
-                                ],
-                              ).paddingOnly(left: 8),
-                            ),
-                          ).onTap(_changeCountryCode),
+                          ),
                           10.width,
                           Expanded(
                             child: AppTextField(
@@ -398,6 +372,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
                             ),
                           ),
                         ],
+                        ),
                       ),
                       if (isEntreprise) ...[
                         16.height,
@@ -416,7 +391,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
                       40.height,
                       AppButton(
                         text: language.save,
-                        color: primaryColor,
+                        color: kMisonGold,
                         textColor: white,
                         width: context.width() - context.navigationBarHeight,
                         onTap: () => ifNotTester(() => update()),

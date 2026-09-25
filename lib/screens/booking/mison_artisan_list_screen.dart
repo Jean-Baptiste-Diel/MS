@@ -1,9 +1,10 @@
+import 'package:booking_system_flutter/component/loader_widget.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/app_empty_state.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_artisan_list_component.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
@@ -63,25 +64,23 @@ class _MisonArtisanListScreenState extends State<MisonArtisanListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: primaryColor,
-        elevation: 0,
+      // Logo centré + fond de la page, comme les autres pages
+      appBar: MisonAppBar(
+        title: 'Prestataires',
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: kMisonDark),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Prestataires', style: boldTextStyle(color: Colors.white, size: 18)),
       ),
       body: DotGridBackground(
         child: Column(
         children: [
           // ── Barre de recherche ───────────────────────────────────────────
-          Container(
-            color: primaryColor,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: kMisonFieldBg,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TextField(
@@ -90,7 +89,7 @@ class _MisonArtisanListScreenState extends State<MisonArtisanListScreen> {
                 decoration: InputDecoration(
                   hintText: 'Recherchez un prestataire ou un service...',
                   hintStyle: secondaryTextStyle(size: 15),
-                  prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.withValues(alpha: 0.7)),
+                  prefixIcon: const Icon(Icons.search_rounded, color: kMisonGold),
                   suffixIcon: _searchCtrl.text.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.close_rounded, size: 18),
@@ -107,7 +106,7 @@ class _MisonArtisanListScreenState extends State<MisonArtisanListScreen> {
           // ── Contenu ──────────────────────────────────────────────────────
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(child: LoaderWidget(colors: const [kMisonDark, kMisonGold]))
                 : _hasError
                     ? AppEmptyState(
                         type: AppEmptyStateType.error,
@@ -121,7 +120,7 @@ class _MisonArtisanListScreenState extends State<MisonArtisanListScreen> {
                                 : 'Aucun résultat pour "${_searchCtrl.text}"',
                           )
                         : RefreshIndicator(
-                            color: primaryColor,
+                            color: kMisonGold,
                             onRefresh: _load,
                             child: GridView.builder(
                               padding: const EdgeInsets.all(16),

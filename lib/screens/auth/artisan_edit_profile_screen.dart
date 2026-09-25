@@ -1,19 +1,18 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:booking_system_flutter/component/back_widget.dart';
+import 'package:booking_system_flutter/component/mison_country_code_dropdown.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/nominatim_address_field.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_vector_icons/flutter_vector_icons.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -147,14 +146,6 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
     );
   }
 
-  void _changeCountry() {
-    showCountryPicker(
-      context: context,
-      showPhoneCode: true,
-      onSelect: (c) { selectedCountry = c; phoneNotifier.value = !phoneNotifier.value; setState(() {}); },
-    );
-  }
-
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     hideKeyboard(context);
@@ -232,13 +223,13 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: appBarWidget(
-        'Modifier mon profil',
-        textColor: Colors.white,
-        color: primaryColor,
-        systemUiOverlayStyle: SystemUiOverlayStyle(statusBarIconBrightness: Brightness.light, statusBarColor: primaryColor),
-        showBack: true,
-        backWidget: BackWidget(),
+      // Logo centré + fond de la page, comme les autres pages
+      appBar: MisonAppBar(
+        title: 'Modifier mon profil',
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: kMisonDark),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: DotGridBackground(
         child: Stack(
@@ -259,7 +250,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                           onTap: _showPickDialog,
                           child: Container(
                             width: 100, height: 100,
-                            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: primaryColor, width: 3)),
+                            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kMisonGold, width: 3)),
                             child: ClipOval(
                               child: profileImageFile != null
                                   ? Image.file(profileImageFile!, fit: BoxFit.cover, width: 100, height: 100)
@@ -273,7 +264,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                             onTap: _showPickDialog,
                             child: Container(
                               padding: const EdgeInsets.all(7),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: primaryColor, border: Border.all(color: Colors.white, width: 2)),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: kMisonGold, border: Border.all(color: Colors.white, width: 2)),
                               child: const Icon(AntDesign.camera, color: Colors.white, size: 14),
                             ),
                           ),
@@ -306,26 +297,17 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                   16.height,
 
                   // Téléphone
-                  Row(
+                  // Indicatif : liste animée des pays, comme à l'inscription
+                  MisonCountryCodeDropdown(
+                    selected: selectedCountry,
+                    onChanged: (country) => setState(() => selectedCountry = country),
+                    fieldBuilder: (context, isOpen, toggle) => Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
-                        onTap: _changeCountry,
-                        child: Container(
-                          height: 58,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(color: context.cardColor, borderRadius: BorderRadius.circular(12)),
-                          child: ValueListenableBuilder(
-                            valueListenable: phoneNotifier,
-                            builder: (_, __, ___) => Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('+${selectedCountry.phoneCode}', style: primaryTextStyle(size: 16)),
-                                const Icon(Icons.arrow_drop_down, size: 20),
-                              ],
-                            ),
-                          ),
-                        ),
+                      MisonCountryCodeButton(
+                        country: selectedCountry,
+                        isOpen: isOpen,
+                        onTap: toggle,
                       ),
                       10.width,
                       Expanded(
@@ -340,6 +322,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                         ),
                       ),
                     ],
+                    ),
                   ),
                   16.height,
 
@@ -392,7 +375,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                   // Save
                   AppButton(
                     text: 'Enregistrer',
-                    color: primaryColor,
+                    color: kMisonGold,
                     textColor: Colors.white,
                     width: context.width(),
                     shapeBorder: RoundedRectangleBorder(borderRadius: radius(12)),

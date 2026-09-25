@@ -50,7 +50,6 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
           _filtered = _allServices;
           _isLoading = false;
         });
-        _focusNode.requestFocus();
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);

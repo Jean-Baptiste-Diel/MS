@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/image_border_component.dart';
 import 'package:booking_system_flutter/main.dart';
@@ -165,9 +166,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bottomNavigationBar: NavigationBarTheme(
             data: NavigationBarThemeData(
               backgroundColor: context.scaffoldBackgroundColor,
-              indicatorColor: context.primaryColor.withValues(alpha: 0.1),
-              labelTextStyle:
-                  WidgetStateProperty.all(primaryTextStyle(size: 12)),
+              indicatorColor: kMisonGold.withValues(alpha: 0.15),
+              labelTextStyle: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.selected)
+                    ? boldTextStyle(size: 12, color: kMisonGold) // onglet actif en doré
+                    : primaryTextStyle(size: 12, color: Colors.grey),
+              ),
               surfaceTintColor: Colors.transparent,
               shadowColor: Colors.transparent,
             ),
@@ -176,26 +180,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
               destinations: [
                 NavigationDestination(
                   icon: ic_home.iconImage(color: appTextSecondaryColor),
-                  selectedIcon: ic_home.iconImage(color: context.primaryColor),
+                  selectedIcon: ic_home.iconImage(color: kMisonGold),
                   label: language.home,
                 ),
                 NavigationDestination(
                   icon: ic_ticket.iconImage(color: appTextSecondaryColor),
                   selectedIcon:
-                      ic_ticket.iconImage(color: context.primaryColor),
+                      ic_ticket.iconImage(color: kMisonGold),
                   label: language.booking,
                 ),
                 NavigationDestination(
                   icon: ic_category.iconImage(color: appTextSecondaryColor),
                   selectedIcon:
-                      ic_category.iconImage(color: context.primaryColor),
+                      ic_category.iconImage(color: kMisonGold),
                   label: 'Service',
                 ),
                 if (appConfigurationStore.isEnableChat)
                   NavigationDestination(
                     icon: ic_chat.iconImage(color: appTextSecondaryColor),
                     selectedIcon:
-                        ic_chat.iconImage(color: context.primaryColor),
+                        ic_chat.iconImage(color: kMisonGold),
                     label: language.lblChat,
                   ),
                 Observer(
@@ -214,7 +218,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ignoring: true,
                               child: ImageBorder(
                                   src: appStore.userProfileImage, height: 26))
-                          : ic_profile2.iconImage(color: context.primaryColor),
+                          : ic_profile2.iconImage(color: kMisonGold),
                       label: language.profile,
                     );
                   },

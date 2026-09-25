@@ -14,7 +14,7 @@ class AppTheme {
     primarySwatch: createMaterialColor(color ?? primaryColor),
     primaryColor: color ?? primaryColor,
     colorScheme: ColorScheme.fromSeed(seedColor: color ?? primaryColor, outlineVariant: borderColor),
-    scaffoldBackgroundColor: const Color(0xFFF1F2F4),
+    scaffoldBackgroundColor: const Color(0xFFFFFFFF),
     fontFamily: GoogleFonts.manrope().fontFamily,
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(backgroundColor: Colors.white),
     iconTheme: const IconThemeData(color: appTextSecondaryColor),

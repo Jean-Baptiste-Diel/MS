@@ -253,25 +253,18 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
                 20.height,
 
                 // ── Description ──────────────────────────────────────────
-                Text('Description *', style: boldTextStyle(size: 16)),
+                Text('Description (facultative)', style: boldTextStyle(size: 16)),
                 8.height,
                 AppTextField(
                   textFieldType: TextFieldType.MULTILINE,
                   controller: _descriptionCont,
                   minLines: 4,
                   maxLines: 6,
-                  isValidationRequired: true,
+                  isValidationRequired: false,
                   decoration: inputDecoration(
                     context,
                     hintText: 'Décrivez le travail à effectuer...',
                   ).copyWith(alignLabelWithHint: true),
-                  validator: (val) {
-                    if (val == null || val.trim().isEmpty)
-                      return language.requiredText;
-                    if (val.trim().length < 10)
-                      return 'Minimum 10 caractères';
-                    return null;
-                  },
                 ),
                 20.height,
 

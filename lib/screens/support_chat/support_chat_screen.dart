@@ -7,7 +7,6 @@ import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/services/support_chat_service.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -337,7 +336,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   }
 
   Widget _buildBody() {
-    if (_isConnecting) return LoaderWidget().center();
+    if (_isConnecting) return LoaderWidget(colors: const [kMisonDark, kMisonGold]).center();
 
     if (_error != null) {
       return Column(
@@ -347,7 +346,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           16.height,
           Text(_error!, style: secondaryTextStyle(), textAlign: TextAlign.center),
           16.height,
-          AppButton(text: 'Réessayer', color: primaryColor, onTap: _initChat),
+          AppButton(text: 'Réessayer', color: kMisonGold, onTap: _initChat),
         ],
       ).paddingSymmetric(horizontal: 32);
     }
@@ -489,7 +488,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         placeholder: (_, __) => const SizedBox(
           width: 200,
           height: 200,
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: kMisonGold)),
         ),
         errorWidget: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white),
       ),
@@ -657,7 +656,7 @@ class _ChatInputState extends State<ChatInput> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: Icon(Icons.photo_library_outlined, color: primaryColor),
+                leading: Icon(Icons.photo_library_outlined, color: kMisonGold),
                 title: const Text('Galerie'),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -665,7 +664,7 @@ class _ChatInputState extends State<ChatInput> {
                 },
               ),
               ListTile(
-                leading: Icon(Icons.camera_alt_outlined, color: primaryColor),
+                leading: Icon(Icons.camera_alt_outlined, color: kMisonGold),
                 title: const Text('Appareil photo'),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -740,7 +739,7 @@ class _ChatInputState extends State<ChatInput> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.add_circle_outline_rounded),
-                    color: primaryColor,
+                    color: kMisonGold,
                     onPressed: (widget.enabled && !_isUploading && !_isRecording) ? _showImageSourceSheet : null,
                   ),
                   Expanded(
@@ -765,7 +764,7 @@ class _ChatInputState extends State<ChatInput> {
                   ),
                   8.width,
                   Container(
-                    decoration: boxDecorationDefault(borderRadius: radius(40), color: primaryColor),
+                    decoration: boxDecorationDefault(borderRadius: radius(40), color: kMisonGold),
                     child: _isUploading
                         ? const SizedBox(
                             width: 48,

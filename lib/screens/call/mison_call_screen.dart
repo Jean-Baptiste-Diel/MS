@@ -1,16 +1,11 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
-import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
+import 'package:booking_system_flutter/services/mison_call_session.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
-import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:nb_utils/nb_utils.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 
 const _kOutgoingCallKey = 'outgoing_call_order_id';
@@ -68,22 +63,18 @@ class MisonCallScreen extends StatefulWidget {
 
   static bool isOutgoing(String orderId) => _outgoingOrderIds.contains(orderId);
 
+  /// Nombre d'écrans d'appel affichés : la barre « Appel en cours » est masquée
+  /// quand l'écran d'appel est déjà à l'écran.
+  static final ValueNotifier<int> visibleCount = ValueNotifier(0);
+
   @override
   State<MisonCallScreen> createState() => _MisonCallScreenState();
 }
 
 class _MisonCallScreenState extends State<MisonCallScreen> {
-  late RtcEngine _engine;
-  bool _isConnected = false;
-  bool _isMuted = false;
-  bool _isSpeakerOn = true;
-  int _callSeconds = 0;
-  Timer? _callTimer;
-  bool _engineReady = false;
-  bool _hasLeft = false;
-  bool _engineCreated = false;
-  bool _micDenied = false;
-  StreamSubscription<DocumentSnapshot>? _callStatusSub;
+  /// L'appel vit dans la session : quitter cet écran (flèche, retour, app en
+  /// arrière-plan) ne raccroche pas. La barre « Appel en cours » permet d'y revenir.
+  late final MisonCallSession _session;
 
   @override
   void initState() {
@@ -93,155 +84,42 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
     ));
-    _initAgora();
-    if (widget.isCaller) _listenCallStatus();
+    _session = MisonCallSession.start(
+      orderId: widget.orderId,
+      otherPartyName: widget.otherPartyName,
+      appId: widget.appId,
+      channel: widget.channel,
+      token: widget.token,
+      uid: widget.uid,
+      isCaller: widget.isCaller,
+    );
+    _session.addListener(_onSessionChanged);
+    MisonCallScreen.visibleCount.value++;
   }
 
-  void _listenCallStatus() {
-    _callStatusSub = FirebaseFirestore.instance
-        .collection('call_status')
-        .doc(widget.orderId)
-        .snapshots()
-        .listen((snap) {
-      if (snap.data()?['status'] == 'rejected' && !_isConnected && mounted) {
-        _callStatusSub?.cancel();
-        _hasLeft = true;
-        _callTimer?.cancel();
-        if (_engineCreated) {
-          _engine.leaveChannel();
-          _engine.release();
-        }
-        _endCallKitSession();
-        showSimpleLocalNotification(
-          id: 9010,
-          title: 'Appel refusé',
-          body: '${widget.otherPartyName} a refusé l\'appel.',
+  void _onSessionChanged() {
+    if (!mounted) return;
+    if (_session.ended) {
+      final message = _session.endMessage;
+      if (message != null) {
+        TopToast.show(
+          message: message,
+          type: _session.micDenied ? TopToastType.error : TopToastType.info,
         );
-        TopToast.show(message: '${widget.otherPartyName} a refusé l\'appel');
-        if (mounted) Navigator.pop(context);
       }
-    });
-  }
-
-  Future<void> _initAgora() async {
-    // Sans micro accordé, l'appel se connecte mais reste muet des deux côtés.
-    final micStatus = await Permission.microphone.request();
-    if (!micStatus.isGranted) {
-      if (!mounted) return;
-      setState(() => _micDenied = true);
-      TopToast.show(
-        message: 'Micro refusé : autorisez le microphone pour passer un appel',
-        type: TopToastType.error,
-      );
-      if (micStatus.isPermanentlyDenied) await openAppSettings();
-      await _endCallKitSession();
-      if (mounted) Navigator.pop(context);
+      Navigator.of(context).maybePop();
       return;
     }
-
-    _engine = createAgoraRtcEngine();
-    _engineCreated = true;
-    await _engine.initialize(RtcEngineContext(
-      appId: widget.appId,
-      channelProfile: ChannelProfileType.channelProfileCommunication,
-    ));
-
-    // iOS : CallKit possède la session audio. Sans ce paramètre, Agora la
-    // reconfigure et le flux entrant devient inaudible.
-    if (Platform.isIOS) {
-      await _engine.setParameters('{"che.audio.keep.audiosession":true}');
-    }
-
-    _engine.registerEventHandler(RtcEngineEventHandler(
-      onJoinChannelSuccess: (connection, elapsed) async {
-        await _engine.setEnableSpeakerphone(_isSpeakerOn);
-        // Indique au système (CallKit / notification Android) que l'appel est
-        // établi : c'est ce qui libère le focus audio vers Agora.
-        try {
-          await FlutterCallkitIncoming.setCallConnected(widget.orderId);
-        } catch (_) {}
-        if (mounted) setState(() => _engineReady = true);
-      },
-      onUserJoined: (connection, remoteUid, elapsed) {
-        if (mounted) {
-          setState(() => _isConnected = true);
-          _startTimer();
-        }
-      },
-      onUserOffline: (connection, remoteUid, reason) {
-        _callTimer?.cancel();
-        if (mounted) {
-          TopToast.show(message: 'Appel terminé');
-          Navigator.pop(context);
-        }
-      },
-      onError: (err, msg) => log('Agora error: $err $msg'),
-    ));
-
-    await _engine.enableAudio();
-    await _engine.muteAllRemoteAudioStreams(false);
-    await _engine.setDefaultAudioRouteToSpeakerphone(true);
-    await _engine.joinChannel(
-      token: widget.token,
-      channelId: widget.channel,
-      uid: widget.uid,
-      options: const ChannelMediaOptions(
-        autoSubscribeAudio: true,
-        publishMicrophoneTrack: true,
-        clientRoleType: ClientRoleType.clientRoleBroadcaster,
-        channelProfile: ChannelProfileType.channelProfileCommunication,
-      ),
-    );
+    setState(() {});
   }
 
-  /// Termine la session CallKit — sur Android comme sur iOS, elle retient le
-  /// focus audio tant qu'elle est active.
-  Future<void> _endCallKitSession() async {
-    try {
-      await FlutterCallkitIncoming.endCall(widget.orderId);
-    } catch (_) {}
-  }
-
-  void _startTimer() {
-    _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _callSeconds++);
-    });
-  }
-
-  String _formatDuration(int s) =>
-      '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
-
-  Future<void> _hangUp() async {
-    if (_hasLeft) return;
-    _hasLeft = true;
-    _callTimer?.cancel();
-    await _endCallKitSession();
-    if (_engineCreated) {
-      await _engine.leaveChannel();
-      await _engine.release();
-    }
-    if (mounted) Navigator.pop(context);
-  }
+  /// Réduit l'écran : l'appel continue en arrière-plan.
+  void _minimize() => Navigator.of(context).maybePop();
 
   @override
   void dispose() {
-    MisonCallScreen.clearOutgoing(widget.orderId);
-    _callStatusSub?.cancel();
-    _callTimer?.cancel();
-    // Clean up Firestore doc so stale status doesn't affect future calls.
-    FirebaseFirestore.instance
-        .collection('call_status')
-        .doc(widget.orderId)
-        .delete()
-        .catchError((_) {});
-    // Clôture la session CallKit (iOS et Android) : sinon elle garde le focus
-    // audio et l'appel suivant reste muet.
-    FlutterCallkitIncoming.endCall(widget.orderId).catchError((_) {});
-    if (!_hasLeft && _engineCreated) {
-      _hasLeft = true;
-      _engine.leaveChannel();
-      _engine.release();
-    }
+    _session.removeListener(_onSessionChanged);
+    MisonCallScreen.visibleCount.value--;
     super.dispose();
   }
 
@@ -252,7 +130,7 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
         : '?';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F2F4),
+      backgroundColor: const Color(0xFFFFFFFF),
       body: DotGridBackground(
         child: SafeArea(
           child: Column(
@@ -265,7 +143,8 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
                     IconButton(
                       icon: const Icon(Icons.keyboard_arrow_down_rounded,
                           color: Colors.black, size: 28),
-                      onPressed: _hangUp,
+                      tooltip: "Réduire (l'appel continue)",
+                      onPressed: _minimize,
                     ),
                     const Spacer(),
                     Text('Appel audio', style: secondaryTextStyle(color: appTextSecondaryColor, size: 14)),
@@ -287,7 +166,7 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
                         shape: BoxShape.circle,
                         color: primaryColor.withValues(alpha: 0.12),
                         border: Border.all(
-                          color: _isConnected
+                          color: _session.isConnected
                               ? Colors.green.withValues(alpha: 0.6)
                               : primaryColor.withValues(alpha: 0.4),
                           width: 2.5,
@@ -308,17 +187,17 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 400),
                       child: Text(
-                        _micDenied
+                        _session.micDenied
                             ? 'Microphone refusé'
-                            : _isConnected
-                                ? _formatDuration(_callSeconds)
-                                : _engineReady
+                            : _session.isConnected
+                                ? _session.durationLabel
+                                : _session.engineReady
                                     ? 'En attente...'
                                     : 'Connexion...',
-                        key: ValueKey(_isConnected ? 'timer' : 'waiting'),
+                        key: ValueKey(_session.isConnected ? 'timer' : 'waiting'),
                         style: secondaryTextStyle(
                           size: 16,
-                          color: _isConnected ? Colors.green.shade600 : appTextSecondaryColor,
+                          color: _session.isConnected ? Colors.green.shade600 : appTextSecondaryColor,
                         ),
                       ),
                     ),
@@ -333,16 +212,13 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _CallButton(
-                      icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                      label: _isMuted ? 'Activer' : 'Muet',
-                      color: _isMuted
+                      icon: _session.isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                      label: _session.isMuted ? 'Activer' : 'Muet',
+                      color: _session.isMuted
                           ? Colors.redAccent.withValues(alpha: 0.85)
                           : Colors.white,
-                      iconColor: _isMuted ? Colors.white : appTextPrimaryColor,
-                      onTap: () async {
-                        setState(() => _isMuted = !_isMuted);
-                        await _engine.muteLocalAudioStream(_isMuted);
-                      },
+                      iconColor: _session.isMuted ? Colors.white : appTextPrimaryColor,
+                      onTap: _session.toggleMute,
                     ),
                     _CallButton(
                       icon: Icons.call_end_rounded,
@@ -350,21 +226,18 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
                       color: Colors.redAccent,
                       iconColor: Colors.white,
                       size: 68,
-                      onTap: _hangUp,
+                      onTap: _session.hangUp,
                     ),
                     _CallButton(
-                      icon: _isSpeakerOn
+                      icon: _session.isSpeakerOn
                           ? Icons.volume_up_rounded
                           : Icons.volume_off_rounded,
                       label: 'Haut-parleur',
-                      color: _isSpeakerOn
+                      color: _session.isSpeakerOn
                           ? primaryColor
                           : Colors.white,
-                      iconColor: _isSpeakerOn ? Colors.white : appTextPrimaryColor,
-                      onTap: () async {
-                        setState(() => _isSpeakerOn = !_isSpeakerOn);
-                        await _engine.setEnableSpeakerphone(_isSpeakerOn);
-                      },
+                      iconColor: _session.isSpeakerOn ? Colors.white : appTextPrimaryColor,
+                      onTap: _session.toggleSpeaker,
                     ),
                   ],
                 ),

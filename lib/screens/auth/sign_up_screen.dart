@@ -905,7 +905,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     return SliverAppBar(
       pinned: true,
       expandedHeight: 220,
-      backgroundColor: const Color(0xFFF1F2F4),
+      backgroundColor: const Color(0xFFFFFFFF),
       elevation: 0,
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
@@ -1006,7 +1006,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     return GestureDetector(
       onTap: () => hideKeyboard(context),
       child: Scaffold(
-        backgroundColor: const Color(0xFFF1F2F4),
+        backgroundColor: const Color(0xFFFFFFFF),
         extendBodyBehindAppBar: true,
         body: DotGridBackground(
           child: Stack(

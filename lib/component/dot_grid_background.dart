@@ -11,14 +11,19 @@ class DotGridBackground extends StatelessWidget {
   const DotGridBackground({
     super.key,
     this.child,
-    this.backgroundColor = const Color(0xFFF1F2F4),
-    this.dotColor = const Color.fromRGBO(26, 42, 59, 0.16),
+    this.backgroundColor = const Color(0xFFFFFFFF),
+    // Fond blanc uni : plus de points (transparent par défaut)
+    this.dotColor = const Color(0x00000000),
     this.spacing = 28,
     this.dotRadius = 1.6,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Sans points visibles : simple fond uni, pas de dessin
+    if (dotColor.a == 0) {
+      return Container(color: backgroundColor, child: SizedBox.expand(child: child));
+    }
     return Container(
       color: backgroundColor,
       child: CustomPaint(

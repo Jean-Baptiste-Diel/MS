@@ -1,10 +1,9 @@
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
-import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
 
@@ -40,18 +39,8 @@ class MisonBookingSuccessScreen extends StatelessWidget {
     }
   }
 
-  Color _statusColor(String? s) {
-    switch (s) {
-      case 'PENDING':                      return pending;
-      case 'ACCEPTED':                     return accept;
-      case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
-      case 'IN_PROGRESS':                  return in_progress;
-      case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
-      case 'COMPLETED':                    return completed;
-      case 'CANCELLED':                    return cancelled;
-      default:                             return defaultStatus;
-    }
-  }
+  /// Sur l'écran de succès, le statut est toujours en doré.
+  Color _statusColor(String? s) => kMisonGold;
 
   String _statusLabel(String? s) {
     switch (s) {
@@ -74,17 +63,9 @@ class MisonBookingSuccessScreen extends StatelessWidget {
         if (!didPop) DashboardScreen().launch(context, isNewTask: true);
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF1F2F4),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFFF1F2F4),
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          systemOverlayStyle: SystemUiOverlayStyle(
-            statusBarIconBrightness:
-                appStore.isDarkMode ? Brightness.light : Brightness.dark,
-            statusBarColor: Colors.transparent,
-          ),
-        ),
+        backgroundColor: const Color(0xFFFFFFFF),
+        // Logo centré + fond de la page, comme les autres pages
+        appBar: const MisonAppBar(),
         body: DotGridBackground(
           child: SafeArea(
           child: SingleChildScrollView(
@@ -92,15 +73,33 @@ class MisonBookingSuccessScreen extends StatelessWidget {
             child: Column(
               children: [
                 // ── Icône succès ─────────────────────────────────────────
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: completed.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeOutBack,
+                  builder: (_, circle, child) => Transform.scale(
+                    scale: circle,
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: completed.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: child,
+                    ),
                   ),
-                  child: Icon(Icons.check_circle_rounded,
-                      size: 62, color: completed),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 900),
+                    // La coche arrive après le rond, avec un petit rebond
+                    curve: const Interval(0.35, 1, curve: Curves.elasticOut),
+                    builder: (_, check, __) => Transform.scale(
+                      scale: check,
+                      child: Icon(Icons.check_circle_rounded,
+                          size: 62, color: completed),
+                    ),
+                  ),
                 ),
                 24.height,
 
@@ -129,16 +128,18 @@ class MisonBookingSuccessScreen extends StatelessWidget {
                       Text(serviceName, style: boldTextStyle(size: 17)),
                       16.height,
 
+                      // "Tout de suite" : l'heure prévue est fictive (création + 30 min),
+                      // on affiche l'heure à laquelle la commande a été passée.
                       _Row(
                         icon: Icons.calendar_today_outlined,
                         label: 'Date',
-                        value: _formatDate(order.serviceDate),
+                        value: _formatDate(order.isImmediate ? order.createdAt : order.serviceDate),
                       ),
                       12.height,
                       _Row(
                         icon: Icons.access_time_rounded,
-                        label: 'Heure',
-                        value: _formatTime(order.serviceDate),
+                        label: order.isImmediate ? 'Commandée à' : 'Heure',
+                        value: _formatTime(order.isImmediate ? order.createdAt : order.serviceDate),
                       ),
                       12.height,
                       _Row(
@@ -181,15 +182,15 @@ class MisonBookingSuccessScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: primaryColor.withValues(alpha: 0.08),
+                    color: kMisonGold.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color: primaryColor.withValues(alpha: 0.2)),
+                        color: kMisonGold.withValues(alpha: 0.2)),
                   ),
                   child: Row(
                     children: [
                       Icon(Icons.info_outline,
-                          color: primaryColor, size: 20),
+                          color: kMisonGold, size: 20),
                       12.width,
                       Expanded(
                         child: Text(
@@ -223,7 +224,7 @@ class MisonBookingSuccessScreen extends StatelessWidget {
                     Expanded(
                       child: AppButton(
                         text: 'Mes commandes',
-                        color: primaryColor,
+                        color: kMisonGold,
                         textColor: Colors.white,
                         shapeBorder: RoundedRectangleBorder(
                             borderRadius: radius(12)),

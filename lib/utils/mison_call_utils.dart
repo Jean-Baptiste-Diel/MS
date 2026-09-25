@@ -1,6 +1,8 @@
 import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
+import 'package:booking_system_flutter/services/mison_call_session.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -12,6 +14,24 @@ Future<void> startMisonOrderCall(
   required String orderId,
   required String otherPartyName,
 }) async {
+  // Appel déjà en cours pour cette commande (écran réduit) : on y revient au
+  // lieu d'en relancer un, qui referait sonner l'autre partie.
+  final active = MisonCallSession.current.value;
+  if (active != null && active.orderId == orderId) {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => MisonCallScreen(
+        orderId: active.orderId,
+        otherPartyName: active.otherPartyName,
+        appId: active.appId,
+        channel: active.channel,
+        token: active.token,
+        uid: active.uid,
+        isCaller: active.isCaller,
+      ),
+    ));
+    return;
+  }
+
   // Await the SharedPreferences write before the API call triggers FCM.
   // data-only FCM (content-available:1) can arrive in the background isolate
   // before the async write completes if not awaited here.
@@ -44,6 +64,9 @@ Future<void> startMisonOrderCall(
     MisonCallScreen.clearOutgoing(orderId);
     appStore.setLoading(false);
     log('startMisonOrderCall error: $e\n$st');
-    TopToast.show(message: 'Impossible d\'initier l\'appel : $e');
+    TopToast.show(
+      message: isNotFoundError(e) ? kOrderUnavailableMessage : 'Impossible d\'initier l\'appel : $e',
+      type: TopToastType.error,
+    );
   }
 }

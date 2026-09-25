@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
@@ -71,8 +72,12 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
         bottomNavigationBar: NavigationBarTheme(
           data: NavigationBarThemeData(
             backgroundColor: context.scaffoldBackgroundColor,
-            indicatorColor: _brandGold.withValues(alpha: 0.1),
-            labelTextStyle: WidgetStateProperty.all(primaryTextStyle(size: 12)),
+            indicatorColor: _brandGold.withValues(alpha: 0.15),
+            labelTextStyle: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.selected)
+                    ? boldTextStyle(size: 12, color: _brandGold) // onglet actif en doré
+                    : primaryTextStyle(size: 12, color: Colors.grey),
+              ),
             surfaceTintColor: Colors.transparent,
             shadowColor: Colors.transparent,
           ),
@@ -140,7 +145,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   Timer? _bgLocationTimer;
   String? _bgTrackedOrderId;
 
-  static const double _expandedHeight = 184.0;
+  static const double _expandedHeight = 208.0;
   static const double _toolbarHeight = 72.0;
 
   @override
@@ -257,6 +262,12 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   Future<void> _restoreBadge() async {
     final saved = getIntAsync(ARTISAN_NOTIF_BADGE_KEY);
     if (saved > 0) artisanNotifBadge.value = saved;
+    // Compteur réel des notifications non lues (historique serveur)
+    try {
+      final res = await getMisonNotifications();
+      artisanNotifBadge.value = res.unreadCount;
+      await setValue(ARTISAN_NOTIF_BADGE_KEY, res.unreadCount);
+    } catch (_) {}
   }
 
   void _load() {
@@ -286,7 +297,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
               floating: false,
               pinned: true,
               // Même fond que la page : l'en-tête se fond dans la grille de points
-              backgroundColor: const Color(0xFFF1F2F4),
+              backgroundColor: const Color(0xFFFFFFFF),
               toolbarHeight: _toolbarHeight,
               surfaceTintColor: Colors.transparent,
               elevation: 0,
@@ -361,8 +372,16 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // Salutation, puis le nom en dessous
                                   Text(
-                                    '$_greeting, ${appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'}',
+                                    '$_greeting,',
+                                    style: secondaryTextStyle(size: 17),
+                                  ),
+                                  2.height,
+                                  Text(
+                                    appStore.userFullName.isNotEmpty
+                                        ? appStore.userFullName
+                                        : (appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'),
                                     style: boldTextStyle(color: _headerDark, size: 24),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -720,9 +739,15 @@ class _UrgentOrderTile extends StatelessWidget {
   final double? distanceKm;
   const _UrgentOrderTile({required this.order, this.distanceKm});
 
-  String _formatDate(String? iso) {
+  /// Date + heure ; « tout de suite » : pas d'heure (le client veut maintenant).
+  String _formatDate(String? iso, {bool immediate = false}) {
     if (iso == null) return '';
-    try { return DateFormat('dd MMM · HH:mm', 'fr_FR').format(DateTime.parse(iso)); }
+    try {
+      final date = DateTime.parse(iso);
+      return immediate
+          ? 'Tout de suite · ${DateFormat('dd MMM', 'fr_FR').format(date)}'
+          : DateFormat('dd MMM · HH:mm', 'fr_FR').format(date);
+    }
     catch (_) { return iso; }
   }
 
@@ -766,7 +791,7 @@ class _UrgentOrderTile extends StatelessWidget {
                       8.width,
                       Icon(Icons.schedule, size: 12, color: Colors.grey),
                       4.width,
-                      Flexible(child: Text(_formatDate(order.serviceDate),
+                      Flexible(child: Text(_formatDate(order.serviceDate, immediate: order.isImmediate),
                           style: secondaryTextStyle(size: 14),
                           maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ],
@@ -1091,41 +1116,24 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
     }
   }
 
-  void _confirmAction({
+  /// Confirmation aux couleurs Mison avant d'accepter, démarrer ou se désister.
+  Future<void> _confirmAction({
     required String title,
     required String subtitle,
     required Future<MisonActionResponse> Function() action,
-  }) {
-    showConfirmDialogCustom(
+    IconData icon = Icons.check_circle_outline_rounded,
+    String confirmLabel = 'Confirmer',
+    bool danger = false,
+  }) async {
+    final ok = await showMisonConfirmSheet(
       context,
       title: title,
-      subTitle: subtitle,
-      positiveText: 'Confirmer',
-      negativeText: 'Annuler',
-      onAccept: (_) => _doAction(action),
+      subtitle: subtitle,
+      icon: icon,
+      confirmLabel: confirmLabel,
+      danger: danger,
     );
-  }
-
-  void _showFeeModal({
-    required String title,
-    required Future<MisonActionResponse> Function(num) apiCall,
-  }) {
-    final ctrl = TextEditingController();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _FeeBottomSheet(
-        title: title,
-        ctrl: ctrl,
-        onConfirm: () {
-          final amount = num.tryParse(ctrl.text.trim());
-          if (amount == null || amount <= 0) { TopToast.show(message: 'Montant invalide'); return; }
-          Navigator.pop(context);
-          _doAction(() => apiCall(amount));
-        },
-      ),
-    );
+    if (ok) _doAction(action);
   }
 
   Widget _buildCard(MisonOrder order) {
@@ -1145,6 +1153,8 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
                       ? 'Cette commande vous a été affectée par Mison. La confirmez-vous ?'
                       : 'Confirmez-vous l\'acceptation de cette commande ?',
                   action: () => artisanAcceptOrder(order.id!),
+                  icon: Icons.assignment_turned_in_outlined,
+                  confirmLabel: order.needsArtisanConfirmation ? 'Oui, je confirme' : "Oui, j'accepte",
                 )
             : null,
         onStart: (order.canStart && !order.needsArtisanConfirmation)
@@ -1152,6 +1162,8 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
                   title: 'Démarrer la prestation',
                   subtitle: 'Confirmez-vous être sur place et prêt à commencer ?',
                   action: () => artisanStartOrder(order.id!),
+                  icon: Icons.play_circle_outline_rounded,
+                  confirmLabel: 'Oui, je démarre',
                 )
             : null,
         onRelease: order.canReleaseByArtisan
@@ -1162,12 +1174,9 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
                     await cancelMisonOrder(order.id!);
                     return MisonActionResponse(message: 'Vous vous êtes désisté de cette commande');
                   },
-                )
-            : null,
-        onSetRealizationFee: order.isInProgress
-            ? () => _showFeeModal(
-                  title: 'Frais de prestation',
-                  apiCall: (amount) => setRealizationFee(order.id!, amount),
+                  icon: Icons.event_busy_rounded,
+                  confirmLabel: 'Oui, me désister',
+                  danger: true,
                 )
             : null,
       ),
@@ -1311,7 +1320,6 @@ class _ArtisanOrderCard extends StatelessWidget {
   final VoidCallback? onApprove;
   final VoidCallback? onStart;
   final VoidCallback? onRelease;
-  final VoidCallback? onSetRealizationFee;
 
   const _ArtisanOrderCard({
     required this.order,
@@ -1319,7 +1327,6 @@ class _ArtisanOrderCard extends StatelessWidget {
     this.onApprove,
     this.onStart,
     this.onRelease,
-    this.onSetRealizationFee,
   });
 
   String _formatDate(String? iso) {
@@ -1389,14 +1396,19 @@ class _ArtisanOrderCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Commande pas encore acceptée : « Prestation demandée chez : » puis le nom
+                if (order.isPending || order.needsArtisanConfirmation) ...[
+                  Text('Prestation demandée chez :', style: secondaryTextStyle(size: 13)),
+                  3.height,
+                ],
                 Row(
                   children: [
-                    Icon(Icons.person_outline, size: 16, color: _brandGold),
+                    const Icon(Icons.person_outline, size: 16, color: _headerDark),
                     6.width,
                     Expanded(
                       child: Text(
                         clientName,
-                        style: boldTextStyle(size: 16, color: _brandGold),
+                        style: boldTextStyle(size: 16, color: _headerDark),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1454,9 +1466,14 @@ class _ArtisanOrderCard extends StatelessWidget {
                           4.width,
                           Text(_formatDate(order.serviceDate), style: secondaryTextStyle(size: 14)),
                           12.width,
-                          Icon(Icons.access_time, size: 12, color: Colors.grey),
-                          4.width,
-                          Text(_formatTime(order.serviceDate), style: secondaryTextStyle(size: 14)),
+                          // « Tout de suite » : pas d'heure
+                          if (order.isImmediate)
+                            Text('Tout de suite', style: boldTextStyle(size: 14, color: _brandGold))
+                          else ...[
+                            Icon(Icons.access_time, size: 12, color: Colors.grey),
+                            4.width,
+                            Text(_formatTime(order.serviceDate), style: secondaryTextStyle(size: 14)),
+                          ],
                         ],
                       ),
                       if (order.serviceAddress != null && order.serviceAddress!.isNotEmpty) ...[
@@ -1480,7 +1497,10 @@ class _ArtisanOrderCard extends StatelessWidget {
           ),
 
           // Distance badge (commandes à traiter uniquement)
-          if (distanceKm != null && order.status != 'CANCELLED' && order.status != 'REJECTED')
+          if (distanceKm != null &&
+              order.status != 'CANCELLED' &&
+              order.status != 'REJECTED' &&
+              order.status != 'COMPLETED')
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Container(
@@ -1505,7 +1525,7 @@ class _ArtisanOrderCard extends StatelessWidget {
             ),
 
           // Action buttons
-          if (onApprove != null || onStart != null || onRelease != null || onSetRealizationFee != null)
+          if (onApprove != null || onStart != null || onRelease != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               child: Column(
@@ -1513,7 +1533,7 @@ class _ArtisanOrderCard extends StatelessWidget {
                   if (onApprove != null)
                     AppButton(
                       width: double.infinity,
-                      color: accept,
+                      color: _brandGold, // bouton Accepter / Confirmer en doré
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       onTap: onApprove,
@@ -1530,15 +1550,6 @@ class _ArtisanOrderCard extends StatelessWidget {
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       onTap: onStart,
                       child: Text('Démarrer la prestation', style: boldTextStyle(color: Colors.white, size: 14)),
-                    ),
-                  if (onSetRealizationFee != null)
-                    AppButton(
-                      width: double.infinity,
-                      color: completed,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      onTap: onSetRealizationFee,
-                      child: Text('Définir les frais de prestation', style: boldTextStyle(color: Colors.white, size: 14)),
                     ),
                   if (onRelease != null) ...[
                     8.height,
@@ -1564,80 +1575,3 @@ class _ArtisanOrderCard extends StatelessWidget {
   }
 }
 
-class _FeeBottomSheet extends StatelessWidget {
-  final String title;
-  final TextEditingController ctrl;
-  final VoidCallback onConfirm;
-
-  const _FeeBottomSheet({
-    required this.title,
-    required this.ctrl,
-    required this.onConfirm,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.fromLTRB(
-          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          20.height,
-          Text(title, style: boldTextStyle(size: 18)),
-          20.height,
-          TextField(
-            controller: ctrl,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            style: boldTextStyle(size: 16),
-            decoration: InputDecoration(
-              hintText: 'Montant en FCFA',
-              hintStyle: secondaryTextStyle(size: 14),
-              suffixText: 'FCFA',
-              suffixStyle: secondaryTextStyle(size: 14),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide:
-                    BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: _brandGold, width: 1.5),
-              ),
-            ),
-          ),
-          20.height,
-          AppButton(
-            text: 'Confirmer',
-            color: _brandGold,
-            textColor: Colors.white,
-            width: double.infinity,
-            height: 50,
-            shapeBorder: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-            onTap: onConfirm,
-          ),
-        ],
-      ),
-    );
-  }
-}

@@ -1,8 +1,7 @@
-import 'package:booking_system_flutter/component/back_widget.dart';
-import 'package:booking_system_flutter/component/cached_image_widget.dart';
+import 'package:booking_system_flutter/component/mison_service_image_header.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/nominatim_address_field.dart';
-import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/screens/booking/mison_confirm_booking_screen.dart';
 import 'package:booking_system_flutter/services/location_service.dart';
@@ -11,7 +10,6 @@ import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/permissions.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:intl/intl.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
@@ -88,7 +86,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: ColorScheme.light(
-              primary: primaryColor,
+              primary: kMisonGold,
               onPrimary: Colors.white,
               surface: context.cardColor,
             ),
@@ -126,7 +124,8 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
 
   String _getServiceDateISO() {
     if (isImmediateService) {
-      return DateTime.now().add(const Duration(minutes: 30)).toIso8601String();
+      // Non envoyée : pour "Tout de suite", le serveur fixe lui-même l'heure (is_immediate).
+      return DateTime.now().toIso8601String();
     }
     
     if (selectedDate != null && selectedTime != null) {
@@ -173,64 +172,66 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: appBarWidget(
-        widget.service.name ?? '',
-        textColor: appStore.isDarkMode ? Colors.white : Colors.black,
-        color: context.scaffoldBackgroundColor,
-        elevation: 0,
-        systemUiOverlayStyle: SystemUiOverlayStyle(
-          statusBarIconBrightness: appStore.isDarkMode ? Brightness.light : Brightness.dark,
-          statusBarColor: context.scaffoldBackgroundColor,
+      // Logo centré + fond de la page, comme les autres pages
+      appBar: MisonAppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: kMisonDark),
+          onPressed: () => Navigator.pop(context),
         ),
-        showBack: true,
-        backWidget: BackWidget(iconColor: Colors.black),
       ),
       body: DotGridBackground(
         child: Form(
         key: _formKey,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.only(bottom: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header: Service info
+              // Image du service (coins arrondis), nom écrit dessus
               _buildServiceHeader(),
-              24.height,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
               
-              // Date selection
-              _buildDateSection(),
-              24.height,
+                  // Date selection
+                  _buildDateSection(),
+                  24.height,
               
-              // Calendar & Time (if "Plus tard")
-              if (!isImmediateService) ...[
-                _buildCalendarSection(),
-                16.height,
-                _buildTimeSlots(),
-                24.height,
-              ],
+                  // Calendar & Time (if "Plus tard")
+                  if (!isImmediateService) ...[
+                    _buildCalendarSection(),
+                    16.height,
+                    _buildTimeSlots(),
+                    24.height,
+                  ],
               
-              // Zone selection
-              _buildZoneDropdown(),
-              16.height,
+                  // Zone selection
+                  _buildZoneDropdown(),
+                  16.height,
               
-              // Description
-              _buildDescriptionField(),
-              24.height,
+                  // Description
+                  _buildDescriptionField(),
+                  24.height,
               
-              // Promise section
-              _buildPromiseSection(),
-              24.height,
+                  // Promise section
+                  _buildPromiseSection(),
+                  24.height,
               
-              // Continue button
-              AppButton(
-                width: context.width(),
-                color: primaryColor,
-                text: 'Continuer',
-                textColor: Colors.white,
-                shapeBorder: RoundedRectangleBorder(borderRadius: radius(12)),
-                onTap: _continueToConfirmation,
+                  // Continue button
+                  AppButton(
+                    width: context.width(),
+                    color: kMisonGold,
+                    text: 'Continuer',
+                    textColor: Colors.white,
+                    shapeBorder: RoundedRectangleBorder(borderRadius: radius(12)),
+                    onTap: _continueToConfirmation,
+                  ),
+                  16.height,
+                  ],
+                ),
               ),
-              16.height,
             ],
           ),
         ),
@@ -239,51 +240,17 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
     );
   }
 
+  /// Image du service avec son nom écrit dessus (composant commun).
   Widget _buildServiceHeader() {
-    return Center(
-      // Ajoutez Center ici
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center, // Correction ici
-        mainAxisSize: MainAxisSize
-            .min, // Pour que la Column prenne juste la hauteur nécessaire
-        children: [
-          // Service icon centered
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: primaryColor.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: widget.service.imageUrl != null &&
-                    widget.service.imageUrl!.isNotEmpty
-                ? CachedImageWidget(
-                    url: widget.service.imageUrl!,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.contain,
-                  ).center()
-                : Icon(_getIconForService(widget.service.name ?? ''),
-                    size: 40, color: primaryColor),
-          ),
-          16.height,
-          // Service name
-          Text(
-            widget.service.name ?? '',
-            style: boldTextStyle(size: 20),
-            textAlign: TextAlign.center,
-          ),
-          4.height,
-          // Duration
-          Text(
-            '~ 30mn',
-            style: secondaryTextStyle(size: 14),
-            textAlign: TextAlign.center,
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: MisonServiceImageHeader(
+        service: widget.service,
+        fallbackIcon: _getIconForService(widget.service.name ?? ''),
       ),
     );
   }
+
   IconData _getIconForService(String serviceName) {
     final name = serviceName.toLowerCase();
     if (name.contains('électr') || name.contains('electr')) return Icons.electrical_services;
@@ -396,12 +363,12 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: isSelected ? primaryColor : Colors.transparent,
+              color: isSelected ? kMisonGold : Colors.transparent,
               borderRadius: radius(8),
               boxShadow: isSelected
                   ? [
                       BoxShadow(
-                        color: primaryColor.withValues(alpha: 0.35),
+                        color: kMisonGold.withValues(alpha: 0.35),
                         blurRadius: 10,
                         spreadRadius: 1,
                         offset: const Offset(0, 4),
@@ -435,9 +402,14 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
       children: [
         Text('Choisir l\'heure', style: boldTextStyle(size: 16)),
         12.height,
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        // Grille de 4 colonnes égales : les créneaux occupent toute la largeur
+        LayoutBuilder(builder: (context, constraints) {
+          const columns = 4;
+          const spacing = 8.0;
+          final slotWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+          return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
           children: timeSlots.map((slot) {
             final isSelected = selectedTime != null && 
                              '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}' == slot;
@@ -445,12 +417,14 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
             return GestureDetector(
               onTap: () => _selectTime(slot),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                width: slotWidth,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: boxDecorationDefault(
-                  color: isSelected ? primaryColor : context.cardColor,
+                  color: isSelected ? kMisonGold : context.cardColor,
                   borderRadius: radius(8),
                   border: Border.all(
-                    color: isSelected ? primaryColor : borderColor,
+                    color: isSelected ? kMisonGold : borderColor,
                   ),
                 ),
                 child: Text(
@@ -463,7 +437,8 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
               ),
             );
           }).toList(),
-        ),
+          );
+        }),
       ],
     );
   }
@@ -493,9 +468,9 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
               icon: _isLocatingZone
                   ? SizedBox(
                       width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: kMisonGold),
                     )
-                  : Icon(Icons.my_location_rounded, color: primaryColor, size: 20),
+                  : Icon(Icons.my_location_rounded, color: kMisonGold, size: 20),
               tooltip: 'Utiliser ma position actuelle',
             ),
           ),
@@ -522,11 +497,12 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Description', style: boldTextStyle(size: 16)),
+        Text('Description (facultative)', style: boldTextStyle(size: 16)),
         8.height,
         AppTextField(
           controller: descriptionCont,
           textFieldType: TextFieldType.MULTILINE,
+          isValidationRequired: false,
           minLines: 3,
           maxLines: 5,
           textInputAction: TextInputAction.done,
@@ -585,10 +561,10 @@ class _DateToggleButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: boxDecorationDefault(
-          color: isSelected ? primaryColor : context.cardColor,
+          color: isSelected ? kMisonGold : context.cardColor,
           borderRadius: radius(8),
           border: Border.all(
-            color: isSelected ? primaryColor : borderColor,
+            color: isSelected ? kMisonGold : borderColor,
           ),
         ),
         child: Row(
@@ -597,7 +573,7 @@ class _DateToggleButton extends StatelessWidget {
             Icon(
               icon,
               size: 18,
-              color: isSelected ? Colors.white : primaryColor,
+              color: isSelected ? Colors.white : kMisonGold,
             ),
             8.width,
             Text(
@@ -627,7 +603,7 @@ class _PromiseItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: primaryColor, size: 16),
+          Icon(icon, color: kMisonGold, size: 16),
           8.width,
           Expanded(
             child: Text(text, style: secondaryTextStyle(size: 14)),

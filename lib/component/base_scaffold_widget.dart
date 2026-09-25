@@ -1,6 +1,7 @@
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:mobx/mobx.dart';
@@ -16,6 +17,10 @@ class AppScaffold extends StatelessWidget {
   final Observable<bool>? isLoading;
   final bool showLoader;
 
+  /// En-tête Mison : logo centré sur le fond gris clair, titre dessous,
+  /// flèche retour gris foncé ; loader aux couleurs Mison.
+  final bool useMisonHeader;
+
   AppScaffold({
     this.appBarTitle,
     required this.child,
@@ -24,12 +29,24 @@ class AppScaffold extends StatelessWidget {
     this.bottomNavigationBar,
     this.showLoader = true,
     this.isLoading,
+    this.useMisonHeader = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: appBarTitle != null
+      appBar: useMisonHeader
+          ? MisonAppBar(
+              title: appBarTitle,
+              leading: context.canPop
+                  ? IconButton(
+                      icon: const Icon(Icons.arrow_back, color: kMisonDark),
+                      onPressed: () => Navigator.pop(context),
+                    )
+                  : null,
+              actions: actions,
+            )
+          : appBarTitle != null
           ? AppBar(
               title: Text(
                 appBarTitle.validate(),
@@ -52,7 +69,11 @@ class AppScaffold extends StatelessWidget {
                   absorbing: loading,
                   child: child,
                 ),
-                if (loading) LoaderWidget().center(),
+                if (loading)
+                  (useMisonHeader
+                          ? LoaderWidget(colors: const [kMisonDark, kMisonGold])
+                          : LoaderWidget())
+                      .center(),
               ],
             );
           },
