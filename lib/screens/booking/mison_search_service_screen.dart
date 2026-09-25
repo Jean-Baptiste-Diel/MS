@@ -1,13 +1,12 @@
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
+import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/component/app_empty_state.dart';
-import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 class MisonSearchServiceScreen extends StatefulWidget {
@@ -77,16 +76,15 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: appBarWidget(
-        'Rechercher un service',
-        textColor: Colors.white,
-        color: primaryColor,
-        systemUiOverlayStyle: SystemUiOverlayStyle(
-          statusBarIconBrightness: Brightness.light,
-          statusBarColor: primaryColor,
-        ),
-        showBack: widget.showBackButton,
-        backWidget: widget.showBackButton ? BackWidget() : null,
+      // Logo centré + fond de la page, comme les autres pages
+      appBar: MisonAppBar(
+        title: 'Rechercher un service',
+        leading: widget.showBackButton
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: kMisonDark),
+                onPressed: () => finish(context),
+              )
+            : null,
       ),
       body: DotGridBackground(
         child: Column(
@@ -99,7 +97,7 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
               decoration: InputDecoration(
                 hintText: 'Rechercher un service...',
                 hintStyle: secondaryTextStyle(),
-                prefixIcon: Icon(Icons.search, color: primaryColor),
+                prefixIcon: const Icon(Icons.search, color: kMisonGold),
                 suffixIcon: _searchCont.text.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.close),
@@ -112,12 +110,19 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
+                // Bordure dorée quand on écrit dans le champ
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: kMisonGold, width: 1.5),
+                ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
           if (_isLoading)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
+            Expanded(
+                child: Center(
+                    child: LoaderWidget(colors: const [kMisonDark, kMisonGold])))
           else if (_filtered.isEmpty)
             Expanded(
               child: AppEmptyState(
@@ -200,7 +205,7 @@ class _ServiceResultTile extends StatelessWidget {
               ),
             ),
             12.width,
-            Icon(Icons.chevron_right, color: primaryColor),
+            const Icon(Icons.chevron_right, color: kMisonGold),
             8.width,
           ],
         ),

@@ -3,8 +3,8 @@ import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/model_keys.dart';
+import 'package:booking_system_flutter/utils/phone_utils.dart';
 import 'package:booking_system_flutter/utils/pin_utils.dart';
-import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -50,10 +50,8 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   /// Construit +indicatif+numéro, ex: +221771234567
-  String buildMobileNumber() {
-    if (mobileCont.text.isEmpty) return '';
-    return '+${mobileCont.text.trim().formatPhoneNumber(selectedCountry.phoneCode)}';
-  }
+  String buildMobileNumber() =>
+      buildInternationalPhone(mobileCont.text, phoneCode: selectedCountry.phoneCode);
 
   /// Step 1: Send OTP by email or phone (SMS)
   Future<void> sendOtp() async {
@@ -62,6 +60,14 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (!_useEmail && mobileCont.text.trim().isEmpty) {
       TopToast.show(message: language.requiredText.validate());
       return;
+    }
+
+    if (!_useEmail && selectedCountry.phoneCode == '221') {
+      final phoneError = validateSenegalPhone(mobileCont.text.trim());
+      if (phoneError != null) {
+        TopToast.show(message: phoneError, type: TopToastType.error);
+        return;
+      }
     }
 
     if (formKey.currentState!.validate()) {
@@ -86,7 +92,9 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           TopToast.show(message: res.message.validate());
         }
       } catch (e) {
-        TopToast.show(message: e.toString(), type: TopToastType.error);
+        TopToast.show(
+            message: friendlyPhoneError(e.toString(), phoneCode: selectedCountry.phoneCode),
+            type: TopToastType.error);
         if (mounted) appStore.setLoading(false);
       }
     }
@@ -131,7 +139,9 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           finish(context);
         }
       } catch (e) {
-        TopToast.show(message: e.toString(), type: TopToastType.error);
+        TopToast.show(
+            message: friendlyPhoneError(e.toString(), phoneCode: selectedCountry.phoneCode),
+            type: TopToastType.error);
         if (mounted) appStore.setLoading(false);
       }
     }

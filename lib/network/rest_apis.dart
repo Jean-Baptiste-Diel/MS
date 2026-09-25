@@ -2048,7 +2048,15 @@ Future<MisonActionResponse> paymentCheckout(String orderId) async {
     final response = await buildHttpResponse(
       'payments/checkout',
       method: HttpMethodType.POST,
-      request: {'order_id': orderId},
+      // Wave n'accepte que des URL https : /payment/success et /payment/error
+      // du back-end redirigent vers mison://payment/… pour rouvrir l'app.
+      // DOMAIN_URL = le serveur que l'app utilise (dev ou prod).
+      // Le back-end y ajoute ?order_id=….
+      request: {
+        'order_id': orderId,
+        'success_url': '$DOMAIN_URL/payment/success',
+        'error_url': '$DOMAIN_URL/payment/error',
+      },
     );
     return MisonActionResponse.fromJson(await handleResponse(response));
   } catch (e) {

@@ -25,6 +25,7 @@ class MisonOrderChatScreen extends StatelessWidget {
           'Échangez directement avec ${peerName.isNotEmpty ? peerName : 'votre interlocuteur'} '
           'au sujet de cette commande.',
       emptyIcon: Icons.chat_bubble_outline_rounded,
+      callPeerName: peerName,
     );
   }
 }

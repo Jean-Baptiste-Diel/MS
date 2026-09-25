@@ -1,12 +1,12 @@
 import 'dart:async';
 
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
-import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
@@ -117,92 +117,65 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
     );
   }
 
+  /// Carrousel des services, arrondi, avec une marge.
   Widget getSliderWidget() {
-    return SizedBox(
-      height: 300,
-      width: context.width(),
-      child: Stack(
-        children: [
-          _isLoading
-              ? Container(
-                  height: 250,
-                  width: context.width(),
-                  color: primaryColor.withOpacity(0.1),
-                  child: const Center(child: CircularProgressIndicator()),
-                )
-              : _services.isNotEmpty
-                  ? PageView.builder(
-                      controller: sliderPageController,
-                      itemCount: _services.length,
-                      itemBuilder: (context, index) {
-                        final service = _services[index];
-                        return GestureDetector(
-                          onTap: () {
-                            MisonBookingFormScreen(service: service).launch(context);
-                          },
-                          child: CachedImageWidget(
-                            url: service.imageUrl ?? '',
-                            height: 250,
-                            width: context.width(),
-                            fit: BoxFit.cover,
-                          ),
-                        );
-                      },
+    const double sliderHeight = 190;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: SizedBox(
+          height: sliderHeight,
+          width: double.infinity,
+          child: Stack(
+            children: [
+              _isLoading
+                  ? Container(
+                      color: kMisonGold.withValues(alpha: 0.1),
+                      child: const Center(
+                          child: CircularProgressIndicator(color: kMisonGold, strokeWidth: 2)),
                     )
-                  : CachedImageWidget(url: '', height: 250, width: context.width()),
-          if (_services.length > 1)
-            Positioned(
-              bottom: 25,
-              left: 16,
-              child: DotIndicator(
-                pageController: sliderPageController,
-                pages: _services,
-                indicatorColor: primaryColor,
-                unselectedIndicatorColor: white,
-                currentBoxShape: BoxShape.rectangle,
-                boxShape: BoxShape.rectangle,
-                borderRadius: radius(16),
-                currentBorderRadius: radius(16),
-                currentDotSize: 70,
-                currentDotWidth: 20,
-                dotSize: 40,
-              ).scale(scale: 0.4),
-            ),
-          if (appStore.isLoggedIn)
-            Positioned(
-              top: context.statusBarHeight + 16,
-              right: 16,
-              child: Container(
-                decoration: boxDecorationDefault(color: context.cardColor, shape: BoxShape.circle),
-                height: 36,
-                padding: const EdgeInsets.all(8),
-                width: 36,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    ic_notification.iconImage(size: 24, color: primaryColor).center(),
-                    Observer(builder: (context) {
-                      return Positioned(
-                        top: -20,
-                        right: -10,
-                        child: appStore.unreadCount.validate() > 0
-                            ? Container(
-                                padding: const EdgeInsets.all(4),
-                                child: FittedBox(
-                                  child: Text(appStore.unreadCount.toString(), style: primaryTextStyle(size: 12, color: Colors.white)),
-                                ),
-                                decoration: boxDecorationDefault(color: Colors.red, shape: BoxShape.circle),
-                              )
-                            : const Offstage(),
-                      );
-                    })
-                  ],
+                  : _services.isNotEmpty
+                      ? PageView.builder(
+                          controller: sliderPageController,
+                          itemCount: _services.length,
+                          itemBuilder: (context, index) {
+                            final service = _services[index];
+                            return GestureDetector(
+                              onTap: () {
+                                MisonBookingFormScreen(service: service).launch(context);
+                              },
+                              child: CachedImageWidget(
+                                url: service.imageUrl ?? '',
+                                height: sliderHeight,
+                                width: context.width(),
+                                fit: BoxFit.cover,
+                              ),
+                            );
+                          },
+                        )
+                      : CachedImageWidget(url: '', height: sliderHeight, width: context.width()),
+              if (_services.length > 1)
+                Positioned(
+                  bottom: 6,
+                  left: 8,
+                  child: DotIndicator(
+                    pageController: sliderPageController,
+                    pages: _services,
+                    indicatorColor: kMisonGold,
+                    unselectedIndicatorColor: white,
+                    currentBoxShape: BoxShape.rectangle,
+                    boxShape: BoxShape.rectangle,
+                    borderRadius: radius(16),
+                    currentBorderRadius: radius(16),
+                    currentDotSize: 70,
+                    currentDotWidth: 20,
+                    dotSize: 40,
+                  ).scale(scale: 0.4),
                 ),
-              ).onTap(() {
-                NotificationScreen().launch(context);
-              }),
-            )
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -211,6 +184,7 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
   Widget build(BuildContext context) {
     return Column(
       children: [
+        8.height,
         getSliderWidget(),
         Row(
           children: [
@@ -234,7 +208,7 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
                           overflow: TextOverflow.ellipsis,
                         ).expand(),
                         8.width,
-                        ic_active_location.iconImage(size: 24, color: appStore.isCurrentLocation ? primaryColor : grey),
+                        ic_active_location.iconImage(size: 24, color: appStore.isCurrentLocation ? kMisonGold : grey),
                       ],
                     ),
                   ),
@@ -254,12 +228,51 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: commonDecoration,
-                child: ic_search.iconImage(color: primaryColor),
+                child: ic_search.iconImage(color: kMisonGold),
               ),
             ),
           ],
         ).paddingAll(16),
       ],
     );
+  }
+}
+
+/// Cloche des notifications (avec compteur de non-lus) pour l'en-tête d'accueil.
+class MisonNotificationBell extends StatelessWidget {
+  const MisonNotificationBell({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: boxDecorationDefault(color: context.cardColor, shape: BoxShape.circle),
+      height: 40,
+      width: 40,
+      padding: const EdgeInsets.all(8),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ic_notification.iconImage(size: 24, color: kMisonDark).center(),
+          Observer(builder: (context) {
+            return Positioned(
+              top: -14,
+              right: -10,
+              child: appStore.unreadCount.validate() > 0
+                  ? Container(
+                      padding: const EdgeInsets.all(4),
+                      child: FittedBox(
+                        child: Text(appStore.unreadCount.toString(),
+                            style: primaryTextStyle(size: 12, color: Colors.white)),
+                      ),
+                      decoration: boxDecorationDefault(color: Colors.red, shape: BoxShape.circle),
+                    )
+                  : const Offstage(),
+            );
+          }),
+        ],
+      ),
+    ).onTap(() {
+      NotificationScreen().launch(context);
+    });
   }
 }

@@ -241,10 +241,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     }
   }
 
-  String buildMobileNumber() {
-    if (mobileCont.text.isEmpty) return '';
-    return '+${selectedCountry.phoneCode}${mobileCont.text.trim().replaceAll(' ', '')}';
-  }
+  String buildMobileNumber() =>
+      buildInternationalPhone(mobileCont.text, phoneCode: selectedCountry.phoneCode);
 
   /// Tous les pays, Sénégal en premier (menus Nationalité et Indicatif).
   late final List<Country> _allCountries = () {
@@ -495,10 +493,24 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       }
       setState(() {});
       return ok;
-    } catch (e) {
-      TopToast.show(
-          message: 'Impossible de vérifier la disponibilité, réessayez.',
-          type: TopToastType.error);
+    } catch (e, st) {
+      log('check-availability error: $e\n$st');
+      // Affiche la vraie raison renvoyée par le back-end au lieu d'un message générique.
+      final msg = e.toString();
+      final lower = msg.toLowerCase();
+      if (isInvalidPhoneError(msg)) {
+        // Numéro refusé par le serveur (ex: plage 79x non attribuée) : on rappelle le bon format.
+        fieldErrors['mobile'] = friendlyPhoneError(msg, phoneCode: selectedCountry.phoneCode);
+      } else if (lower.contains('email')) {
+        fieldErrors['email'] = 'Adresse email invalide';
+      } else {
+        TopToast.show(
+            message: msg.isNotEmpty
+                ? msg
+                : 'Impossible de vérifier la disponibilité, réessayez.',
+            type: TopToastType.error);
+      }
+      setState(() {});
       return false;
     } finally {
       appStore.setLoading(false);

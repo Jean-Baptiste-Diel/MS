@@ -14,17 +14,21 @@ const Color kMisonHeaderBg = Color(0xFFF1F2F4);
 class MisonAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? title;
   final Widget? subtitle;
+
+  /// Élément affiché en face du titre, à droite (ex. bouton d'appel).
+  final Widget? titleTrailing;
   final PreferredSizeWidget? bottom;
   final Widget? leading;
   final List<Widget>? actions;
 
-  static const double _toolbarHeight = 72;
+  static const double _toolbarHeight = 84;
   static const double _titleHeight = 40;
 
   const MisonAppBar({
     Key? key,
     this.title,
     this.subtitle,
+    this.titleTrailing,
     this.bottom,
     this.leading,
     this.actions,
@@ -51,29 +55,51 @@ class MisonAppBar extends StatelessWidget implements PreferredSizeWidget {
       automaticallyImplyLeading: false,
       leading: leading,
       centerTitle: true,
-      title: Image.asset('assets/logo/logo_transparent.png', height: 58),
+      // Logo un peu plus bas dans la barre
+      title: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Image.asset('assets/logo/logo_transparent.png', height: 58),
+      ),
       actions: actions,
       bottom: hasBottom
           ? PreferredSize(
               preferredSize: Size.fromHeight(
                   _titleBlockHeight + (bottom?.preferredSize.height ?? 0)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (title != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title!,
-                              style: boldTextStyle(color: kMisonDark, size: 22)),
-                          if (subtitle != null) subtitle!,
-                        ],
+              // Pleine largeur : sinon l'AppBar centre ce bloc et le titre
+              // n'est pas à gauche
+              child: SizedBox(
+                width: double.infinity,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (title != null)
+                      Padding(
+                        // Même marge que le contenu des pages (16) : titre aligné sur la liste
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(title!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: boldTextStyle(color: kMisonDark, size: 22)),
+                                  if (subtitle != null) subtitle!,
+                                ],
+                              ),
+                            ),
+                            if (titleTrailing != null) ...[
+                              8.width,
+                              titleTrailing!,
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
-                  if (bottom != null) bottom!,
-                ],
+                    if (bottom != null) bottom!,
+                  ],
+                ),
               ),
             )
           : null,

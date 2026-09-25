@@ -1,8 +1,10 @@
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_artisan_list_component.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_service_list_component.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_slider_dashboard_component.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 
@@ -14,19 +16,30 @@ class DashboardFragment extends StatefulWidget {
 }
 
 class _DashboardFragmentState extends State<DashboardFragment> {
+  final ScrollController _scrollController = ScrollController();
+  bool _isCollapsed = false;
+
   @override
   void initState() {
     super.initState();
     setStatusBarColorChange();
+    _scrollController.addListener(() {
+      final collapsed =
+          _scrollController.hasClients && _scrollController.offset > 4;
+      if (collapsed != _isCollapsed) setState(() => _isCollapsed = collapsed);
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> setStatusBarColorChange() async {
     setStatusBarColor(
-      statusBarIconBrightness: appStore.isDarkMode
-          ? Brightness.light
-          : await isNetworkAvailable()
-              ? Brightness.light
-              : Brightness.dark,
+      statusBarIconBrightness:
+          appStore.isDarkMode ? Brightness.light : Brightness.dark,
       transparentColor,
       delayInMilliSeconds: 800,
     );
@@ -41,41 +54,83 @@ class _DashboardFragmentState extends State<DashboardFragment> {
     if (mounted) super.setState(fn);
   }
 
+  static const double _toolbarHeight = 84;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          AnimatedScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            listAnimationType: ListAnimationType.FadeIn,
-            fadeInConfiguration: FadeInConfiguration(duration: 2.seconds),
-            onSwipeRefresh: () async {
+          RefreshIndicator(
+            color: kMisonGold,
+            onRefresh: () async {
               setState(() {});
-              return await 2.seconds.delay;
+              await 2.seconds.delay;
             },
-            children: [
-              // Slider avec images des services Mison et barre de recherche/localisation
-              MisonSliderDashboardComponent(callback: _onRefresh),
-              16.height,
-            
-              // Catégories (services Mison affichés comme catégories)
-        /*    //   const MisonCategoryComponent(), */
-              // Liste des prestataires disponibles
-              const MisonArtisanListComponent(),
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // Barre fixe du logo : le contenu défile et passe dessous
+                SliverAppBar(
+                  pinned: true,
+                  backgroundColor: kMisonHeaderBg,
+                  surfaceTintColor: Colors.transparent,
+                  // Pendant le défilement, la barre du logo garde son fond gris
+                  // et une légère ombre la sépare du contenu
+                  forceElevated: _isCollapsed,
+                  elevation: _isCollapsed ? 3 : 0,
+                  scrolledUnderElevation: _isCollapsed ? 3 : 0,
+                  shadowColor: Colors.black.withValues(alpha: 0.25),
+                  systemOverlayStyle: SystemUiOverlayStyle.dark,
+                  automaticallyImplyLeading: false,
+                  toolbarHeight: _toolbarHeight,
+                  centerTitle: true,
+                  title: Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Image.asset('assets/logo/logo_transparent.png', height: 58),
+                  ),
+                  actions: [
+                    Observer(
+                      builder: (_) => appStore.isLoggedIn
+                          ? const Padding(
+                              padding: EdgeInsets.only(right: 16, top: 12),
+                              child: Center(child: MisonNotificationBell()),
+                            )
+                          : const SizedBox(),
+                    ),
+                  ],
+                ),
 
-              // Liste des services avec détails (image, description, prix)
-              const MisonServiceListComponent(),
-              32.height,
-                // Bouton "Nouvelle Demande"
-            /*   const MisonNewRequestDashboardComponent(),
-              16.height, */
-            ],
+                // Fond gris jusqu'à la barre de recherche ; ce bloc défile
+                // et passe sous la barre du logo
+                SliverToBoxAdapter(
+                  child: Container(
+                    color: kMisonHeaderBg,
+                    child: MisonSliderDashboardComponent(callback: _onRefresh),
+                  ),
+                ),
+
+                SliverList(
+                  delegate: SliverChildListDelegate([
+                    16.height,
+                    // Liste des prestataires disponibles
+                    const MisonArtisanListComponent(),
+
+                    // Liste des services avec détails (image, description, prix)
+                    const MisonServiceListComponent(),
+                    32.height,
+                  ]),
+                ),
+              ],
+            ),
           ),
           Observer(
             builder: (context) {
-              return appStore.isLoading ? LoaderWidget().center() : const SizedBox();
+              return appStore.isLoading
+                  ? LoaderWidget(colors: const [kMisonDark, kMisonGold]).center()
+                  : const SizedBox();
             },
           ),
         ],

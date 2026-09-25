@@ -4,6 +4,7 @@ import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
@@ -149,6 +150,7 @@ class DeepLinkService {
     if (orderId.isNotEmpty) {
       // Rafraîchit le détail commande déjà ouvert
       LiveStream().emit(LIVESTREAM_ORDER_PAYMENT_UPDATE, orderId);
+      OrderEvents.emit(orderId);
       // Rafraîchit la liste globale des commandes
       LiveStream().emit(LIVESTREAM_ORDERS_LIST_REFRESH, true);
     }

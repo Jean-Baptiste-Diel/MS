@@ -14,13 +14,14 @@ final String _WS_BASE = '${DOMAIN_URL.replaceFirst('https://', 'wss://').replace
 const String _CONVERSATIONS_ENDPOINT = '${BASE_URL}chat/conversations';
 
 enum MessageStatus { sent, pending, failed }
-enum MessageType { text, image }
+enum MessageType { text, image, audio }
 
 class SupportChatMessage {
   final String id;
   final String localId;
   final String content;       // texte ou object_name pour les images
   final String? imageUrl;     // URL pré-signée pour afficher l'image
+  final String? audioUrl;     // URL pré-signée pour lire la note vocale
   final Uint8List? localBytes; // bytes locaux pour preview avant upload
   final String senderName;
   final bool isMe;
@@ -33,6 +34,7 @@ class SupportChatMessage {
     required this.localId,
     required this.content,
     this.imageUrl,
+    this.audioUrl,
     this.localBytes,
     required this.senderName,
     required this.isMe,
@@ -42,6 +44,7 @@ class SupportChatMessage {
   });
 
   bool get isImage => messageType == MessageType.image;
+  bool get isAudio => messageType == MessageType.audio;
 
   factory SupportChatMessage.fromJson(Map<String, dynamic> json) {
     final senderId = (json['sender_id'] ?? json['sender'])?.toString() ?? '';
@@ -51,12 +54,17 @@ class SupportChatMessage {
       localId: '',
       content: json['content']?.toString() ?? '',
       imageUrl: json['image_url']?.toString(),
+      audioUrl: json['audio_url']?.toString(),
       senderName: json['sender_name']?.toString() ?? '',
       isMe: senderId == appStore.uid,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())?.toLocal() ?? DateTime.now()
           : DateTime.now(),
-      messageType: rawType == 'image' ? MessageType.image : MessageType.text,
+      messageType: rawType == 'image'
+          ? MessageType.image
+          : rawType == 'audio'
+              ? MessageType.audio
+              : MessageType.text,
       status: MessageStatus.sent,
     );
   }
@@ -105,9 +113,13 @@ class SupportChatService {
   /// Émet l'état de connexion (true = connecté, false = déconnecté)
   final _connectionController = StreamController<bool>.broadcast();
 
+  /// Émet le message d'erreur envoyé par le serveur quand un message n'a pas pu être traité
+  final _errorController = StreamController<String>.broadcast();
+
   Stream<List<SupportChatMessage>> get historyStream => _historyController.stream;
   Stream<SupportChatMessage> get newMessageStream => _newMessageController.stream;
   Stream<bool> get connectionStream => _connectionController.stream;
+  Stream<String> get errorStream => _errorController.stream;
   bool get isReady => _isReady;
   String? get conversationId => _conversationId;
 
@@ -232,11 +244,16 @@ class SupportChatService {
             .map((e) => SupportChatMessage.fromJson(e as Map<String, dynamic>))
             .toList();
         if (!_historyController.isClosed) _historyController.add(history);
-      } else {
+      } else if (type == 'message') {
         // Nouveau message en temps réel
         final message = SupportChatMessage.fromJson(json);
         if (!_newMessageController.isClosed) _newMessageController.add(message);
+      } else if (type == 'error') {
+        // Message refusé par le serveur : {"type": "error", "message": "..."}
+        final error = json['message']?.toString() ?? 'Message non envoyé, réessayez.';
+        if (!_errorController.isClosed) _errorController.add(error);
       }
+      // Les autres événements (ex: "typing") ne sont pas des messages : on les ignore.
     } catch (e) {
       log('SupportChat parse error: $e');
     }
@@ -277,6 +294,41 @@ class SupportChatService {
     return null;
   }
 
+  /// Upload une note vocale (m4a), retourne l'object_name ou null en cas d'erreur
+  Future<String?> uploadAudio(File file) async {
+    if (_conversationId == null) return null;
+    final uri = Uri.parse('${BASE_URL}chat/conversations/$_conversationId/upload-audio');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers[HttpHeaders.authorizationHeader] = 'Bearer ${appStore.token}'
+      ..files.add(await http.MultipartFile.fromPath('audio', file.path));
+    try {
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      log('SupportChat uploadAudio: ${response.statusCode} ${response.body}');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final body = jsonDecode(response.body);
+        return body['object_name']?.toString();
+      }
+    } catch (e) {
+      log('SupportChat uploadAudio error: $e');
+    }
+    return null;
+  }
+
+  /// Envoie une note vocale via WS, retourne true si envoyé
+  bool sendAudioMessage(String objectName) {
+    if (_channel == null || !_isReady) {
+      log('SupportChat: tentative d\'envoi audio mais WS non prêt');
+      return false;
+    }
+    _channel!.sink.add(jsonEncode({
+      'type': 'message',
+      'message_type': 'audio',
+      'content': objectName,
+    }));
+    return true;
+  }
+
   /// Envoie un message image via WS, retourne true si envoyé
   bool sendImageMessage(String objectName) {
     if (_channel == null || !_isReady) {
@@ -298,5 +350,6 @@ class SupportChatService {
     _historyController.close();
     _newMessageController.close();
     _connectionController.close();
+    _errorController.close();
   }
 }

@@ -15,7 +15,6 @@ import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/phone_utils.dart';
 import 'package:booking_system_flutter/utils/pin_utils.dart';
-import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -141,10 +140,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
-  String buildMobileNumber() {
-    if (mobileCont.text.isEmpty) return '';
-    return '+${mobileCont.text.trim().formatPhoneNumber(selectedCountry.phoneCode)}';
-  }
+  String buildMobileNumber() =>
+      buildInternationalPhone(mobileCont.text, phoneCode: selectedCountry.phoneCode);
 
   Future<void> registerWithOTP() async {
     hideKeyboard(context);
@@ -275,7 +272,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ).launch(context);
     }).catchError((e) {
       appStore.setLoading(false);
-      TopToast.show(message: e.toString(), type: TopToastType.error);
+      TopToast.show(
+          message: friendlyPhoneError(e.toString(), phoneCode: selectedCountry.phoneCode),
+          type: TopToastType.error);
     });
   }
 

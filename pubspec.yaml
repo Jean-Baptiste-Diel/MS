@@ -108,6 +108,8 @@ dependencies:
   flutter_ringtone_player: ^4.0.0+4
   flutter_tts: ^4.2.1
   flutter_callkit_incoming: ^2.3.2
+  record: ^7.1.1
+  audioplayers: ^6.8.1
 
 
 dev_dependencies:
