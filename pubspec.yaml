@@ -108,6 +108,8 @@ dependencies:
   flutter_ringtone_player: ^4.0.0+4
   flutter_tts: ^4.2.1
   flutter_callkit_incoming: ^2.3.2
+  record: ^7.1.1
+  audioplayers: ^6.8.1
 
 
 dev_dependencies:
@@ -131,6 +133,7 @@ flutter:
     - assets/lottie/
     - assets/newDashboard/
     - assets/json/
+    - assets/logo/
 
 
   fonts:
@@ -142,11 +145,11 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/ic_app_logo.png"
+  image_path: "assets/logo/app_icon.png"
   min_sdk_android: 21
   remove_alpha_ios: true
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/ic_app_logo.png"
+  adaptive_icon_foreground: "assets/logo/app_icon_foreground.png"
   web:
     generate: true
     image_path: "assets/ic_app_logo.png"

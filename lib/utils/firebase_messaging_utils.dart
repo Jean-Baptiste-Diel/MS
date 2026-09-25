@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:booking_system_flutter/utils/common.dart';
+import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -206,6 +207,7 @@ Future<bool> unsubscribeFirebaseTopic(int userId) async {
 /// Appeler depuis le thread principal (ou via Future.microtask).
 void emitOrderListRefresh({bool badge = true}) {
   Future.microtask(() {
+    OrderEvents.emit();
     try {
       if (appStore.userType == USER_TYPE_PROVIDER) {
         if (badge) {

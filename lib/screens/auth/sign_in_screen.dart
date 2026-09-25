@@ -7,6 +7,8 @@ import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/utils/phone_utils.dart';
+import 'package:booking_system_flutter/utils/pin_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -35,6 +37,9 @@ class SignInScreen extends StatefulWidget {
 }
 
 class _SignInScreenState extends State<SignInScreen> {
+  // Couleur doree du logo : boutons, case a cocher et lien "mot de passe oublie"
+  static const Color _brandGold = Color(0xFFC49716);
+
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
   final GlobalKey<FormState> forgotFormKey = GlobalKey<FormState>();
   final GlobalKey<FormState> forgotResetFormKey = GlobalKey<FormState>();
@@ -78,13 +83,13 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  void _recreateForgotControllers({String initialEmail = ''}) {
+  void _recreateForgotControllers() {
     _safeDisposeController(forgotEmailCont);
     _safeDisposeController(forgotOtpCont);
     _safeDisposeController(forgotNewPasswordCont);
     _safeDisposeController(forgotConfirmPasswordCont);
 
-    forgotEmailCont = TextEditingController(text: initialEmail);
+    forgotEmailCont = TextEditingController();
     forgotOtpCont = TextEditingController();
     forgotNewPasswordCont = TextEditingController();
     forgotConfirmPasswordCont = TextEditingController();
@@ -106,21 +111,32 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  /// Indicatif du Sénégal, ajouté d'office aux numéros saisis.
+  static const String _senegalDialCode = '+221';
+
+  /// True si l'identifiant saisi est un numéro (et non un email).
+  bool _isPhoneIdentifier(String raw) {
+    final digitsOnly = raw.trim().replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    return digitsOnly.isNotEmpty && RegExp(r'^\d+$').hasMatch(digitsOnly);
+  }
+
+  /// Numéro local à 9 chiffres (retire un éventuel 221 / 00221 saisi).
+  String _localPhoneDigits(String raw) {
+    var digits = raw.trim().replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    if (digits.startsWith('00221')) digits = digits.substring(5);
+    if (digits.length == 12 && digits.startsWith('221')) digits = digits.substring(3);
+    return digits;
+  }
+
   /// Normalise l'identifiant avant envoi au back :
   /// - email ou numéro déjà préfixé '+' → envoi direct
-  /// - numéro avec indicatif mais sans '+' (≥ 10 chiffres) → ajoute '+'
-  /// - numéro sans indicatif (< 10 chiffres) → lève une exception
+  /// - numéro → préfixé par +221
   String _normalizeIdentifier(String raw) {
     final trimmed = raw.trim();
     if (trimmed.contains('@')) return trimmed;
-    if (trimmed.startsWith('+')) return trimmed;
-
-    final digitsOnly = trimmed.replaceAll(RegExp(r'[\s\-\(\)]'), '');
-    if (RegExp(r'^\d+$').hasMatch(digitsOnly)) {
-      if (digitsOnly.length >= 10) {
-        return '+$digitsOnly';
-      }
-      throw Exception("L'indicatif téléphonique est requis (ex: +221XXXXXXXXX)");
+    if (trimmed.startsWith('+')) return trimmed.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    if (_isPhoneIdentifier(trimmed)) {
+      return '$_senegalDialCode${_localPhoneDigits(trimmed)}';
     }
     return trimmed;
   }
@@ -205,7 +221,7 @@ class _SignInScreenState extends State<SignInScreen> {
             28.height,
             AppButton(
               width: double.infinity,
-              color: primaryColor,
+              color: _brandGold,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               onTap: () => Navigator.pop(context),
@@ -339,7 +355,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   void _openForgotPasswordFlow() {
     hideKeyboard(context);
-    _recreateForgotControllers(initialEmail: emailCont.text.trim());
+    _recreateForgotControllers();
     setState(() {
       isForgotPasswordMode = true;
       showForgotOtpStep = false;
@@ -393,10 +409,6 @@ class _SignInScreenState extends State<SignInScreen> {
       TopToast.show(message: language.passwordNotMatch.validate());
       return;
     }
-    if (!_isForgotPasswordStrong) {
-      TopToast.show(message: 'Le mot de passe ne respecte pas les critères');
-      return;
-    }
 
     appStore.setLoading(true);
     try {
@@ -408,12 +420,11 @@ class _SignInScreenState extends State<SignInScreen> {
       appStore.setLoading(false);
       TopToast.show(message: res.message.validate());
       if (!mounted) return;
-      _recreateForgotControllers(initialEmail: forgotEmail);
+      _recreateForgotControllers();
       setState(() {
         isForgotPasswordMode = false;
         showForgotOtpStep = false;
       });
-      emailCont.text = forgotEmail;
     } catch (e) {
       appStore.setLoading(false);
       TopToast.show(message: e.toString(), type: TopToastType.error);
@@ -437,25 +448,6 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  bool get _forgotHasMin12Chars =>
-      forgotNewPasswordCont.text.trim().length >= 12;
-
-  bool get _forgotHasSpecialChar =>
-      RegExp(r'[!@#$%^&*(),.?":{}|<>_\-\\/\[\]`~+=;]')
-          .hasMatch(forgotNewPasswordCont.text);
-
-  bool get _forgotHasDigit =>
-      RegExp(r'\d').hasMatch(forgotNewPasswordCont.text);
-
-  bool get _forgotHasUppercase =>
-      RegExp(r'[A-Z]').hasMatch(forgotNewPasswordCont.text);
-
-  bool get _isForgotPasswordStrong =>
-      _forgotHasMin12Chars &&
-      _forgotHasSpecialChar &&
-      _forgotHasDigit &&
-      _forgotHasUppercase;
-
 //endregion
 
 //region Widgets
@@ -469,6 +461,7 @@ class _SignInScreenState extends State<SignInScreen> {
       labelStyle: TextStyle(color: appTextSecondaryColor, fontSize: 16),
       hintStyle: TextStyle(color: appTextSecondaryColor.withValues(alpha: 0.6), fontSize: 16),
       errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 13),
+      errorMaxLines: 3, // message affiché en entier
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -476,11 +469,11 @@ class _SignInScreenState extends State<SignInScreen> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: borderColor),
+        borderSide: BorderSide(color: _brandGold),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: primaryColor, width: 1.5),
+        borderSide: BorderSide(color: _brandGold, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -496,50 +489,11 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget _buildTopWidget() {
     return Column(
       children: [
-        // Logo badge
-        Container(
-          width: 68,
-          height: 68,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [primaryColor, primaryColor.withValues(alpha: 0.6)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: primaryColor.withValues(alpha: 0.35),
-                blurRadius: 28,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.home_work_rounded, color: Colors.white, size: 34),
-        ),
-        22.height,
-        // Brand name
-        RichText(
-          text: TextSpan(children: [
-            TextSpan(
-              text: 'Mi',
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.w900,
-                color: appTextPrimaryColor,
-                letterSpacing: -1,
-              ),
-            ),
-            TextSpan(
-              text: 'son',
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.w900,
-                color: primaryColor,
-                letterSpacing: -1,
-              ),
-            ),
-          ]),
+        // Logo
+        Image.asset(
+          'assets/logo/logo.png',
+          height: 150,
+          fit: BoxFit.contain,
         ),
         10.height,
         // Tagline
@@ -556,55 +510,15 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
+  /// True dès que la confirmation saisie ne peut plus correspondre au nouveau PIN.
+  bool get _forgotPinMismatch {
+    final pin = forgotNewPasswordCont.text;
+    final confirm = forgotConfirmPasswordCont.text;
+    if (confirm.isEmpty) return false;
+    return confirm.length >= pin.length ? confirm != pin : !pin.startsWith(confirm);
+  }
+
   // ── Forgot password helpers ───────────────────────────────────────────────
-
-  int get _forgotPasswordStrength {
-    int s = 0;
-    if (_forgotHasMin12Chars) s++;
-    if (_forgotHasDigit) s++;
-    if (_forgotHasUppercase) s++;
-    if (_forgotHasSpecialChar) s++;
-    return s;
-  }
-
-  Color _forgotStrengthColor(int s) {
-    switch (s) {
-      case 1: return Colors.redAccent;
-      case 2: return Colors.orange;
-      case 3: return Colors.amber;
-      case 4: return const Color(0xFF4CAF50);
-      default: return Colors.transparent;
-    }
-  }
-
-  Widget _buildForgotStrengthBar() {
-    final s = _forgotPasswordStrength;
-    final color = _forgotStrengthColor(s);
-    final label = ['', 'Très faible', 'Faible', 'Moyen', 'Fort'][s];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          for (int i = 0; i < 4; i++)
-            Expanded(
-              child: Container(
-                margin: EdgeInsets.only(right: i < 3 ? 4 : 0),
-                height: 3,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(2),
-                  color: i < s ? color : Colors.black.withValues(alpha: 0.08),
-                ),
-              ),
-            ),
-        ]),
-        if (s > 0) ...[
-          5.height,
-          Text(label,
-              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w500)),
-        ],
-      ],
-    );
-  }
 
   Widget _forgotGradientButton({
     required String label,
@@ -617,10 +531,10 @@ class _SignInScreenState extends State<SignInScreen> {
         height: 54,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: primaryColor,
+          color: _brandGold,
           boxShadow: [
             BoxShadow(
-                color: primaryColor.withValues(alpha: 0.38),
+                color: _brandGold.withValues(alpha: 0.38),
                 blurRadius: 18,
                 offset: const Offset(0, 7))
           ],
@@ -628,7 +542,7 @@ class _SignInScreenState extends State<SignInScreen> {
         child: Center(
           child: Text(label,
               style: const TextStyle(
-                  color: Colors.black, fontSize: 15, fontWeight: FontWeight.w700)),
+                  color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
         ),
       ),
     );
@@ -641,6 +555,13 @@ class _SignInScreenState extends State<SignInScreen> {
 
     return Column(
       children: [
+        // Logo
+        Image.asset(
+          'assets/logo/logo.png',
+          height: 110,
+          fit: BoxFit.contain,
+        ),
+        16.height,
         // Step indicator
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -655,7 +576,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(4),
                   color: step == i
-                      ? primaryColor
+                      ? _brandGold
                       : Colors.black.withValues(alpha: 0.12),
                 ),
               ),
@@ -668,36 +589,37 @@ class _SignInScreenState extends State<SignInScreen> {
           width: 64, height: 64,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: primaryColor.withValues(alpha: 0.12),
-            border: Border.all(color: primaryColor.withValues(alpha: 0.35), width: 1.5),
+            color: _brandGold.withValues(alpha: 0.12),
+            border: Border.all(color: _brandGold.withValues(alpha: 0.35), width: 1.5),
             boxShadow: [
               BoxShadow(
-                  color: primaryColor.withValues(alpha: 0.22),
+                  color: _brandGold.withValues(alpha: 0.22),
                   blurRadius: 22,
                   spreadRadius: 2)
             ],
           ),
           child: Icon(
             showForgotOtpStep ? Icons.lock_reset_rounded : Icons.lock_outline_rounded,
-            color: primaryColor,
+            color: _brandGold,
             size: 28,
           ),
         ),
         18.height,
         Text(
-          showForgotOtpStep ? 'Nouveau mot de passe' : 'Mot de passe oublié',
+          showForgotOtpStep ? 'Entrez le mot de passe OTP reçu :' : 'Code PIN oublié',
           style: TextStyle(
               color: appTextPrimaryColor, fontSize: 22, fontWeight: FontWeight.w800),
         ).center(),
-        8.height,
-        Text(
-          showForgotOtpStep
-              ? 'Saisissez le code reçu puis définissez votre nouveau mot de passe.'
-              : 'Entrez votre adresse email pour recevoir un code de vérification.',
-          style: TextStyle(
-              color: appTextSecondaryColor, fontSize: 13, height: 1.5),
-          textAlign: TextAlign.center,
-        ).paddingSymmetric(horizontal: 12),
+        // Sous-titre uniquement à l'étape 1 (le titre de l'étape 2 suffit)
+        if (!showForgotOtpStep) ...[
+          8.height,
+          Text(
+            'Entrez votre numéro de téléphone ou votre email pour recevoir un code de vérification.',
+            style: TextStyle(
+                color: appTextSecondaryColor, fontSize: 13, height: 1.5),
+            textAlign: TextAlign.center,
+          ).paddingSymmetric(horizontal: 12),
+        ],
         24.height,
       ],
     );
@@ -706,7 +628,7 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget _buildForgotEmailForm() {
     return Form(
       key: forgotFormKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+      autovalidateMode: AutovalidateMode.disabled, // erreurs affichées seulement au clic sur le bouton
       child: Column(
         children: [
           AppTextField(
@@ -714,15 +636,22 @@ class _SignInScreenState extends State<SignInScreen> {
             controller: forgotEmailCont,
             errorThisFieldRequired: language.requiredText,
             decoration: _fieldDecoration(
-              label: 'Email ou numéro de téléphone',
-              hint: 'exemple@email.com ou +221771234567',
+              label: 'Numéro ou email',
+              hint: '77 123 45 67 ou exemple@email.com',
+            ).copyWith(
+              // +221 affiché d'office dès qu'un numéro est saisi
+              prefixText: _isPhoneIdentifier(forgotEmailCont.text)
+                  ? '$_senegalDialCode '
+                  : null,
+              prefixStyle: primaryTextStyle(size: 16),
             ),
-            suffix: Icon(Icons.perm_identity_rounded, size: 18,
-                    color: appTextSecondaryColor)
-                .paddingAll(14),
+            onChanged: (_) => setState(() {}),
             isValidationRequired: true,
             validator: (val) {
               if (val == null || val.trim().isEmpty) return language.requiredText;
+              if (_isPhoneIdentifier(val)) {
+                return validateSenegalPhone(_localPhoneDigits(val));
+              }
               return null;
             },
           ),
@@ -758,7 +687,7 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget _buildForgotResetForm() {
     return Form(
       key: forgotResetFormKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+      autovalidateMode: AutovalidateMode.disabled, // erreurs affichées seulement au clic sur le bouton
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -766,27 +695,31 @@ class _SignInScreenState extends State<SignInScreen> {
           if (forgotEmail.isNotEmpty)
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  color: primaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(24),
+                  color: _brandGold.withValues(alpha: 0.08),
                   border: Border.all(
-                      color: primaryColor.withValues(alpha: 0.3), width: 1),
+                      color: _brandGold.withValues(alpha: 0.3), width: 1),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.mail_outline_rounded,
-                        size: 14, color: primaryColor),
-                    6.width,
+                    Icon(
+                        _forgotIdentityIsEmail
+                            ? Icons.mail_outline_rounded
+                            : Icons.phone_rounded,
+                        size: 18,
+                        color: _brandGold),
+                    8.width,
                     Text(
                       forgotEmail.length > 28
                           ? '${forgotEmail.substring(0, 25)}...'
                           : forgotEmail,
                       style: TextStyle(
-                          color: primaryColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500),
+                          color: _brandGold,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700),
                     ),
                   ],
                 ),
@@ -805,7 +738,7 @@ class _SignInScreenState extends State<SignInScreen> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             textStyle: TextStyle(
                 color: appTextPrimaryColor, fontSize: 22, fontWeight: FontWeight.w700),
-            cursorColor: primaryColor,
+            cursorColor: _brandGold,
             pinTheme: PinTheme(
               shape: PinCodeFieldShape.box,
               borderRadius: BorderRadius.circular(14),
@@ -814,9 +747,9 @@ class _SignInScreenState extends State<SignInScreen> {
               activeFillColor: Colors.white,
               inactiveFillColor: Colors.white,
               selectedFillColor: Colors.white,
-              activeColor: primaryColor,
+              activeColor: _brandGold,
               inactiveColor: borderColor,
-              selectedColor: primaryColor,
+              selectedColor: _brandGold,
             ),
             enableActiveFill: true,
             onChanged: (_) {},
@@ -834,7 +767,7 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
               child: Text('Renvoyer le code',
                   style: TextStyle(
-                      color: primaryColor,
+                      color: _brandGold,
                       fontSize: 12,
                       fontWeight: FontWeight.w600)),
             ),
@@ -842,6 +775,12 @@ class _SignInScreenState extends State<SignInScreen> {
           16.height,
 
           // New password
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Entrez votre nouveau code PIN',
+                style: boldTextStyle(size: 15, color: appTextPrimaryColor)),
+          ),
+          10.height,
           AppTextField(
             textFieldType: TextFieldType.PASSWORD,
             controller: forgotNewPasswordCont,
@@ -849,26 +788,19 @@ class _SignInScreenState extends State<SignInScreen> {
             nextFocus: forgotConfirmPasswordFocus,
             errorThisFieldRequired: language.requiredText,
             obscureText: true,
+            keyboardType: pinKeyboardType,
+            inputFormatters: pinInputFormatters,
             suffixPasswordVisibleWidget: Icon(Icons.visibility_outlined,
                     size: 18, color: appTextSecondaryColor)
                 .paddingAll(14),
             suffixPasswordInvisibleWidget: Icon(Icons.visibility_off_outlined,
                     size: 18, color: appTextSecondaryColor)
                 .paddingAll(14),
-            decoration: _fieldDecoration(label: language.hintNewPasswordTxt),
+            decoration: _fieldDecoration(label: 'Nouveau code PIN (4 chiffres)'),
             onChanged: (_) => setState(() {}),
             isValidationRequired: true,
-            validator: (val) {
-              if (val == null || val.trim().isEmpty) return language.requiredText;
-              if (!_isForgotPasswordStrong)
-                return 'Le mot de passe ne respecte pas les critères';
-              return null;
-            },
+            validator: validatePin,
           ),
-          if (forgotNewPasswordCont.text.isNotEmpty) ...[
-            10.height,
-            _buildForgotStrengthBar(),
-          ],
           14.height,
 
           // Confirm password
@@ -878,20 +810,22 @@ class _SignInScreenState extends State<SignInScreen> {
             focus: forgotConfirmPasswordFocus,
             errorThisFieldRequired: language.requiredText,
             obscureText: true,
+            keyboardType: pinKeyboardType,
+            inputFormatters: pinInputFormatters,
             suffixPasswordVisibleWidget: Icon(Icons.visibility_outlined,
                     size: 18, color: appTextSecondaryColor)
                 .paddingAll(14),
             suffixPasswordInvisibleWidget: Icon(Icons.visibility_off_outlined,
                     size: 18, color: appTextSecondaryColor)
                 .paddingAll(14),
-            decoration: _fieldDecoration(label: 'Confirmer le mot de passe'),
+            // Seule erreur affichée pendant la saisie : PIN différents
+            decoration: _fieldDecoration(label: 'Confirmer le code PIN').copyWith(
+              errorText: _forgotPinMismatch ? 'Les codes PIN ne correspondent pas' : null,
+            ),
             onChanged: (_) => setState(() {}),
             isValidationRequired: true,
-            validator: (val) {
-              if (val == null || val.trim().isEmpty) return language.requiredText;
-              if (val != forgotNewPasswordCont.text) return language.passwordNotMatch;
-              return null;
-            },
+            validator: (val) =>
+                validatePinConfirmation(val, forgotNewPasswordCont.text),
           ),
           22.height,
 
@@ -940,7 +874,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 child: Text('Connexion',
                     style: TextStyle(
-                        color: primaryColor,
+                        color: _brandGold,
                         fontSize: 13,
                         fontWeight: FontWeight.w600)),
               ),
@@ -959,11 +893,11 @@ class _SignInScreenState extends State<SignInScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             RoundedCheckBox(
-              borderColor: context.primaryColor,
-              checkedColor: context.primaryColor,
+              borderColor: const Color(0xFF3A3A3A),
+              checkedColor: const Color(0xFF3A3A3A),
               isChecked: isRemember,
               text: language.rememberMe,
-              textStyle: secondaryTextStyle(size: 15),
+              textStyle: secondaryTextStyle(size: 15, color: const Color(0xFF3A3A3A)),
               size: 18,
               onTap: (value) async {
                 await setValue(IS_REMEMBERED, isRemember);
@@ -975,12 +909,12 @@ class _SignInScreenState extends State<SignInScreen> {
               onPressed: _openForgotPasswordFlow,
               child: Text(
                 language.forgotPassword,
-                style: secondaryTextStyle(size: 15, color: primaryColor),
+                style: secondaryTextStyle(size: 15, color: _brandGold),
               ),
             ).flexible(),
           ],
         ),
-        22.height,
+        52.height,
         // Sign In button
         GestureDetector(
           onTap: _handleLogin,
@@ -989,16 +923,16 @@ class _SignInScreenState extends State<SignInScreen> {
             padding: const EdgeInsets.symmetric(vertical: 17),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [primaryColor, primaryColor.withValues(alpha: 0.75)],
+                colors: [_brandGold, _brandGold.withValues(alpha: 0.75)],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: primaryColor.withValues(alpha: 0.40),
-                  blurRadius: 22,
-                  offset: const Offset(0, 8),
+                  color: _brandGold.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
@@ -1026,7 +960,7 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
               child: Text(
                 language.signUp,
-                style: boldTextStyle(size: 15, color: primaryColor),
+                style: boldTextStyle(size: 15, color: _brandGold),
               ),
             ),
           ],
@@ -1234,6 +1168,7 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
             Body(
+          loaderColors: const [Color(0xFF3A3A3A), _brandGold],
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Observer(builder: (context) {
@@ -1241,7 +1176,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 return Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    (context.height() * 0.12).toInt().height,
+                    (context.height() * 0.06).toInt().height,
                     _buildForgotTopWidget(),
                     if (showForgotOtpStep)
                       _buildForgotResetForm()
@@ -1254,11 +1189,11 @@ class _SignInScreenState extends State<SignInScreen> {
 
               return Form(
                 key: formKey,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
+                autovalidateMode: AutovalidateMode.disabled, // erreurs affichées seulement au clic sur le bouton
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    (context.height() * 0.12).toInt().height,
+                    (context.height() * 0.06).toInt().height,
                     _buildTopWidget(),
                     AutofillGroup(
                       child: Column(
@@ -1273,23 +1208,22 @@ class _SignInScreenState extends State<SignInScreen> {
                             decoration: _fieldDecoration(
                               label: 'Identifiant',
                               hint: 'Numéro ou email',
+                            ).copyWith(
+                              // +221 affiché d'office dès qu'un numéro est saisi
+                              prefixText: _isPhoneIdentifier(emailCont.text)
+                                  ? '$_senegalDialCode '
+                                  : null,
+                              prefixStyle: primaryTextStyle(size: 16),
                             ),
-                            suffix: Icon(Icons.alternate_email_rounded, size: 18, color: appTextSecondaryColor).paddingAll(14),
+                            onChanged: (_) => setState(() {}),
                             autoFillHints: [AutofillHints.username],
                             isValidationRequired: true,
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) {
                                 return language.requiredText;
                               }
-                              final trimmed = val.trim();
-                              if (!trimmed.contains('@') &&
-                                  !trimmed.startsWith('+')) {
-                                final digitsOnly = trimmed.replaceAll(
-                                    RegExp(r'[\s\-\(\)]'), '');
-                                if (RegExp(r'^\d+$').hasMatch(digitsOnly) &&
-                                    digitsOnly.length < 10) {
-                                  return "L'indicatif téléphonique est requis (ex: +221...)";
-                                }
+                              if (_isPhoneIdentifier(val)) {
+                                return validateSenegalPhone(_localPhoneDigits(val));
                               }
                               return null;
                             },
@@ -1300,19 +1234,16 @@ class _SignInScreenState extends State<SignInScreen> {
                             controller: passwordCont,
                             focus: passwordFocus,
                             obscureText: true,
+                            keyboardType: pinKeyboardType,
+                            inputFormatters: pinInputFormatters,
                             suffixPasswordVisibleWidget:
                                 Icon(Icons.visibility_outlined, size: 18, color: appTextSecondaryColor).paddingAll(14),
                             suffixPasswordInvisibleWidget:
                                 Icon(Icons.visibility_off_outlined, size: 18, color: appTextSecondaryColor).paddingAll(14),
-                            decoration: _fieldDecoration(label: language.hintPasswordTxt),
+                            decoration: _fieldDecoration(label: 'Code PIN (4 chiffres)'),
                             autoFillHints: [AutofillHints.password],
                             isValidationRequired: true,
-                            validator: (val) {
-                              if (val == null || val.trim().isEmpty) {
-                                return language.requiredText;
-                              }
-                              return null;
-                            },
+                            validator: validatePin,
                             onFieldSubmitted: (s) {
                               _handleLogin();
                             },

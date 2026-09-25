@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
@@ -333,14 +334,8 @@ class ProfileFragmentState extends State<ProfileFragment> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: appBarWidget(
-        language.profile,
-        textColor: white,
-        textSize: APP_BAR_TEXT_SIZE,
-        elevation: 0.0,
-        color: context.primaryColor,
-        showBack: false,
-      ),
+      // Logo centré + fond de la page, comme l'accueil
+      appBar: MisonAppBar(title: language.profile),
       body: Observer(
         builder: (BuildContext context) {
           return Stack(

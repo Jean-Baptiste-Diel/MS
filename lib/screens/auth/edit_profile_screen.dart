@@ -11,6 +11,7 @@ import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/utils/phone_utils.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -121,13 +122,18 @@ class EditProfileScreenState extends State<EditProfileScreen> {
     setState(() {});
   }
 
-  String buildMobileNumber() {
-    if (mobileCont.text.isEmpty) return '';
-    return '+${selectedCountryCode.phoneCode}${mobileCont.text.trim()}';
-  }
+  String buildMobileNumber() =>
+      buildInternationalPhone(mobileCont.text, phoneCode: selectedCountryCode.phoneCode);
 
   Future<void> update() async {
     if (!formKey.currentState!.validate()) return;
+    if (selectedCountryCode.phoneCode == '221' && mobileCont.text.trim().isNotEmpty) {
+      final phoneError = validateSenegalPhone(mobileCont.text.trim());
+      if (phoneError != null) {
+        TopToast.show(message: phoneError, type: TopToastType.error);
+        return;
+      }
+    }
     hideKeyboard(context);
     appStore.setLoading(true);
 
@@ -182,13 +188,29 @@ class EditProfileScreenState extends State<EditProfileScreen> {
         finish(context);
       } else {
         log('update() ${response.statusCode}: ${response.body}');
-        TopToast.show(message: 'Erreur ${response.statusCode}: ${response.body}');
+        final serverMsg = _extractServerMessage(response.body);
+        if (serverMsg != null && isInvalidPhoneError(serverMsg)) {
+          TopToast.show(
+              message: friendlyPhoneError(serverMsg, phoneCode: selectedCountryCode.phoneCode),
+              type: TopToastType.error);
+        } else {
+          TopToast.show(message: 'Erreur ${response.statusCode}: ${response.body}');
+        }
       }
     } catch (e) {
       appStore.setLoading(false);
       log('update() exception: $e');
       TopToast.show(message: e.toString(), type: TopToastType.error);
     }
+  }
+
+  /// Extrait le champ "message" d'une réponse JSON du back-end, ou null.
+  String? _extractServerMessage(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['message'] != null) return decoded['message'].toString();
+    } catch (_) {}
+    return null;
   }
 
   void _getFromGallery() async {
@@ -364,7 +386,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
                               controller: mobileCont,
                               focus: mobileFocus,
                               isValidationRequired: false,
-                              maxLength: 15,
+                              maxLength: selectedCountryCode.phoneCode == '221' ? 9 : 15, // 9 chiffres au Sénégal
                               decoration: inputDecoration(context,
                                       hintText:
                                           language.hintContactNumberTxt)

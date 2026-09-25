@@ -93,7 +93,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Handyman Service app needs access to your device&apos;s location at all times to ensure seamless service delivery tailored to your precise location, even when the app is running in the background.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Handyman Service app requires access to your device&apos;s microphone when recording your speech using the &quot;Mic&quot; button.</string>
+	<string>Mison Service utilise le microphone pour vos appels audio et vos notes vocales avec l&apos;artisan, le client ou le support.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Handyman Service app requires access to Speech recognition when you will be used to determine which words you speak into this device microphone.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

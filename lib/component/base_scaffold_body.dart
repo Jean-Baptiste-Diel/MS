@@ -8,8 +8,9 @@ import 'package:nb_utils/nb_utils.dart';
 class Body extends StatelessWidget {
   final Widget child;
   final bool showLoader;
+  final List<Color>? loaderColors;
 
-  const Body({Key? key, required this.child, this.showLoader = true}) : super(key: key);
+  const Body({Key? key, required this.child, this.showLoader = true, this.loaderColors}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +22,7 @@ class Body extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             child,
-            if (showLoader) Observer(builder: (_) => LoaderWidget().center().visible(appStore.isLoading)),
+            if (showLoader) Observer(builder: (_) => LoaderWidget(colors: loaderColors).center().visible(appStore.isLoading)),
           ],
         ),
       ),

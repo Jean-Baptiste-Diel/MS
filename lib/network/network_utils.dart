@@ -124,6 +124,27 @@ Uri buildBaseUrl(String endPoint) {
   return url;
 }
 
+/// Endpoints `auth/` qui exigent une session : un 401 y signifie un jeton
+/// expiré, il faut rafraîchir puis réessayer. Sans ça, le token FCM/VoIP n'est
+/// jamais enregistré au démarrage et le téléphone ne sonne pas lors d'un appel.
+const _authenticatedAuthEndpoints = {
+  'auth/me',
+  'auth/fcm-token',
+  'auth/voip-token',
+  'auth/change-password',
+  // La déconnexion efface le token FCM côté serveur : elle doit aboutir même
+  // si le jeton d'accès a expiré, sinon le téléphone reçoit encore les appels.
+  'auth/logout',
+};
+
+/// Les autres endpoints `auth/` (login, register, OTP…) sont publics : un 401
+/// y est une vraie erreur (ex: mauvais PIN), on ne rafraîchit pas.
+bool _canRefreshOn401(String endPoint) {
+  if (!endPoint.startsWith('auth/')) return true;
+  final path = endPoint.split('?').first;
+  return _authenticatedAuthEndpoints.contains(path);
+}
+
 Future<Response> buildHttpResponse(
   String endPoint, {
   HttpMethodType method = HttpMethodType.GET,
@@ -158,7 +179,7 @@ Future<Response> buildHttpResponse(
       methodtype: method.name,
     );
 
-    if (appStore.isLoggedIn && response.statusCode == 401 && !endPoint.startsWith('http') && !endPoint.startsWith('auth/')) {
+    if (appStore.isLoggedIn && response.statusCode == 401 && !endPoint.startsWith('http') && _canRefreshOn401(endPoint)) {
       if (isRetry) {
         // Le token rafraîchi est aussi rejeté → session invalide
         await _redirectToLogin();

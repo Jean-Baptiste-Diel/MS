@@ -5,7 +5,6 @@ import 'package:booking_system_flutter/screens/maintenance_mode_screen.dart';
 import 'package:booking_system_flutter/screens/mison_welcome_screen.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
-import 'package:booking_system_flutter/utils/images.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:geolocator/geolocator.dart';
@@ -21,12 +20,35 @@ class SplashScreen extends StatefulWidget {
   _SplashScreenState createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   bool appNotSynced = false;
+
+  // ── Animation d'ouverture du logo ──────────────────────────────────────────
+  static const Color _brandGold = Color(0xFFC49716);
+  late final AnimationController _introController;
+  late final Animation<double> _symbolScale;
+  late final Animation<double> _symbolFade;
+  late final Animation<double> _textFade;
+  late final Animation<Offset> _textSlide;
+  late final Animation<double> _lineWidth;
+  late final Future<void> _introDone;
 
   @override
   void initState() {
     super.initState();
+    _introController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+    // 1) le symbole « M » grossit et apparaît
+    _symbolScale = Tween<double>(begin: 0.5, end: 1).animate(CurvedAnimation(
+        parent: _introController, curve: const Interval(0.0, 0.45, curve: Curves.easeOutBack)));
+    _symbolFade = CurvedAnimation(parent: _introController, curve: const Interval(0.0, 0.3, curve: Curves.easeIn));
+    // 2) « MISON » monte en fondu
+    _textFade = CurvedAnimation(parent: _introController, curve: const Interval(0.35, 0.7, curve: Curves.easeOut));
+    _textSlide = Tween<Offset>(begin: const Offset(0, 0.6), end: Offset.zero).animate(CurvedAnimation(
+        parent: _introController, curve: const Interval(0.35, 0.75, curve: Curves.easeOutCubic)));
+    // 3) un trait doré se dessine sous le nom
+    _lineWidth = CurvedAnimation(parent: _introController, curve: const Interval(0.65, 1.0, curve: Curves.easeInOut));
+    _introDone = _introController.forward().orCancel.catchError((_) {});
+
     afterBuildCreated(() {
       setStatusBarColor(Colors.transparent, statusBarBrightness: Brightness.dark, statusBarIconBrightness: appStore.isDarkMode ? Brightness.light : Brightness.dark);
       init();
@@ -64,6 +86,9 @@ class _SplashScreenState extends State<SplashScreen> {
     });
 
     appStore.setLoading(false);
+    // Laisser l'animation du logo se terminer avant de changer d'écran
+    await _introDone;
+    if (!mounted) return;
     if (!getBoolAsync(IS_APP_CONFIGURATION_SYNCED_AT_LEAST_ONCE)) {
       appNotSynced = true;
       setState(() {});
@@ -99,44 +124,66 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   void dispose() {
+    _introController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            appStore.isDarkMode ? splash_background : splash_light_background,
-            height: context.height(),
-            width: context.width(),
-            fit: BoxFit.cover,
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Image.asset(appLogo, height: 120, width: 120),
-              32.height,
-              Text(APP_NAME, style: boldTextStyle(size: 26, color: appStore.isDarkMode ? Colors.white : Colors.black), textAlign: TextAlign.center),
-              16.height,
-              if (appNotSynced)
-                Observer(
-                  builder: (_) => appStore.isLoading
-                      ? LoaderWidget().center()
-                      : TextButton(
-                          child: Text(language.reload, style: boldTextStyle()),
-                          onPressed: () {
-                            appStore.setLoading(true);
-                            init();
-                          },
-                        ),
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Symbole « M »
+            FadeTransition(
+              opacity: _symbolFade,
+              child: ScaleTransition(
+                scale: _symbolScale,
+                child: Image.asset('assets/logo/logo_symbol.png', width: 96),
+              ),
+            ),
+            22.height,
+            // Nom « MISON »
+            ClipRect(
+              child: SlideTransition(
+                position: _textSlide,
+                child: FadeTransition(
+                  opacity: _textFade,
+                  child: Image.asset('assets/logo/logo_text.png', width: 220),
                 ),
+              ),
+            ),
+            14.height,
+            // Trait doré
+            AnimatedBuilder(
+              animation: _lineWidth,
+              builder: (_, __) => Container(
+                width: 70 * _lineWidth.value,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: _brandGold,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            if (appNotSynced) ...[
+              28.height,
+              Observer(
+                builder: (_) => appStore.isLoading
+                    ? LoaderWidget(colors: const [Color(0xFF3A3A3A), _brandGold]).center()
+                    : TextButton(
+                        child: Text(language.reload, style: boldTextStyle(color: _brandGold)),
+                        onPressed: () {
+                          appStore.setLoading(true);
+                          init();
+                        },
+                      ),
+              ),
             ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

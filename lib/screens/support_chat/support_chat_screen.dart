@@ -1,17 +1,25 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:booking_system_flutter/utils/mison_call_utils.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/services/support_chat_service.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+
+import 'voice_note_player.dart';
 
 // Délai avant de marquer un message pending comme failed
 const _kSendTimeout = Duration(seconds: 10);
@@ -25,6 +33,10 @@ class SupportChatScreen extends StatefulWidget {
   final String emptySubtitle;
   final IconData emptyIcon;
 
+  /// Nom de l'interlocuteur à appeler ; si renseigné (chat de commande),
+  /// un bouton d'appel s'affiche en face du nom.
+  final String? callPeerName;
+
   const SupportChatScreen({
     Key? key,
     this.orderId,
@@ -32,6 +44,7 @@ class SupportChatScreen extends StatefulWidget {
     this.emptyTitle = 'Démarrez la conversation',
     this.emptySubtitle = 'Notre équipe vous répondra dans les plus brefs délais.',
     this.emptyIcon = Icons.support_agent_rounded,
+    this.callPeerName,
   }) : super(key: key);
 
   @override
@@ -47,6 +60,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   StreamSubscription? _historySub;
   StreamSubscription? _newMessageSub;
   StreamSubscription? _connectionSub;
+  StreamSubscription? _errorSub;
 
   bool _isConnecting = true;
   bool _wsConnected = false;
@@ -105,6 +119,19 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         _scrollToBottom();
       });
 
+      // Le serveur n'a pas pu traiter un message : les messages sont traités
+      // dans l'ordre, c'est donc le plus ancien encore en attente qui a échoué.
+      // Il passe en "échec" tout de suite (avec le bouton réessayer).
+      _errorSub?.cancel();
+      _errorSub = _service.errorStream.listen((error) {
+        if (!mounted) return;
+        final pending = _messages.where(
+          (m) => m.isMe && m.status == MessageStatus.pending && !m.isImage,
+        );
+        if (pending.isNotEmpty) _markFailed(pending.first.localId);
+        TopToast.show(message: error, type: TopToastType.error);
+      });
+
       // Écouter les changements d'état de connexion WS
       _connectionSub?.cancel();
       _connectionSub = _service.connectionStream.listen((connected) {
@@ -148,6 +175,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   void _handleSend(String content, String messageType) {
     if (messageType == 'image') {
       _service.sendImageMessage(content);
+    } else if (messageType == 'audio') {
+      if (!_service.sendAudioMessage(content)) {
+        TopToast.show(message: 'Note vocale non envoyée, réessayez.', type: TopToastType.error);
+      }
     } else {
       _sendMessage(content);
     }
@@ -230,6 +261,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     _historySub?.cancel();
     _newMessageSub?.cancel();
     _connectionSub?.cancel();
+    _errorSub?.cancel();
     _service.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -241,33 +273,54 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       onTap: () => hideKeyboard(context),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: context.primaryColor,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.title, style: boldTextStyle(color: Colors.white, size: 16)),
-              Row(
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
+        // Logo centré + fond de la page, comme l'accueil
+        appBar: MisonAppBar(
+          title: widget.title,
+          // Bouton d'appel en face du nom (chat d'une commande uniquement)
+          titleTrailing: (widget.orderId != null && widget.callPeerName != null)
+              ? GestureDetector(
+                  onTap: () => startMisonOrderCall(
+                    context,
+                    orderId: widget.orderId!,
+                    otherPartyName: widget.callPeerName!,
+                  ),
+                  child: Container(
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _wsConnected ? Colors.greenAccent : Colors.orange,
+                      color: kMisonGold,
+                      boxShadow: [
+                        BoxShadow(
+                          color: kMisonGold.withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
+                    child: const Icon(Icons.call_rounded, color: Colors.white, size: 20),
                   ),
-                  4.width,
-                  Text(
-                    _wsConnected ? 'Connecté' : 'Reconnexion...',
-                    style: secondaryTextStyle(color: Colors.white70, size: 13),
-                  ),
-                ],
+                )
+              : null,
+          subtitle: Row(
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _wsConnected ? Colors.green : kMisonGold,
+                ),
+              ),
+              4.width,
+              Text(
+                _wsConnected ? 'Connecté' : 'Reconnexion...',
+                style: secondaryTextStyle(size: 13),
               ),
             ],
           ),
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            icon: const Icon(Icons.arrow_back, color: kMisonDark),
             onPressed: () => finish(context),
           ),
         ),
@@ -357,7 +410,13 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             ),
             child: msg.isImage
                 ? _buildImageContent(msg)
-                : Text(msg.content, style: primaryTextStyle(color: Colors.white)),
+                : msg.isAudio
+                    ? VoiceNotePlayer(
+                        url: (msg.audioUrl != null && msg.audioUrl!.isNotEmpty)
+                            ? msg.audioUrl!
+                            : 'https://api.mison.app/media/minio/${msg.content}',
+                      )
+                    : Text(msg.content, style: primaryTextStyle(color: Colors.white)),
           ),
           // Heure + indicateur d'état
           Padding(
@@ -440,6 +499,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   Widget _buildInputBar() {
     return ChatInput(
       onUpload: _service.uploadImage,
+      onUploadAudio: _service.uploadAudio,
       onSend: _handleSend,
       enabled: _wsConnected,
     );
@@ -450,12 +510,14 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
 
 class ChatInput extends StatefulWidget {
   final Future<String?> Function(File file) onUpload;
+  final Future<String?> Function(File file) onUploadAudio;
   final void Function(String content, String messageType) onSend;
   final bool enabled;
 
   const ChatInput({
     Key? key,
     required this.onUpload,
+    required this.onUploadAudio,
     required this.onSend,
     this.enabled = true,
   }) : super(key: key);
@@ -471,6 +533,107 @@ class _ChatInputState extends State<ChatInput> {
 
   File? _selectedImage;
   bool _isUploading = false;
+
+  // ── Note vocale : maintenir le micro pour enregistrer, relâcher pour
+  // envoyer, glisser vers la gauche pour annuler.
+  static const _maxRecordDuration = Duration(minutes: 2);
+  static const _minRecordDuration = Duration(seconds: 1);
+  static const _cancelSlideDistance = 90.0;
+
+  final _recorder = AudioRecorder();
+  Future<void>? _recorderStarting;
+  Timer? _recordTimer;
+  bool _isRecording = false;
+  Duration _recordElapsed = Duration.zero;
+  double _slideDx = 0;
+  bool _hasText = false;
+
+  bool get _slideCancels => _slideDx < -_cancelSlideDistance;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController.addListener(() {
+      final hasText = _textController.text.trim().isNotEmpty;
+      if (hasText != _hasText) setState(() => _hasText = hasText);
+    });
+  }
+
+  Future<void> _startRecording() async {
+    if (!widget.enabled || _isUploading || _isRecording) return;
+    if (!await _recorder.hasPermission()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Autorisez l\'accès au micro pour envoyer une note vocale.')),
+      );
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    final path = '${dir.path}/note_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isRecording = true;
+      _recordElapsed = Duration.zero;
+      _slideDx = 0;
+    });
+    // AAC mono 64 kb/s : ~0,5 Mo par minute, qualité voix suffisante.
+    _recorderStarting = _recorder.start(
+      const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100, numChannels: 1),
+      path: path,
+    );
+    _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _recordElapsed += const Duration(seconds: 1));
+      if (_recordElapsed >= _maxRecordDuration) _stopRecording(send: true);
+    });
+  }
+
+  Future<void> _stopRecording({required bool send}) async {
+    if (!_isRecording) return;
+    _recordTimer?.cancel();
+    final elapsed = _recordElapsed;
+    setState(() => _isRecording = false);
+
+    // L'appui a pu être relâché avant la fin du démarrage de l'enregistreur.
+    try {
+      await _recorderStarting;
+    } catch (e) {
+      log('record start: $e');
+      return;
+    }
+
+    if (!send || elapsed < _minRecordDuration) {
+      await _recorder.cancel();
+      if (send && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Maintenez le micro pour enregistrer.')),
+        );
+      }
+      return;
+    }
+
+    final path = await _recorder.stop();
+    if (path == null || !mounted) return;
+    final file = File(path);
+    setState(() => _isUploading = true);
+    try {
+      final objectName = await widget.onUploadAudio(file);
+      if (!mounted) return;
+      if (objectName == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Échec de l\'envoi de la note vocale')),
+        );
+        return;
+      }
+      widget.onSend(objectName, 'audio');
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+      file.delete().catchError((_) => file);
+    }
+  }
+
+  String _formatElapsed(Duration d) =>
+      '${d.inMinutes}:${d.inSeconds.remainder(60).toString().padLeft(2, '0')}';
 
   Future<void> _pickImage(ImageSource source) async {
     final picked = await _picker.pickImage(
@@ -551,6 +714,8 @@ class _ChatInputState extends State<ChatInput> {
 
   @override
   void dispose() {
+    _recordTimer?.cancel();
+    _recorder.dispose();
     _textController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -576,10 +741,12 @@ class _ChatInputState extends State<ChatInput> {
                   IconButton(
                     icon: const Icon(Icons.add_circle_outline_rounded),
                     color: primaryColor,
-                    onPressed: (widget.enabled && !_isUploading) ? _showImageSourceSheet : null,
+                    onPressed: (widget.enabled && !_isUploading && !_isRecording) ? _showImageSourceSheet : null,
                   ),
                   Expanded(
-                    child: AppTextField(
+                    child: _isRecording
+                        ? _buildRecordingIndicator()
+                        : AppTextField(
                       textFieldType: TextFieldType.OTHER,
                       controller: _textController,
                       focus: _focusNode,
@@ -611,16 +778,61 @@ class _ChatInputState extends State<ChatInput> {
                               ),
                             ),
                           )
-                        : IconButton(
-                            icon: const Icon(Icons.send_rounded, color: Colors.white),
-                            onPressed: widget.enabled ? _send : null,
-                          ),
+                        : (_hasText || _selectedImage != null)
+                            ? IconButton(
+                                icon: const Icon(Icons.send_rounded, color: Colors.white),
+                                onPressed: widget.enabled ? _send : null,
+                              )
+                            : _buildMicButton(),
                   ),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMicButton() {
+    return GestureDetector(
+      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maintenez le micro pour enregistrer une note vocale.')),
+      ),
+      onLongPressStart: widget.enabled ? (_) => _startRecording() : null,
+      onLongPressMoveUpdate: (d) {
+        if (_isRecording) setState(() => _slideDx = d.offsetFromOrigin.dx);
+      },
+      onLongPressEnd: (_) => _stopRecording(send: !_slideCancels),
+      onLongPressCancel: () => _stopRecording(send: false),
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: Icon(
+          _isRecording ? Icons.mic : Icons.mic_none_rounded,
+          color: widget.enabled ? Colors.white : Colors.white54,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecordingIndicator() {
+    final cancelling = _slideCancels;
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: boxDecorationDefault(borderRadius: radius(24), color: context.scaffoldBackgroundColor),
+      child: Row(
+        children: [
+          const Icon(Icons.fiber_manual_record, color: Colors.red, size: 14),
+          8.width,
+          Text(_formatElapsed(_recordElapsed), style: boldTextStyle(size: 14)),
+          const Spacer(),
+          Text(
+            cancelling ? 'Relâchez pour annuler' : '‹ Glissez pour annuler',
+            style: secondaryTextStyle(size: 13, color: cancelling ? Colors.red : null),
+          ),
+        ],
       ),
     );
   }

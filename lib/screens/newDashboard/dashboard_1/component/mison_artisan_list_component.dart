@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_artisan_detail_screen.dart';
@@ -74,17 +75,17 @@ class _MisonArtisanListComponentState extends State<MisonArtisanListComponent> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: primaryColor.withValues(alpha: 0.08),
+                    color: kMisonGold.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: primaryColor.withValues(alpha: 0.18),
+                        color: kMisonGold.withValues(alpha: 0.18),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
                     ],
                   ),
-                  child: Text('Voir tout', style: boldTextStyle(color: primaryColor, size: 14)),
+                  child: Text('Voir tout', style: boldTextStyle(color: kMisonGold, size: 14)),
                 ),
               ),
             ],
@@ -126,7 +127,7 @@ class ArtisanCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.cardColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: primaryColor.withValues(alpha: 0.08)),
+          border: Border.all(color: kMisonGold.withValues(alpha: 0.08)),
           boxShadow: [
             BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 3)),
           ],
@@ -140,8 +141,8 @@ class ArtisanCard extends StatelessWidget {
               height: 62,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: primaryColor.withValues(alpha: 0.07),
-                border: Border.all(color: primaryColor.withValues(alpha: 0.18), width: 2),
+                color: kMisonGold.withValues(alpha: 0.07),
+                border: Border.all(color: kMisonGold.withValues(alpha: 0.18), width: 2),
                 image: artisan.profilePictureUrl != null
                     ? DecorationImage(image: CachedNetworkImageProvider(artisan.profilePictureUrl!), fit: BoxFit.cover)
                     : null,
@@ -150,7 +151,7 @@ class ArtisanCard extends StatelessWidget {
                   ? Center(
                       child: Text(
                         artisan.fullName.isNotEmpty ? artisan.fullName[0].toUpperCase() : '?',
-                        style: boldTextStyle(color: primaryColor, size: 24),
+                        style: boldTextStyle(color: kMisonGold, size: 24),
                       ),
                     )
                   : null,
@@ -172,12 +173,12 @@ class ArtisanCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.08),
+                  color: kMisonGold.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   artisan.service!.name!,
-                  style: boldTextStyle(color: primaryColor, size: 10),
+                  style: boldTextStyle(color: kMisonGold, size: 10),
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                 ),
               ),

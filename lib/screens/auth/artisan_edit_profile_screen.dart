@@ -335,7 +335,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                           focus: mobileFocus,
                           nextFocus: bioFocus,
                           isValidationRequired: false,
-                          maxLength: 15,
+                          maxLength: selectedCountry.phoneCode == '221' ? 9 : 15, // 9 chiffres au Sénégal
                           decoration: inputDecoration(context, hintText: language.hintContactNumberTxt),
                         ),
                       ),

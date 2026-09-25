@@ -11,7 +11,7 @@ class TopToast {
   static void show({
     required String message,
     TopToastType type = TopToastType.info,
-    Duration duration = const Duration(seconds: 3),
+    Duration duration = const Duration(seconds: 5),
     IconData? icon,
   }) {
     final overlay = navigatorKey.currentState?.overlay;
@@ -116,7 +116,11 @@ class _TopToastWidgetState extends State<_TopToastWidget> with SingleTickerProvi
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [colors.gradientStart, colors.gradientEnd],
+                    // Légèrement transparent
+                    colors: [
+                      colors.gradientStart.withValues(alpha: 0.85),
+                      colors.gradientEnd.withValues(alpha: 0.85),
+                    ],
                   ),
                   borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(20),
@@ -220,8 +224,9 @@ class _TopToastWidgetState extends State<_TopToastWidget> with SingleTickerProvi
         );
       case TopToastType.info:
         return _ToastColors(
-          gradientStart: const Color(0xFF3182CE),
-          gradientEnd: const Color(0xFF2C5282),
+          // Couleur unie (pas de dégradé)
+          gradientStart: const Color(0xFFC49716),
+          gradientEnd: const Color(0xFFC49716),
           defaultIcon: Icons.info_outline_rounded,
         );
     }

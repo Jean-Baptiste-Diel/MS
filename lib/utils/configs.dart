@@ -5,8 +5,6 @@ const APP_NAME = 'Mison Service';
 const APP_NAME_TAG_LINE = 'On-Demand Home Services App';
 var defaultPrimaryColor = Color(0xFFF4BB16);
 
-
-
 //const DOMAIN_URL = 'https://stony-ladylike-jolliness.ngrok-free.dev';
 const DOMAIN_URL = 'https://dev-api.mison.app';
 const BASE_URL = '$DOMAIN_URL/api/';

@@ -11,6 +11,7 @@ import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,7 +27,7 @@ import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../call/mison_call_screen.dart';
+import 'package:booking_system_flutter/utils/mison_call_utils.dart';
 import '../chat/mison_order_chat_screen.dart';
 import '../map/mison_artisan_navigation_screen.dart';
 import '../map/mison_tracking_screen.dart';
@@ -45,6 +46,14 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   late Future<MisonOrderDetailResponse> future;
   Timer? _locationTimer;
   Position? _artisanPosition;
+  StreamSubscription<String?>? _orderEventsSub;
+  Timer? _paymentPollTimer;
+  bool _paymentLaunched = false;
+  bool _paymentRequestInFlight = false;
+
+  /// Un paiement est en cours (requête, app Wave/Orange ouverte ou vérification
+  /// du statut) : le bouton "Payer" est désactivé pour éviter de payer deux fois.
+  bool get _paymentVerifying => _paymentRequestInFlight || _paymentLaunched || _paymentPollTimer != null;
 
   @override
   void initState() {
@@ -52,36 +61,23 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     WidgetsBinding.instance.addObserver(this);
     init();
     if (appStore.userType == USER_TYPE_PROVIDER) _fetchArtisanPosition();
-    LiveStream().on(LIVESTREAM_ORDER_PAYMENT_UPDATE, (orderId) {
-      if (orderId.toString() == widget.orderId) {
+    // Statut de commande changé côté serveur (paiement confirmé, prestation
+    // terminée par l'ouvrier…). orderId null = event sans id, on rafraîchit.
+    _orderEventsSub = OrderEvents.stream.listen((orderId) {
+      if (orderId == null || orderId.isEmpty || orderId == widget.orderId) {
+        _stopPaymentPolling();
         init();
         if (mounted) setState(() {});
       }
-    });
-    // Statut de commande changé côté serveur (ex: prestation terminée par l'ouvrier)
-    // — ces events ne portent pas l'orderId, on rafraîchit systématiquement.
-    LiveStream().on(LIVESTREAM_ORDERS_LIST_REFRESH, (_) {
-      init();
-      if (mounted) setState(() {});
-    });
-    LiveStream().on(LIVESTREAM_UPDATE_BOOKING_LIST, (_) {
-      init();
-      if (mounted) setState(() {});
-    });
-    LiveStream().on(LIVESTREAM_ARTISAN_ORDERS_REFRESH, (_) {
-      init();
-      if (mounted) setState(() {});
     });
   }
 
   @override
   void dispose() {
     _locationTimer?.cancel();
+    _paymentPollTimer?.cancel();
+    _orderEventsSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    LiveStream().dispose(LIVESTREAM_ORDER_PAYMENT_UPDATE);
-    LiveStream().dispose(LIVESTREAM_ORDERS_LIST_REFRESH);
-    LiveStream().dispose(LIVESTREAM_UPDATE_BOOKING_LIST);
-    LiveStream().dispose(LIVESTREAM_ARTISAN_ORDERS_REFRESH);
     super.dispose();
   }
 
@@ -92,10 +88,43 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     if (state == AppLifecycleState.resumed) {
       init();
       if (mounted) setState(() {});
+      if (_paymentLaunched) {
+        _paymentLaunched = false;
+        _startPaymentPolling();
+      }
     }
   }
 
   void init() => future = getMisonOrderDetail(widget.orderId);
+
+  /// Le webhook Wave/Orange Money peut arriver au serveur quelques secondes
+  /// après le retour dans l'app : on interroge le statut jusqu'à ce que le
+  /// paiement soit pris en compte (max ~30 s).
+  void _startPaymentPolling() {
+    _stopPaymentPolling();
+    int ticks = 0;
+    _paymentPollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (++ticks > 10 || !mounted) return _stopPaymentPolling();
+      try {
+        final res = await getMisonOrderDetail(widget.orderId);
+        if (!mounted || _paymentPollTimer == null) return;
+        if (res.data != null && !res.data!.isAwaitingAnyPayment) {
+          _stopPaymentPolling();
+          setState(() => future = Future.value(res));
+        }
+      } catch (e) {
+        log('[PaymentPolling] $e');
+      }
+    });
+  }
+
+  void _stopPaymentPolling() {
+    final wasPolling = _paymentPollTimer != null;
+    _paymentPollTimer?.cancel();
+    _paymentPollTimer = null;
+    // Réactive le bouton "Payer" si la commande est toujours en attente.
+    if (wasPolling && mounted) setState(() {});
+  }
 
   // ── Distance ouvrier → commande (fiable même sans passer par le dashboard) ──
 
@@ -328,6 +357,10 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
 
 
   void _showPaymentModal(MisonOrder order) {
+    if (_paymentVerifying) {
+      TopToast.show(message: 'Paiement en cours de vérification, patientez quelques secondes.');
+      return;
+    }
     const title = 'Frais de prestation';
     const desc  = 'Ces frais correspondent à la prestation réalisée par l\'ouvrier.';
     final feeRaw = order.currentFeeAmount;
@@ -346,76 +379,55 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         feeLabel: feeLabel,
         onPayWave: () async {
           Navigator.pop(context);
+          if (_paymentVerifying) return;
+          setState(() => _paymentRequestInFlight = true);
           appStore.setLoading(true);
           try {
             final res = await paymentCheckout(order.id ?? '');
             if (res.waveLaunchUrl != null && res.waveLaunchUrl!.isNotEmpty) {
+              _paymentLaunched = true;
               await launchUrl(Uri.parse(res.waveLaunchUrl!), mode: LaunchMode.externalApplication);
             } else {
               TopToast.show(message: res.message ?? 'Paiement Wave initié');
             }
             init(); setState(() {});
           } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
-          finally { appStore.setLoading(false); }
+          finally {
+            appStore.setLoading(false);
+            if (mounted) setState(() => _paymentRequestInFlight = false);
+          }
         },
         onPayOrange: () async {
           Navigator.pop(context);
+          if (_paymentVerifying) return;
+          setState(() => _paymentRequestInFlight = true);
           appStore.setLoading(true);
           try {
             final res = await paymentCheckoutOrange(order.id ?? '');
             if (res.deeplink != null && res.deeplink!.isNotEmpty) {
+              _paymentLaunched = true;
               await launchUrl(Uri.parse(res.deeplink!), mode: LaunchMode.externalApplication);
             } else {
               TopToast.show(message: res.message ?? 'Paiement Orange Money initié');
             }
             init(); setState(() {});
           } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
-          finally { appStore.setLoading(false); }
+          finally {
+            appStore.setLoading(false);
+            if (mounted) setState(() => _paymentRequestInFlight = false);
+          }
         },
       ),
     );
   }
 
   Future<void> _startCall(MisonOrder order) async {
-    // Await the SharedPreferences write before the API call triggers FCM.
-    // data-only FCM (content-available:1) can arrive in the background isolate
-    // before the async write completes if not awaited here.
-    await MisonCallScreen.markOutgoing(order.id!);
-    appStore.setLoading(true);
-    try {
-      final tokenData = await getCallToken(order.id!);
-      appStore.setLoading(false);
-      if (tokenData.appId == null || tokenData.appId!.isEmpty || (tokenData.token ?? '').isEmpty) {
-        MisonCallScreen.clearOutgoing(order.id!);
-        TopToast.show(message: 'Service d\'appel indisponible pour le moment');
-        return;
-      }
-      if (!mounted) return;
-      final otherName = appStore.userType == USER_TYPE_PROVIDER
-          ? order.client != null
-              ? '${order.client!.firstName ?? ''} ${order.client!.lastName ?? ''}'.trim()
-              : 'Client'
-          : order.artisan?.fullName ?? 'Ouvrier';
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => MisonCallScreen(
-            orderId: order.id!,
-            otherPartyName: otherName.isNotEmpty ? otherName : 'Correspondant',
-            appId: tokenData.appId ?? '',
-            channel: tokenData.channel ?? '',
-            token: tokenData.token ?? '',
-            uid: tokenData.uid ?? 1,
-            isCaller: true,
-          ),
-        ),
-      );
-    } catch (e, st) {
-      MisonCallScreen.clearOutgoing(order.id!);
-      appStore.setLoading(false);
-      log('_startCall error: $e\n$st');
-      TopToast.show(message: 'Impossible d\'initier l\'appel : $e');
-    }
+    final otherName = appStore.userType == USER_TYPE_PROVIDER
+        ? order.client != null
+            ? '${order.client!.firstName ?? ''} ${order.client!.lastName ?? ''}'.trim()
+            : 'Client'
+        : order.artisan?.fullName ?? 'Ouvrier';
+    await startMisonOrderCall(context, orderId: order.id!, otherPartyName: otherName);
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────────
@@ -481,6 +493,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                   onConfirm: () => _cancelOrder(order.id!),
                 ),
                 onPay: () => _showPaymentModal(order),
+                paymentVerifying: _paymentVerifying,
                 onRated: () { init(); setState(() {}); },
                 onCall: () => _startCall(order),
                 onTrack: () => Navigator.push(context, MaterialPageRoute(
@@ -537,6 +550,7 @@ class _OrderDetailBody extends StatelessWidget {
   final VoidCallback onSetRealizationFee;
   final VoidCallback onCancel;
   final VoidCallback onPay;
+  final bool paymentVerifying;
   final VoidCallback onRated;
   final VoidCallback onCall;
   final VoidCallback onTrack;
@@ -556,6 +570,7 @@ class _OrderDetailBody extends StatelessWidget {
     required this.onSetRealizationFee,
     required this.onCancel,
     required this.onPay,
+    this.paymentVerifying = false,
     required this.onRated,
     required this.onCall,
     required this.onTrack,
@@ -602,6 +617,11 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionIcon = Icons.receipt_long_rounded;
       primaryActionColor = completed;
       primaryActionTap = onSetRealizationFee;
+    } else if (_showPayButton && paymentVerifying) {
+      primaryActionLabel = 'Vérification du paiement…';
+      primaryActionIcon = Icons.hourglass_top_rounded;
+      primaryActionColor = Colors.grey;
+      primaryActionTap = onPay; // affiche seulement "patientez", n'ouvre pas le paiement
     } else if (_showPayButton) {
       primaryActionLabel = 'Payer la prestation';
       primaryActionIcon = Icons.payment_rounded;

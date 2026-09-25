@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/component/loader_widget.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
@@ -22,16 +23,11 @@ class MisonBookingFragment extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: Text('Mes Commandes',
-            style: boldTextStyle(color: Colors.white, size: 18)),
-        backgroundColor: context.primaryColor,
-        elevation: 3,
-        automaticallyImplyLeading: false,
-      ),
+      // Logo centré + fond de la page, comme les pages prestataire
+      appBar: const MisonAppBar(title: 'Mes Commandes'),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => const MisonSearchServiceScreen().launch(context),
-        backgroundColor: primaryColor,
+        backgroundColor: kMisonGold,
         icon: const Icon(Icons.add, color: Colors.white),
         label: Text('Nouvelle Commande',
             style: boldTextStyle(color: Colors.white, size: 14)),
@@ -41,7 +37,8 @@ class MisonBookingFragment extends StatelessWidget {
         children: [
           const _MiseEnRelationTab(),
           Observer(
-              builder: (_) => LoaderWidget().visible(appStore.isLoading)),
+              builder: (_) => LoaderWidget(colors: const [kMisonDark, kMisonGold])
+                  .visible(appStore.isLoading)),
         ],
       ),
     );
@@ -65,15 +62,42 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
   String? _selectedStatus;
   UniqueKey _key = UniqueKey();
 
+  /// Nombre de filtres toujours visibles ; les autres s'affichent avec « + ».
+  static const int _visibleFilterCount = 4;
+
+  // Couleurs des filtres (style WhatsApp, version dorée)
+  static const Color _chipBg = Color(0xFFE9EAEC);
+  static const Color _chipText = kMisonDark;
+  static const Color _chipSelectedBg = Color(0xFFF3E7C4);
+  static const Color _chipSelectedText = Color(0xFF8A6A0F);
+  bool _showAllFilters = false;
+
   final List<Map<String, String>> _filters = const [
+    // « Tous » : sélectionné (en couleur) quand aucun statut n'est choisi
     {'value': '', 'label': 'Tous'},
-    {'value': 'PENDING', 'label': 'Recherche ouvrier'},
-    {'value': 'ACCEPTED', 'label': 'Ouvrier trouvé'},
-    {'value': 'IN_PROGRESS', 'label': 'En intervention'},
-    {'value': 'AWAITING_REALIZATION_PAYMENT', 'label': 'Paiement prestation'},
+    // Libellés courts pour que les 4 premiers tiennent sur une ligne
+    {'value': 'PENDING', 'label': 'Recherche'},
+    {'value': 'ACCEPTED', 'label': 'Trouvé'},
+    {'value': 'IN_PROGRESS', 'label': 'En cours'},
+    {'value': 'PAYMENT', 'label': 'Paiement'},
     {'value': 'COMPLETED', 'label': 'Terminé'},
     {'value': 'CANCELLED', 'label': 'Annulé'},
   ];
+
+  /// Statuts de commande couverts par chaque filtre.
+  static const Map<String, Set<String>> _filterStatuses = {
+    'PENDING': {'PENDING', 'ASSIGNED'},
+    'ACCEPTED': {'ACCEPTED'},
+    'IN_PROGRESS': {'IN_PROGRESS'},
+    'PAYMENT': {'AWAITING_TRAVEL_PAYMENT', 'AWAITING_REALIZATION_PAYMENT'},
+    'COMPLETED': {'COMPLETED'},
+    'CANCELLED': {'CANCELLED', 'REJECTED'},
+  };
+
+  bool _matchesFilter(MisonOrder o) {
+    final status = (o.status ?? '').trim().toUpperCase();
+    return _filterStatuses[_selectedStatus]?.contains(status) ?? false;
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -118,46 +142,123 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
     );
   }
 
+  /// Filtres de la ligne principale. Si le filtre choisi fait partie des
+  /// filtres cachés, il remplace le dernier de la ligne pour rester visible.
+  List<Map<String, String>> get _visibleFilters {
+    final first = _filters.take(_visibleFilterCount).toList();
+    final selected = _filters.where((f) => f['value'] == _selectedStatus);
+    if (selected.isEmpty || first.contains(selected.first)) return first;
+    return [...first.take(_visibleFilterCount - 1), selected.first];
+  }
+
+  /// Filtres affichés en dessous avec « + » (tous ceux absents de la ligne).
+  List<Map<String, String>> get _hiddenFilters {
+    final visible = _visibleFilters;
+    return _filters.where((f) => !visible.contains(f)).toList();
+  }
+
+  Widget _buildFilterChip(Map<String, String> f) {
+    final isAll = f['value']!.isEmpty;
+    final isSelected = isAll ? _selectedStatus == null : _selectedStatus == f['value'];
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          // « Tous » ou re-toucher le filtre actif = toutes les commandes
+          _selectedStatus =
+              (isAll || _selectedStatus == f['value']) ? null : f['value'];
+        });
+      },
+      // Style WhatsApp : gris clair, doré clair quand sélectionné
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? _chipSelectedBg : _chipBg,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          f['label']!,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            color: isSelected ? _chipSelectedText : _chipText,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoreFiltersButton() {
+    final expanded = _showAllFilters;
+    return GestureDetector(
+      onTap: () => setState(() => _showAllFilters = !_showAllFilters),
+      // Bouton rond « + » style WhatsApp (« − » quand les filtres sont dépliés)
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: expanded ? _chipSelectedBg : _chipBg,
+        ),
+        child: Icon(
+          expanded ? Icons.remove_rounded : Icons.add_rounded,
+          size: 18,
+          color: expanded ? _chipSelectedText : _chipText,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
     return Column(
       children: [
-        // Filtres par statut
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: _filters.map((f) {
-              final isSelected = _selectedStatus == f['value'] ||
-                  (_selectedStatus == null && f['value'] == '');
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedStatus =
-                        f['value']!.isEmpty ? null : f['value'];
-                  });
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? primaryColor
-                        : primaryColor.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    f['label']!,
-                    style: boldTextStyle(
-                      size: 12,
-                      color: isSelected ? Colors.white : primaryColor,
+        // Filtres par statut : 4 visibles + bouton « + » pour afficher le reste
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Une seule ligne : filtres réduits pour tenir + « + » fixe à droite
+              Row(
+                children: [
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          for (final f in _visibleFilters) ...[
+                            _buildFilterChip(f),
+                            6.width,
+                          ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                  _buildMoreFiltersButton(),
+                ],
+              ),
+              // Filtres restants, dépliés en dessous
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topCenter,
+                child: _showAllFilters
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children:
+                              _hiddenFilters.map(_buildFilterChip).toList(),
+                        ),
+                      )
+                    : const SizedBox(width: double.infinity),
+              ),
+            ],
           ),
         ),
         Expanded(
@@ -176,7 +277,7 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
               final all = response.data ?? [];
               final orders = _selectedStatus == null
                   ? all
-                  : all.where((o) => o.status == _selectedStatus).toList();
+                  : all.where(_matchesFilter).toList();
 
               if (orders.isEmpty) {
                 return AppEmptyState(
@@ -256,12 +357,14 @@ class MisonOrderItemComponent extends StatelessWidget {
   }
 
   Color _statusColor(String? s) {
-    switch (s) {
+    switch (s?.trim().toUpperCase()) {
       case 'PENDING':                      return pending;
+      case 'ASSIGNED':                     return pending;
+      case 'REJECTED':                     return cancelled;
       case 'ACCEPTED':                     return accept;
-      case 'AWAITING_TRAVEL_PAYMENT':      return const Color(0xFFC99700);
+      case 'AWAITING_TRAVEL_PAYMENT':      return kMisonGold;
       case 'IN_PROGRESS':                  return in_progress;
-      case 'AWAITING_REALIZATION_PAYMENT': return const Color(0xFFE67E22);
+      case 'AWAITING_REALIZATION_PAYMENT': return kMisonGold;
       case 'COMPLETED':                    return completed;
       case 'CANCELLED':                    return cancelled;
       default:                             return defaultStatus;
@@ -269,8 +372,10 @@ class MisonOrderItemComponent extends StatelessWidget {
   }
 
   String _statusLabel(String? s) {
-    switch (s) {
+    switch (s?.trim().toUpperCase()) {
       case 'PENDING':                      return 'Recherche d\'ouvrier';
+      case 'ASSIGNED':                     return 'Recherche d\'ouvrier';
+      case 'REJECTED':                     return 'Commande refusée';
       case 'ACCEPTED':                     return 'Ouvrier trouvé';
       case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente de paiement';
       case 'IN_PROGRESS':                  return 'Intervention en cours';
@@ -306,7 +411,7 @@ class MisonOrderItemComponent extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: BoxDecoration(
-              color: context.primaryColor.withValues(alpha: 0.06),
+              color: kMisonGold.withValues(alpha: 0.06),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
@@ -355,7 +460,7 @@ class MisonOrderItemComponent extends StatelessWidget {
                   height: 52,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: primaryColor.withValues(alpha: 0.1),
+                    color: kMisonGold.withValues(alpha: 0.1),
                     border: Border.all(
                         color: const Color(0xFFF0E8E0), width: 2),
                     image: order.service?.imageUrl != null
@@ -366,7 +471,7 @@ class MisonOrderItemComponent extends StatelessWidget {
                         : null,
                   ),
                   child: order.service?.imageUrl == null
-                      ? Icon(Icons.handyman, color: primaryColor, size: 24)
+                      ? Icon(Icons.handyman, color: kMisonGold, size: 24)
                       : null,
                 ),
                 12.width,

@@ -89,9 +89,7 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
       padding: const EdgeInsets.only(bottom: 16),
       margin: const EdgeInsets.only(top: 16),
       width: context.width(),
-      decoration: BoxDecoration(
-        color: appStore.isDarkMode ? context.cardColor : context.primaryColor.withOpacity(0.03),
-      ),
+      // Pas de fond : la section repose directement sur le fond de la page
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -131,6 +129,9 @@ class _MisonServiceCard extends StatelessWidget {
     this.width = 280,
   });
 
+  /// Image (180) + nom + description sur 2 lignes + marges.
+  static const double _cardHeight = 290;
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -139,6 +140,7 @@ class _MisonServiceCard extends StatelessWidget {
       },
       child: Container(
         width: width,
+        height: _cardHeight, // même taille pour toutes les cartes
         decoration: boxDecorationWithRoundedCorners(
           borderRadius: radius(),
           backgroundColor: context.cardColor,
@@ -172,7 +174,7 @@ class _MisonServiceCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: boxDecorationWithShadow(
-                          backgroundColor: const Color.fromARGB(255, 255, 255, 255).withOpacity(0.9),
+                          backgroundColor: const Color.fromARGB(255, 255, 255, 255).withValues(alpha: 0.9),
                           borderRadius: radius(24),
                         ),
                         child: Text(
@@ -198,14 +200,17 @@ class _MisonServiceCard extends StatelessWidget {
                   ),
                 ).paddingSymmetric(horizontal: 16),
                 8.height,
-                // Description (si disponible)
-                if (service.description != null && service.description!.isNotEmpty)
-                  Text(
-                    service.description!,
+                // Description : place de 2 lignes toujours réservée pour que
+                // toutes les cartes aient la même hauteur
+                SizedBox(
+                  height: 40,
+                  child: Text(
+                    service.description.validate(),
                     style: secondaryTextStyle(size: 14),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                  ).paddingSymmetric(horizontal: 16),
+                  ),
+                ).paddingSymmetric(horizontal: 16),
                 16.height,
               ],
             ),
