@@ -3,8 +3,8 @@ import 'dart:io' show Platform;
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
+import 'package:booking_system_flutter/utils/call_status.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
@@ -45,12 +45,14 @@ class MisonCallSession extends ChangeNotifier {
 
   RtcEngine? _engine;
   Timer? _timer;
-  StreamSubscription<DocumentSnapshot>? _callStatusSub;
+  StreamSubscription<String?>? _callStatusSub;
 
   bool engineReady = false;
   bool isConnected = false;
   bool isMuted = false;
-  bool isSpeakerOn = true;
+  /// L'appel démarre sur l'écouteur (comme un appel téléphonique) ; l'utilisateur
+  /// active ou coupe le haut-parleur avec le bouton de l'écran d'appel.
+  bool isSpeakerOn = false;
   bool micDenied = false;
   bool ended = false;
   int seconds = 0;
@@ -149,7 +151,7 @@ class MisonCallSession extends ChangeNotifier {
 
     await engine.enableAudio();
     await engine.muteAllRemoteAudioStreams(false);
-    await engine.setDefaultAudioRouteToSpeakerphone(true);
+    await engine.setDefaultAudioRouteToSpeakerphone(false);
     await engine.joinChannel(
       token: token,
       channelId: channel,
@@ -163,11 +165,14 @@ class MisonCallSession extends ChangeNotifier {
     );
   }
 
-  /// Android : sans service de premier plan, le système suspend l'app (et coupe
-  /// le micro) dès qu'elle passe en arrière-plan. startCall lance le service
-  /// « appel en cours » de flutter_callkit_incoming, avec sa notification.
+  /// Déclare l'appel au système, ce qui donne un bouton « Raccrocher » hors de
+  /// l'app (géré par main.dart → [hangUpFromSystem]) :
+  /// - Android : service « appel en cours » (sans lui, le système suspend l'app
+  ///   et coupe le micro en arrière-plan) + notification avec « Raccrocher ».
+  /// - iOS : appel sortant CallKit (écran verrouillé, pastille verte). L'appelé
+  ///   y est déjà, via l'appel entrant CallKit qu'il a accepté.
   Future<void> _keepAliveInBackground() async {
-    if (!Platform.isAndroid) return;
+    if (Platform.isIOS && !isCaller) return;
     try {
       await FlutterCallkitIncoming.startCall(CallKitParams(
         id: orderId,
@@ -176,6 +181,12 @@ class MisonCallSession extends ChangeNotifier {
         handle: otherPartyName,
         type: 0, // audio
         extra: {'order_id': orderId, 'channel': channel},
+        callingNotification: const NotificationParams(
+          showNotification: true,
+          subtitle: 'Appel en cours…',
+          isShowCallback: true, // bouton « Raccrocher » dans la notification
+          callbackText: 'Raccrocher',
+        ),
         android: const AndroidParams(
           isCustomNotification: false,
           isShowLogo: false,
@@ -184,20 +195,31 @@ class MisonCallSession extends ChangeNotifier {
           incomingCallNotificationChannelName: 'Appels entrants',
           missedCallNotificationChannelName: 'Appels manqués',
         ),
+        ios: const IOSParams(
+          handleType: 'generic',
+          supportsVideo: false,
+          supportsHolding: false,
+          supportsGrouping: false,
+          supportsUngrouping: false,
+          supportsDTMF: false,
+          configureAudioSession: true,
+        ),
       ));
     } catch (e) {
       log('MisonCallSession startCall: $e');
     }
   }
 
+  /// « Raccrocher » depuis la notification Android ou l'interface CallKit iOS.
+  static void hangUpFromSystem(String orderId) {
+    final session = current.value;
+    if (session != null && session.orderId == orderId) session.hangUp();
+  }
+
   void _listenCallStatus() {
-    _callStatusSub = FirebaseFirestore.instance
-        .collection('call_status')
-        .doc(orderId)
-        .snapshots()
-        .listen((snap) {
-      if (snap.data()?['status'] == 'rejected' && !isConnected) {
-        _end(message: '$otherPartyName a refusé l\'appel', rejected: true);
+    _callStatusSub = callStatusStream(orderId).listen((status) {
+      if (status == kCallRejected && !isConnected) {
+        _end(message: "$otherPartyName a refusé l'appel", rejected: true);
       }
     });
   }
@@ -241,8 +263,15 @@ class MisonCallSession extends ChangeNotifier {
     // Clôture la session CallKit / le service Android : sinon elle garde le
     // focus audio et l'appel suivant reste muet.
     FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
-    // Nettoie le statut Firestore pour ne pas influencer l'appel suivant.
-    FirebaseFirestore.instance.collection('call_status').doc(orderId).delete().catchError((_) {});
+    if (isCaller && !isConnected && !rejected) {
+      // Raccroché avant la réponse : la sonnerie doit s'arrêter chez l'appelé
+      // (dans l'app comme dans la notification / CallKit).
+      markCallCancelled(orderId);
+    } else if (isConnected) {
+      // Appel terminé normalement : plus rien à signaler. (Le statut est de
+      // toute façon remis à zéro avant chaque nouvel appel.)
+      resetCallStatus(orderId);
+    }
     final engine = _engine;
     _engine = null;
     if (engine != null) {

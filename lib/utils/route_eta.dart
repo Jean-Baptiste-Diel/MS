@@ -91,3 +91,12 @@ String formatArrivalTime(int etaSeconds) {
   final arrival = DateTime.now().add(Duration(seconds: etaSeconds));
   return '${arrival.hour.toString().padLeft(2, '0')}:${arrival.minute.toString().padLeft(2, '0')}';
 }
+
+/// Distance (à vol d'oiseau) à l'adresse sous laquelle l'ouvrier est « arrivé ».
+/// Au-delà, il est seulement « à proximité » : annoncer l'arrivée à 50-100 m
+/// (fin de rue, dernier virage) était trompeur.
+const double kArrivalRadiusMeters = 30;
+
+/// Au-delà de cette imprécision GPS (en mètres), on ne déclare pas l'arrivée :
+/// un saut de position pourrait la déclencher à tort.
+const double kMaxArrivalGpsAccuracyMeters = 50;

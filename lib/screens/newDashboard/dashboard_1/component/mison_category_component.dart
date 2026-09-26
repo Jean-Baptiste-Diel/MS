@@ -7,6 +7,7 @@ import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
@@ -112,9 +113,7 @@ class MisonCategoryComponentState extends State<MisonCategoryComponent> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      ).paddingAll(16);
+      return const MisonPageLoader().paddingAll(16);
     }
 
     if (errorMessage != null) {

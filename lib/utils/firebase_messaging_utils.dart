@@ -238,10 +238,7 @@ void _handleForegroundMessage(RemoteMessage message) {
   // Message du chat de commande : la notification suffit, l'écran de chat
   // reçoit le message par WebSocket s'il est ouvert.
   if (message.data['type'] == 'ORDER_CHAT_MESSAGE') {
-    final notif = message.notification;
-    if (notif != null) {
-      showNotification(currentTimeStamp(), notif.title ?? '', parseHtmlString(notif.body ?? ''), message);
-    }
+    _showForegroundNotification(message);
     return;
   }
 
@@ -255,13 +252,23 @@ void _handleForegroundMessage(RemoteMessage message) {
     return;
   }
 
+  _showForegroundNotification(message);
+}
+
+/// Affiche la notification d'un message reçu app ouverte.
+///
+/// iOS l'affiche déjà lui-même (setForegroundNotificationPresentationOptions
+/// alert: true dans main.dart) : créer en plus une notification locale la
+/// faisait apparaître deux fois. Seul Android a besoin de la notification locale.
+void _showForegroundNotification(RemoteMessage message) {
   final notif = message.notification;
-  if (notif != null) {
-    log('[FCM onMessage] → showNotification title="${notif.title}" body="${notif.body}"');
-    showNotification(currentTimeStamp(), notif.title ?? '', parseHtmlString(notif.body ?? ''), message);
-  } else {
+  if (notif == null) {
     log('[FCM onMessage] → notification field is null, skipping showNotification');
+    return;
   }
+  if (Platform.isIOS) return;
+  log('[FCM onMessage] → showNotification title="${notif.title}" body="${notif.body}"');
+  showNotification(currentTimeStamp(), notif.title ?? '', parseHtmlString(notif.body ?? ''), message);
 }
 
 /// Enregistre le listener foreground UNE SEULE FOIS depuis main() avant runApp().

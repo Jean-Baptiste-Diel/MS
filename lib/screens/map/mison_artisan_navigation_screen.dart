@@ -3,6 +3,9 @@ import 'dart:convert';
 
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:booking_system_flutter/utils/artisan_arrival_reporter.dart';
+import 'package:booking_system_flutter/utils/route_eta.dart';
+import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -64,6 +67,8 @@ class _MisonArtisanNavigationScreenState
   double _remainingDistanceM = 0;
   StreamSubscription<Position>? _positionSub;
   bool _hasAnnouncedApproach = false;
+  bool _arrived = false;            // à moins de kArrivalRadiusMeters de l'adresse
+  bool _announcedWalkToDest = false; // fin de route atteinte, adresse un peu à l'écart
 
   @override
   void initState() {
@@ -186,6 +191,8 @@ class _MisonArtisanNavigationScreenState
         _isLoading = false;
         _currentStepIndex = 0;
         _hasAnnouncedApproach = false;
+        _arrived = false;
+        _announcedWalkToDest = false;
       });
 
       if (steps.isNotEmpty) _speak(steps.first.instruction);
@@ -248,7 +255,24 @@ class _MisonArtisanNavigationScreenState
   }
 
   void _checkStepProgress(Position pos) {
-    if (_steps.isEmpty) return;
+    if (_steps.isEmpty || _arrived) return;
+
+    final distToDest = Geolocator.distanceBetween(
+      pos.latitude, pos.longitude, widget.destLat, widget.destLng,
+    );
+
+    // Arrivée : seulement près de l'ADRESSE (pas du dernier virage ni du point
+    // routier calculé par l'itinéraire), avec un GPS assez précis.
+    if (distToDest <= kArrivalRadiusMeters && pos.accuracy <= kMaxArrivalGpsAccuracyMeters) {
+      setState(() {
+        _arrived = true;
+        _currentStepIndex = _steps.length - 1;
+      });
+      _speak('Vous êtes arrivé à destination');
+      // Serveur : fin de la mini-carte, « Commencer la prestation » disponible.
+      ArtisanArrivalReporter.markArrived(widget.orderId);
+      return;
+    }
 
     while (_currentStepIndex < _steps.length) {
       final step = _steps[_currentStepIndex];
@@ -259,11 +283,25 @@ class _MisonArtisanNavigationScreenState
         step.location.longitude,
       );
 
-      // Annonce à 200 m du prochain manœuvre
+      // Dernière étape (« arrive ») : c'est le point de la route le plus proche
+      // de l'adresse. L'arrivée est gérée plus haut, sur l'adresse elle-même ;
+      // si la route s'arrête à l'écart, on l'indique une fois.
+      if (_currentStepIndex == _steps.length - 1) {
+        if (dist < 20 && !_announcedWalkToDest) {
+          _announcedWalkToDest = true;
+          _speak('La destination est à ${_fmtDist(distToDest)}, continuez à pied');
+        }
+        break;
+      }
+
+      final nextIsArrival = _currentStepIndex + 1 == _steps.length - 1;
+
+      // Annonce à 200 m du prochain manœuvre (pas pour l'arrivée : elle est
+      // annoncée quand l'ouvrier y est réellement).
       if (dist < 200 &&
           dist > 30 &&
           !_hasAnnouncedApproach &&
-          _currentStepIndex + 1 < _steps.length) {
+          !nextIsArrival) {
         _hasAnnouncedApproach = true;
         final next = _steps[_currentStepIndex + 1];
         _speak('Dans ${_fmtDist(dist)}, ${next.instruction}');
@@ -274,7 +312,10 @@ class _MisonArtisanNavigationScreenState
       if (dist < 20) {
         _currentStepIndex++;
         _hasAnnouncedApproach = false;
-        if (_currentStepIndex < _steps.length) {
+        if (nextIsArrival) {
+          // Dernier virage passé : il reste la dernière rue, pas encore arrivé.
+          _speak('Votre destination est à ${_fmtDist(distToDest)}');
+        } else if (_currentStepIndex < _steps.length) {
           _speak(_steps[_currentStepIndex].instruction);
         }
       } else {
@@ -540,7 +581,7 @@ class _MisonArtisanNavigationScreenState
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            CircularProgressIndicator(color: primaryColor),
+                            const MisonPageLoader(),
                             const SizedBox(height: 14),
                             const Text(
                               'Calcul de l\'itinéraire…',
@@ -703,6 +744,17 @@ class _MisonArtisanNavigationScreenState
     );
   }
 
+  /// L'étape « arrivée » ne dit « Vous êtes arrivé » qu'une fois réellement
+  /// à l'adresse ; avant, elle indique la distance restante.
+  String _headerInstruction(_NavStep? step) {
+    if (step == null) return 'Navigation';
+    if (_arrived) return 'Vous êtes arrivé à destination';
+    if (_currentStepIndex == _steps.length - 1) {
+      return 'Destination à ${_fmtDist(_remainingDistanceM)}';
+    }
+    return step.instruction;
+  }
+
   Widget _buildHeader(_NavStep? step) {
     if (_isLoading) {
       return const Padding(
@@ -754,7 +806,7 @@ class _MisonArtisanNavigationScreenState
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  step?.instruction ?? 'Navigation',
+                  _headerInstruction(step),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 15,

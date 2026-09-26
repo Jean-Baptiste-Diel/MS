@@ -252,7 +252,8 @@ class MisonNotificationBell extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          ic_notification.iconImage(size: 24, color: kMisonDark).center(),
+          // Couleurs de la marque : cloche et pastille dorées.
+          ic_notification.iconImage(size: 24, color: kMisonGold).center(),
           Observer(builder: (context) {
             return Positioned(
               top: -14,
@@ -264,7 +265,12 @@ class MisonNotificationBell extends StatelessWidget {
                         child: Text(appStore.unreadCount.toString(),
                             style: primaryTextStyle(size: 12, color: Colors.white)),
                       ),
-                      decoration: boxDecorationDefault(color: Colors.red, shape: BoxShape.circle),
+                      // Liseré blanc : la pastille dorée se détache de la cloche dorée.
+                      decoration: BoxDecoration(
+                        color: kMisonGold,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
                     )
                   : const Offstage(),
             );

@@ -7,6 +7,7 @@ import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
 import 'package:booking_system_flutter/utils/route_eta.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -169,7 +170,9 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
       _destinationPosition!.latitude, _destinationPosition!.longitude,
     );
 
-    final isArrived = dist < 100 || (_etaSeconds != null && _etaSeconds! < 120);
+    // Arrivé seulement près de l'adresse : ni à 100 m, ni sur une estimation
+    // de trajet < 2 min (qui se déclenchait en bout de rue).
+    final isArrived = dist <= kArrivalRadiusMeters;
     final isNearby  = dist < 500 || (_etaSeconds != null && _etaSeconds! < 300);
 
     if (_hadFirstUpdate) {
@@ -177,12 +180,9 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
       if (isArrived && !_arrivedAlertShown) {
         _arrivedAlertShown = true;
         _nearbyAlertShown  = true; // évite double alerte
+        // Bandeau dans l'écran seulement : la notification « arrivé » est
+        // envoyée par le serveur, en créer une ici la doublerait.
         _showArrivedBanner();
-        showSimpleLocalNotification(
-          id: 9002,
-          title: '${widget.artisanName} est arrivé !',
-          body: 'Votre ouvrier est arrivé à votre adresse.',
-        );
       }
       // Proche (seulement si pas encore déclenché et transition far→near)
       else if (isNearby && !_artisanNearby && !_nearbyAlertShown) {
@@ -216,7 +216,7 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
             ),
           ],
         ),
-        backgroundColor: Colors.orange.shade700,
+        backgroundColor: kMisonGold,
         duration: const Duration(seconds: 5),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -529,7 +529,7 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: _artisanNearby
-                                    ? Colors.orange
+                                    ? kMisonGold
                                     : _artisanPosition != null
                                         ? Colors.green
                                         : Colors.grey,
@@ -549,7 +549,7 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                   color: _artisanNearby
-                                      ? Colors.orange.shade700
+                                      ? kMisonGold
                                       : Colors.black87,
                                 ),
                                 overflow: TextOverflow.ellipsis,

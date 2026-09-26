@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:booking_system_flutter/component/ongoing_call_banner.dart';
+import 'package:booking_system_flutter/services/mison_call_session.dart';
+import 'package:booking_system_flutter/utils/call_status.dart';
 import 'package:booking_system_flutter/app_theme.dart';
 import 'package:booking_system_flutter/firebase_options.dart';
 import 'package:booking_system_flutter/locale/app_localizations.dart';
@@ -37,7 +39,6 @@ import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
 import 'package:booking_system_flutter/screens/call/mison_incoming_call_screen.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
@@ -66,6 +67,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     final orderId  = message.data['order_id']?.toString()  ?? '';
     final channel  = message.data['channel']?.toString()   ?? '';
     final caller   = message.data['caller_name']?.toString() ?? 'Appel entrant';
+
+    // Refus depuis la notification / CallKit et annulation par l'appelant,
+    // même app fermée : ce handler est le seul code Dart qui tourne alors.
+    watchIncomingCall(orderId);
 
     // iOS: AppDelegate handles CallKit natively — MethodChannel unreliable
     // from a terminated-app Dart background isolate.
@@ -211,13 +216,12 @@ void _listenCallKitEvents() {
         _openCallScreen(orderId, channel);
       case Event.actionCallDecline:
       case Event.actionCallTimeout:
-        FirebaseFirestore.instance
-            .collection('call_status')
-            .doc(orderId)
-            .set({'status': 'rejected', 'at': FieldValue.serverTimestamp()})
-            .catchError((_) {});
+        markCallDeclined(orderId);
         FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
       case Event.actionCallEnded:
+        // « Raccrocher » depuis la notification Android ou l'interface CallKit :
+        // sans ça, seul l'affichage se fermait et l'appel continuait.
+        MisonCallSession.hangUpFromSystem(orderId);
         FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
       default:
         break;

@@ -4,13 +4,14 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
+import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../../booking/mison_booking_form_screen.dart';
 
-/// Composant affichant la liste horizontale des services Mison avec
-/// image, description, prix minimum - Design identique à ServiceListDashboardComponent1
+/// Liste verticale des services Mison sur l'accueil : cartes pleine largeur
+/// (image, nom, description complète), qui défilent avec la page.
 class MisonServiceListComponent extends StatefulWidget {
   const MisonServiceListComponent({super.key});
 
@@ -52,7 +53,7 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
     if (isLoading) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 32),
-        child: const Center(child: CircularProgressIndicator()),
+        child: const MisonPageLoader(),
       );
     }
 
@@ -104,13 +105,16 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
               const MisonSearchServiceScreen().launch(context);
             },
           ).paddingSymmetric(horizontal: 16),
-          HorizontalList(
-            itemCount: services.length,
-            spacing: 16,
-            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 26, top: 8),
-            itemBuilder: (context, index) => _MisonServiceCard(
-              service: services[index],
-              width: 280,
+          // Défilement vertical avec la page (plus de carrousel horizontal).
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+            child: Column(
+              children: [
+                for (final service in services) ...[
+                  _MisonServiceCard(service: service),
+                  16.height,
+                ],
+              ],
             ),
           ),
         ],
@@ -122,15 +126,8 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
 /// Carte individuelle de service Mison
 class _MisonServiceCard extends StatelessWidget {
   final MisonService service;
-  final double width;
 
-  const _MisonServiceCard({
-    required this.service,
-    this.width = 280,
-  });
-
-  /// Image (180) + nom + description sur 2 lignes + marges.
-  static const double _cardHeight = 290;
+  const _MisonServiceCard({required this.service});
 
   @override
   Widget build(BuildContext context) {
@@ -139,8 +136,8 @@ class _MisonServiceCard extends StatelessWidget {
         MisonBookingFormScreen(service: service).launch(context);
       },
       child: Container(
-        width: width,
-        height: _cardHeight, // même taille pour toutes les cartes
+        width: double.infinity,
+        // Hauteur libre : la carte s'adapte à la description complète.
         decoration: boxDecorationWithRoundedCorners(
           borderRadius: radius(),
           backgroundColor: context.cardColor,
@@ -153,14 +150,14 @@ class _MisonServiceCard extends StatelessWidget {
             // Image du service
             SizedBox(
               height: 180,
-              width: width,
+              width: double.infinity,
               child: Stack(
                 children: [
                   CachedImageWidget(
                     url: service.imageUrl ?? '',
                     fit: BoxFit.cover,
                     height: 180,
-                    width: width,
+                    width: context.width(),
                     circle: false,
                   ).cornerRadiusWithClipRRectOnly(
                     topRight: defaultRadius.toInt(),
@@ -192,25 +189,18 @@ class _MisonServiceCard extends StatelessWidget {
               children: [
                 16.height,
                 // Nom du service
-                Marquee(
-                  directionMarguee: DirectionMarguee.oneDirection,
-                  child: Text(
-                    service.name.validate(),
-                    style: boldTextStyle(size: 16),
-                  ),
+                Text(
+                  service.name.validate(),
+                  style: boldTextStyle(size: 16),
                 ).paddingSymmetric(horizontal: 16),
-                8.height,
-                // Description : place de 2 lignes toujours réservée pour que
-                // toutes les cartes aient la même hauteur
-                SizedBox(
-                  height: 40,
-                  child: Text(
+                // Description complète, sans coupure
+                if (service.description.validate().isNotEmpty) ...[
+                  8.height,
+                  Text(
                     service.description.validate(),
                     style: secondaryTextStyle(size: 14),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ).paddingSymmetric(horizontal: 16),
+                  ).paddingSymmetric(horizontal: 16),
+                ],
                 16.height,
               ],
             ),

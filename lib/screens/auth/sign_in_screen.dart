@@ -9,6 +9,7 @@ import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/phone_utils.dart';
 import 'package:booking_system_flutter/utils/pin_utils.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -205,10 +206,10 @@ class _SignInScreenState extends State<SignInScreen> {
             Container(
               width: 72, height: 72,
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.12),
+                color: kMisonGold.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 36),
+              child: const Icon(Icons.hourglass_top_rounded, color: kMisonGold, size: 36),
             ),
             20.height,
             Text('Compte en attente', style: boldTextStyle(size: 18)),

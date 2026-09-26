@@ -13,12 +13,16 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/component/artisan_arrival_eta.dart';
+import 'package:booking_system_flutter/utils/artisan_arrival_reporter.dart';
+import 'package:booking_system_flutter/component/mison_discreet_cancel_button.dart';
+import 'package:booking_system_flutter/utils/route_eta.dart' show kArrivalRadiusMeters;
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:booking_system_flutter/utils/auto_refresh_mixin.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:flutter/services.dart';
@@ -47,7 +51,7 @@ class MisonOrderDetailScreen extends StatefulWidget {
   State<MisonOrderDetailScreen> createState() => _MisonOrderDetailScreenState();
 }
 
-class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with WidgetsBindingObserver {
+class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with WidgetsBindingObserver, AutoRefreshMixin {
   late Future<MisonOrderDetailResponse> future;
   Timer? _locationTimer;
   Position? _artisanPosition;
@@ -68,6 +72,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     if (appStore.userType == USER_TYPE_PROVIDER) _fetchArtisanPosition();
     // Statut de commande changé côté serveur (paiement confirmé, prestation
     // terminée par l'ouvrier…). orderId null = event sans id, on rafraîchit.
+    startAutoRefresh();
     _orderEventsSub = OrderEvents.stream.listen((orderId) {
       if (orderId == null || orderId.isEmpty || orderId == widget.orderId) {
         _stopPaymentPolling();
@@ -79,6 +84,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
 
   @override
   void dispose() {
+    stopAutoRefresh();
     _locationTimer?.cancel();
     _paymentPollTimer?.cancel();
     _orderEventsSub?.cancel();
@@ -101,6 +107,13 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   }
 
   void init() => future = getMisonOrderDetail(widget.orderId);
+
+  /// Actualisation silencieuse du statut (acceptée, en route, arrivée…).
+  @override
+  Future<void> onAutoRefresh() async {
+    final res = await getMisonOrderDetail(widget.orderId);
+    if (mounted) setState(() => future = Future.value(res));
+  }
 
   /// Le webhook Wave/Orange Money peut arriver au serveur quelques secondes
   /// après le retour dans l'app : on interroge le statut jusqu'à ce que le
@@ -173,10 +186,59 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         1000;
   }
 
+  // ── Trajet de l'ouvrier : « Aller chez le client » → arrivée ────────────────
+
+  void _openNavigation(MisonOrder order) {
+    final lat = double.tryParse(order.latitude ?? '');
+    final lng = double.tryParse(order.longitude ?? '');
+    if (lat == null || lng == null) {
+      TopToast.show(message: 'Coordonnées de destination introuvables');
+      return;
+    }
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => MisonArtisanNavigationScreen(
+        serviceAddress: order.serviceAddress ?? '',
+        destLat: lat,
+        destLng: lng,
+        orderId: order.id!,
+      ),
+    ));
+  }
+
+  /// Signale le départ au serveur (mini-carte des deux côtés, client prévenu),
+  /// puis ouvre la navigation. Déjà en route : rouvre simplement la navigation.
+  Future<void> _departTo(MisonOrder order) async {
+    if (!order.isEnRoute) {
+      appStore.setLoading(true);
+      try {
+        await artisanDepart(order.id!);
+      } catch (e) {
+        TopToast.show(message: e.toString(), type: TopToastType.error);
+        return;
+      } finally {
+        appStore.setLoading(false);
+      }
+      init();
+      if (mounted) setState(() {});
+    }
+    if (mounted) _openNavigation(order);
+  }
+
+  /// « Je suis arrivé » : au cas où le GPS n'a pas détecté l'arrivée.
+  Future<void> _markArrived(MisonOrder order) async {
+    appStore.setLoading(true);
+    final ok = await ArtisanArrivalReporter.markArrived(order.id!);
+    appStore.setLoading(false);
+    if (!ok) TopToast.show(message: "Impossible de signaler l'arrivée, réessayez.", type: TopToastType.error);
+    init();
+    if (mounted) setState(() {});
+  }
+
   // ── Tracking GPS artisan → Firestore ────────────────────────────────────────
 
-  Future<void> _startTracking(String orderId) async {
+  Future<void> _startTracking(MisonOrder order) async {
     if (_locationTimer != null) return;
+    final orderId = order.id!;
 
     // Vérifie/demande la permission GPS avant de démarrer
     LocationPermission perm = await Geolocator.checkPermission();
@@ -202,6 +264,13 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
           'updated_at': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
         log('[Tracking] Position envoyée: ${pos.latitude}, ${pos.longitude}');
+        // Arrivé à l'adresse : bascule sur « Commencer la prestation »
+        ArtisanArrivalReporter.check(
+          orderId: orderId,
+          destLat: double.tryParse(order.latitude ?? ''),
+          destLng: double.tryParse(order.longitude ?? ''),
+          position: pos,
+        );
       } catch (e) {
         log('[Tracking] Erreur: $e');
       }
@@ -477,7 +546,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
               // Ouvrier : démarrer / arrêter le tracking selon le statut
               if (appStore.userType == USER_TYPE_PROVIDER) {
                 if (order.canTrack) {
-                  _startTracking(order.id!);
+                  _startTracking(order);
                 } else {
                   _stopTracking();
                 }
@@ -492,8 +561,8 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 statusIcon: _statusIcon,
                 onAccept: () => _confirm(title: 'Accepter la commande', subtitle: 'Confirmez-vous l\'acceptation ?', onConfirm: () => _acceptOrder(order.id!)),
                 onStart: () => _confirm(
-                  title: 'Démarrer la prestation',
-                  subtitle: 'Prêt à vous rendre sur le lieu de la prestation',
+                  title: 'Commencer la prestation',
+                  subtitle: 'Vous êtes chez le client : confirmez le début de la prestation.',
                   onConfirm: () => _startOrder(order.id!),
                 ),
                 onChat: () => _openChat(order),
@@ -530,22 +599,9 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                     serviceLng: double.tryParse(order.longitude ?? ''),
                   ),
                 )),
-                onNavigate: () {
-                  final lat = double.tryParse(order.latitude ?? '');
-                  final lng = double.tryParse(order.longitude ?? '');
-                  if (lat == null || lng == null) {
-                    TopToast.show(message: 'Coordonnées de destination introuvables');
-                    return;
-                  }
-                  Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => MisonArtisanNavigationScreen(
-                      serviceAddress: order.serviceAddress ?? '',
-                      destLat: lat,
-                      destLng: lng,
-                      orderId: order.id!,
-                    ),
-                  ));
-                },
+                onNavigate: () => _openNavigation(order),
+                onDepart: () => _departTo(order),
+                onArrive: () => _markArrived(order),
               );
             },
           ),
@@ -580,6 +636,8 @@ class _OrderDetailBody extends StatelessWidget {
   final VoidCallback onCall;
   final VoidCallback onTrack;
   final VoidCallback onNavigate;
+  final VoidCallback onDepart;
+  final VoidCallback onArrive;
 
   const _OrderDetailBody({
     required this.order,
@@ -600,6 +658,8 @@ class _OrderDetailBody extends StatelessWidget {
     required this.onCall,
     required this.onTrack,
     required this.onNavigate,
+    required this.onDepart,
+    required this.onArrive,
   });
 
   bool get _isArtisan => appStore.userType == USER_TYPE_PROVIDER;
@@ -608,20 +668,35 @@ class _OrderDetailBody extends StatelessWidget {
   bool get _showPayButton =>
       _isClient && order.isAwaitingAnyPayment;
 
+  /// Client, prestation en cours : le bouton « Payer » est déjà là, mais
+  /// inutilisable tant que l'ouvrier n'a pas terminé (et fixé ses frais).
+  bool get _showPayLocked => _isClient && order.isInProgress;
+
+  /// Prestataire, frais de prestation fixés (paiement en attente ou fait) :
+  /// récapitulatif seulement (prix, client, prestation, paiement, adresse).
+  bool get _artisanSummary =>
+      _isArtisan && (order.isAwaitingRealizationPayment || order.isCompleted);
+
   bool get _canCancel =>
       _isArtisan ? order.canReleaseByArtisan : order.canCancelByClient;
 
   @override
   Widget build(BuildContext context) {
     final sColor = statusColor(order.status);
-    final showBottomCall = order.canCall;
-    final showTrackButton = _isClient && order.canTrack;
+    // Récapitulatif prestataire : plus d'appel ni de message
+    final showBottomCall = order.canCall && !_artisanSummary;
+    // Client : l'annulation prend la place de « Suivre en direct » (déplacé
+    // dans la carte de l'ouvrier, après le statut « En route »).
+    final showClientCancel = _isClient && _canCancel;
     final showAcceptButton = _isArtisan &&
         ((order.isPending && order.artisan == null) || order.needsArtisanConfirmation);
-    final showStartButton = _isArtisan && order.artisan != null && order.canStart && !order.needsArtisanConfirmation;
+    // Ouvrier : « Aller chez le client » tant qu'il n'est pas arrivé, puis
+    // « Commencer la prestation » une fois sur place.
+    final showGoButton = _isArtisan && order.isBeforeStart && !order.needsArtisanConfirmation && !order.hasArrived;
+    final showStartButton = _isArtisan && order.hasArrived && !order.needsArtisanConfirmation;
     final showSetFeeButton = _isArtisan && order.artisan != null && order.isInProgress;
-    final showPrimaryAction = showAcceptButton || showStartButton || showSetFeeButton || _showPayButton || showTrackButton;
-    final showBottomBar = showBottomCall || showPrimaryAction;
+    final showPrimaryAction = showAcceptButton || showGoButton || showStartButton || showSetFeeButton || _showPayButton || _showPayLocked;
+    final showBottomBar = showBottomCall || showPrimaryAction || showClientCancel;
 
     late final String primaryActionLabel;
     late final IconData primaryActionIcon;
@@ -632,8 +707,13 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionIcon = Icons.check_circle_outline_rounded;
       primaryActionColor = kMisonGold; // Accepter / Confirmer en doré
       primaryActionTap = onAccept;
+    } else if (showGoButton) {
+      primaryActionLabel = 'Aller chez le client';
+      primaryActionIcon = Icons.directions_car_rounded;
+      primaryActionColor = kMisonGold;
+      primaryActionTap = onDepart;
     } else if (showStartButton) {
-      primaryActionLabel = 'Démarrer la prestation';
+      primaryActionLabel = 'Commencer la prestation';
       primaryActionIcon = Icons.play_circle_outline_rounded;
       primaryActionColor = Colors.green;
       primaryActionTap = onStart;
@@ -642,6 +722,13 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionIcon = Icons.receipt_long_rounded;
       primaryActionColor = completed;
       primaryActionTap = onSetRealizationFee;
+    } else if (_showPayLocked) {
+      primaryActionLabel = 'Payer la prestation';
+      primaryActionIcon = Icons.lock_clock_rounded;
+      primaryActionColor = Colors.grey.shade400;
+      primaryActionTap = () => TopToast.show(
+            message: 'Le paiement sera possible dès la fin de la prestation.',
+          );
     } else if (_showPayButton && paymentVerifying) {
       primaryActionLabel = 'Vérification du paiement…';
       primaryActionIcon = Icons.hourglass_top_rounded;
@@ -652,11 +739,6 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionIcon = Icons.payment_rounded;
       primaryActionColor = kMisonGold;
       primaryActionTap = onPay;
-    } else if (showTrackButton) {
-      primaryActionLabel = 'Suivre en direct';
-      primaryActionIcon = Icons.open_in_full_rounded;
-      primaryActionColor = kMisonGold;
-      primaryActionTap = onTrack;
     }
 
     return Stack(
@@ -714,6 +796,13 @@ class _OrderDetailBody extends StatelessWidget {
                   20.height,
                 ],
 
+                // ── Client : récapitulatif (prix, prestation, mode de paiement)
+                // une fois les frais de prestation fixés ──────────────────────
+                if (_isClient && (order.isAwaitingRealizationPayment || order.isCompleted)) ...[
+                  _ArtisanSummaryCard(order: order, forClient: true),
+                  20.height,
+                ],
+
 
 
 
@@ -726,6 +815,19 @@ class _OrderDetailBody extends StatelessWidget {
                     onTrack: onNavigate,
                     forArtisan: true,
                   ),
+                  // Si le GPS ne détecte pas l'arrivée
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: onArrive,
+                      icon: const Icon(Icons.where_to_vote_rounded, size: 18, color: kMisonGold),
+                      label: Text('Je suis arrivé', style: boldTextStyle(size: 13, color: kMisonGold)),
+                    ),
+                  ),
+                  8.height,
+                ] else if (_artisanSummary) ...[
+                  // Frais fixés : plus de carte ni d'appel/chat, un récapitulatif
+                  _ArtisanSummaryCard(order: order),
                   16.height,
                 ] else if (_isArtisan && order.client != null) ...[
                   // Infos du client, comme la carte de l'ouvrier chez le client
@@ -766,8 +868,8 @@ class _OrderDetailBody extends StatelessWidget {
                   ],
                 ],
 
-                // ── Infos commande ──────────────────────────────────────────
-                _InfoCard(children: [
+                // ── Infos commande (le récapitulatif prestataire les contient déjà)
+                if (!_artisanSummary) _InfoCard(children: [
                   _InfoRow(icon: Icons.calendar_today_rounded, label: 'Date', value: fmtDate(order.serviceDate)),
                   // Pas d'heure pour une prestation demandée « tout de suite »
                   if (_isClient && _ArrivalRow.isShown(order)) ...[
@@ -793,40 +895,28 @@ class _OrderDetailBody extends StatelessWidget {
                   ],
                 ]),
 
-                if (order.description != null && order.description!.isNotEmpty) ...[
+                if (!_artisanSummary && order.description != null && order.description!.isNotEmpty) ...[
                   16.height,
                   _InfoCard(children: [
                     _InfoRow(icon: Icons.notes_rounded, label: 'Description', value: order.description!),
                   ]),
                 ],
 
-                // ── Annulation — client et ouvrier ──────────────────────────
-                if (_canCancel) ...[
-                  20.height,
-                  // Bouton rempli en rouge, comme dans « Mes commandes »
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE53935),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      minimumSize: const Size(double.infinity, 52),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: onCancel,
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    label: Text(
-                      _isArtisan ? 'Se désister de la commande' : 'Annuler la commande',
-                      style: boldTextStyle(color: Colors.white, size: 16),
-                    ),
+                // ── Désistement — ouvrier (le client annule depuis la barre du bas)
+                if (_isArtisan && _canCancel) ...[
+                  16.height,
+                  // Désistement discret, même style que l'annulation côté client
+                  MisonDiscreetCancelButton(
+                    label: 'Se désister de la commande',
+                    onTap: onCancel,
+                    expanded: true,
                   ),
-                  if (_isArtisan) ...[
-                    8.height,
-                    Text(
-                      'La commande sera reproposée aux autres ouvriers du service.',
-                      style: secondaryTextStyle(size: 13),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                  8.height,
+                  Text(
+                    'La commande sera reproposée aux autres ouvriers du service.',
+                    style: secondaryTextStyle(size: 12, color: Colors.grey.shade500),
+                    textAlign: TextAlign.center,
+                  ).center(),
                 ],
 
                 // ── Évaluation existante ────────────────────────────────────
@@ -903,6 +993,18 @@ class _OrderDetailBody extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                  if (showBottomCall) 12.width,
+                ],
+                // Client : annulation discrète (même style que « Mes commandes »),
+                // à la place de l'ancien bouton « Suivre en direct ».
+                if (showClientCancel && !showPrimaryAction) ...[
+                  Expanded(
+                    child: MisonDiscreetCancelButton(
+                      label: 'Annuler la commande',
+                      onTap: onCancel,
+                      expanded: true,
                     ),
                   ),
                   if (showBottomCall) 12.width,
@@ -1280,7 +1382,20 @@ class _ArrivalRow extends StatelessWidget {
     if (order.isPending) {
       return const _InfoRow(icon: icon, label: 'Ouvrier', value: "Recherche d'un ouvrier en cours…");
     }
-    if (order.isAssigned || order.isAccepted || order.isAwaitingTravelPayment) {
+    // Trajet de l'ouvrier : pas encore parti → en route (heure d'arrivée) → arrivé
+    if (order.hasArrived) {
+      return const _InfoRow(icon: Icons.where_to_vote_rounded, label: 'Ouvrier', value: 'Arrivé chez vous');
+    }
+    if (order.isBeforeStart && !order.isEnRoute) {
+      return _InfoRow(
+        icon: icon,
+        label: 'Ouvrier',
+        value: order.isImmediate
+            ? 'Ouvrier trouvé · il va bientôt partir'
+            : 'Ouvrier trouvé · prévu à ${fmtTime(order.serviceDate)}',
+      );
+    }
+    if (order.isEnRoute) {
       final lat = double.tryParse(order.latitude ?? '');
       final lng = double.tryParse(order.longitude ?? '');
       return _InfoRow(
@@ -1304,6 +1419,50 @@ class _ArrivalRow extends StatelessWidget {
       return const _InfoRow(icon: icon, label: 'Ouvrier', value: 'Prestation terminée');
     }
     return _InfoRow(icon: icon, label: 'Heure', value: fmtTime(order.serviceDate));
+  }
+}
+
+/// Récapitulatif une fois les frais de prestation fixés.
+/// Prestataire : prix, client, prestation, paiement, adresse.
+/// Client : prix, prestation, mode de paiement.
+class _ArtisanSummaryCard extends StatelessWidget {
+  final MisonOrder order;
+  final bool forClient;
+  const _ArtisanSummaryCard({required this.order, this.forClient = false});
+
+  String get _price {
+    final fee = num.tryParse(order.realizationFee ?? '');
+    if (fee == null) return '—';
+    final digits = fee.toStringAsFixed(0);
+    final grouped = digits.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ');
+    return '$grouped FCFA';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final client = order.client?.fullName ?? '';
+    return _InfoCard(children: [
+      _InfoRow(icon: Icons.payments_rounded, label: 'Prix de la prestation', value: _price),
+      if (!forClient) ...[
+        _Divider(),
+        _InfoRow(icon: Icons.person_rounded, label: 'Client', value: client.isNotEmpty ? client : '—'),
+      ],
+      _Divider(),
+      _InfoRow(icon: Icons.handyman_rounded, label: 'Prestation', value: order.service?.name ?? '—'),
+      _Divider(),
+      _InfoRow(
+        icon: Icons.account_balance_wallet_rounded,
+        label: forClient ? 'Mode de paiement' : 'Paiement',
+        // Client, pas encore payé : formulé pour lui (seul Wave pour le moment)
+        value: forClient && order.paymentMethod == null && !order.isCompleted
+            ? 'Wave · à régler'
+            : order.paymentMethodLabel,
+      ),
+      if (!forClient && (order.serviceAddress ?? '').isNotEmpty) ...[
+        _Divider(),
+        _InfoRow(icon: Icons.location_on_rounded, label: 'Adresse', value: order.serviceAddress!),
+      ],
+    ]);
   }
 }
 
@@ -1945,18 +2104,15 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
     final dist = _roadDistanceM ?? _haversineDist();
     if (dist == null) return;
 
-    final isArrived = dist < 100;
+    final isArrived = dist <= kArrivalRadiusMeters;
     final isNearby  = dist < 500;
 
     if (_hadFirstUpdate) {
       if (isArrived && !_arrivedAlertShown) {
+        // La notification « arrivé » est envoyée par le serveur (arrivée signalée
+        // par l'ouvrier) : ne pas en créer une seconde ici.
         _arrivedAlertShown = true;
         _nearbyAlertShown  = true;
-        showSimpleLocalNotification(
-          id: 9002,
-          title: '${widget.artisan.fullName} est arrivé !',
-          body: 'Votre ouvrier est arrivé à votre adresse.',
-        );
       } else if (isNearby && !_wasNearby && !_nearbyAlertShown) {
         _nearbyAlertShown = true;
         showSimpleLocalNotification(
@@ -2174,7 +2330,7 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
             ),
           ),
 
-          // ── Infos ouvrier (le suivi se lance via la barre du bas) ─────────
+          // ── Infos ouvrier (le suivi se lance via le bouton en pied de carte) ─
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
             child: Column(
@@ -2281,6 +2437,29 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
               ],
             ),
           ),
+          // ── Client : « Suivre en direct » en pied de carte, pleine largeur,
+          // collé aux bords (juste sous les infos du prestataire) ─────────────
+          if (!widget.forArtisan)
+            Material(
+              color: kMisonGold,
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: widget.onTrack,
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.open_in_full_rounded, size: 18, color: Colors.white),
+                      8.width,
+                      Text('Suivre en direct', style: boldTextStyle(size: 15, color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     ),

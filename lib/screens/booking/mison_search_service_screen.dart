@@ -152,12 +152,23 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
   }
 }
 
-class _ServiceResultTile extends StatelessWidget {
+class _ServiceResultTile extends StatefulWidget {
   final MisonService service;
   const _ServiceResultTile({required this.service});
 
   @override
+  State<_ServiceResultTile> createState() => _ServiceResultTileState();
+}
+
+/// Carte d'un service : description sur 2 lignes ; la flèche › la déplie en
+/// entier (et la replie). Un appui sur le reste de la carte ouvre la commande.
+class _ServiceResultTileState extends State<_ServiceResultTile> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final service = widget.service;
+    final hasDescription = (service.description ?? '').isNotEmpty;
     return GestureDetector(
       onTap: () => MisonBookingFormScreen(service: service).launch(context),
       child: Container(
@@ -166,47 +177,60 @@ class _ServiceResultTile extends StatelessWidget {
           borderRadius: radius(12),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            CachedImageWidget(
-              url: service.imageUrl ?? '',
-              height: 128,
-              width: 128,
-              fit: BoxFit.cover,
-              circle: false,
-            ),
-            16.width,
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      service.name ?? '',
-                      style: boldTextStyle(size: 16),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (service.description != null && service.description!.isNotEmpty) ...[
-                      4.height,
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: Row(
+            // Dépliée : l'image reste en haut, le texte s'allonge dessous.
+            crossAxisAlignment: _expanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+            children: [
+              CachedImageWidget(
+                url: service.imageUrl ?? '',
+                height: 128,
+                width: 128,
+                fit: BoxFit.cover,
+                circle: false,
+              ),
+              16.width,
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        service.description!,
-                        style: secondaryTextStyle(size: 14),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        service.name ?? '',
+                        style: boldTextStyle(size: 16),
+                        maxLines: _expanded ? null : 1,
+                        overflow: _expanded ? null : TextOverflow.ellipsis,
                       ),
+                      if (hasDescription) ...[
+                        4.height,
+                        Text(
+                          service.description!,
+                          style: secondaryTextStyle(size: 14),
+                          maxLines: _expanded ? null : 2,
+                          overflow: _expanded ? null : TextOverflow.ellipsis,
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-            12.width,
-            const Icon(Icons.chevron_right, color: kMisonGold),
-            8.width,
-          ],
+              // › : déplie / replie la description (ne lance pas la commande)
+              IconButton(
+                tooltip: _expanded ? 'Réduire' : 'Voir toute la description',
+                onPressed: hasDescription ? () => setState(() => _expanded = !_expanded) : null,
+                icon: AnimatedRotation(
+                  turns: _expanded ? 0.25 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(Icons.chevron_right, color: kMisonGold),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

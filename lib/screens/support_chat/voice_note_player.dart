@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 /// Lecteur d'une note vocale dans une bulle de chat : lecture/pause,
-/// barre de progression (déplaçable) et durée.
+/// barre de progression (déplaçable), durée, et réécoute depuis le début.
 class VoiceNotePlayer extends StatefulWidget {
   final String url;
 
@@ -19,6 +19,10 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
   /// Lecture sur le haut-parleur : sans ça, après un enregistrement (session
   /// audio "voix") ou un appel, le son part dans l'écouteur, à peine audible.
   static final _speakerContext = AudioContextConfig(route: AudioContextConfigRoute.speaker).build();
+
+  /// Note en cours de lecture : en lancer une autre la met en pause, pour ne
+  /// jamais entendre deux notes en même temps.
+  static _VoiceNotePlayerState? _playing;
 
   final AudioPlayer _player = AudioPlayer();
   final List<StreamSubscription> _subs = [];
@@ -46,6 +50,9 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
         if (mounted) setState(() => _position = Duration.zero);
       }),
     ]);
+    // Garder le fichier chargé en fin de lecture : la réécoute repart tout de
+    // suite, sans retélécharger la note (ReleaseMode.release par défaut).
+    _player.setReleaseMode(ReleaseMode.stop).catchError((e) => log('VoiceNotePlayer release: $e'));
     _player.setAudioContext(_speakerContext).catchError((e) => log('VoiceNotePlayer context: $e'));
     // Charge la source sans jouer, pour afficher la durée tout de suite.
     _player.setSourceUrl(widget.url).catchError((e) {
@@ -59,6 +66,7 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
         await _player.pause();
         return;
       }
+      await _pauseOtherNote();
       setState(() {
         _loading = true;
         _error = false;
@@ -75,6 +83,32 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
     }
   }
 
+  Future<void> _pauseOtherNote() async {
+    final other = _playing;
+    if (other != null && other != this && other.mounted) {
+      await other._player.pause();
+    }
+    _playing = this;
+  }
+
+  /// Réécoute depuis le début.
+  Future<void> _replay() async {
+    setState(() => _position = Duration.zero);
+    if (_state == PlayerState.playing) {
+      await _player.seek(Duration.zero);
+    } else {
+      await _toggle();
+    }
+  }
+
+  /// Déplacement dans la note, lecture en cours ou non : la position affichée
+  /// suit le doigt, et la prochaine lecture repart de là.
+  void _seekTo(double fraction) {
+    final target = Duration(milliseconds: (fraction * _duration.inMilliseconds).round());
+    setState(() => _position = target);
+    _player.seek(target).catchError((e) => log('VoiceNotePlayer seek: $e'));
+  }
+
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString();
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
@@ -83,6 +117,7 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
 
   @override
   void dispose() {
+    if (_playing == this) _playing = null;
     for (final s in _subs) {
       s.cancel();
     }
@@ -93,6 +128,8 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
   @override
   Widget build(BuildContext context) {
     final isPlaying = _state == PlayerState.playing;
+    // « Réécouter » dès que la note a été entamée ou écoutée jusqu'au bout.
+    final canReplay = _position > Duration.zero || _state == PlayerState.completed;
     final total = _duration.inMilliseconds;
     final progress = total > 0 ? (_position.inMilliseconds / total).clamp(0.0, 1.0) : 0.0;
     // Pendant la lecture : temps écoulé ; sinon : durée totale.
@@ -117,7 +154,9 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
                           ? Icons.error_outline
                           : isPlaying
                               ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
+                              : _state == PlayerState.completed
+                                  ? Icons.replay_rounded // écoutée : rejouer
+                                  : Icons.play_arrow_rounded,
                       color: Colors.white,
                       size: 30,
                     ),
@@ -136,14 +175,23 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
               ),
               child: Slider(
                 value: progress,
-                onChanged: total > 0
-                    ? (v) => _player.seek(Duration(milliseconds: (v * total).round()))
-                    : null,
+                onChanged: total > 0 ? _seekTo : null,
               ),
             ),
           ),
           6.width,
           Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+          if (canReplay && _state != PlayerState.completed)
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                tooltip: 'Réécouter depuis le début',
+                icon: const Icon(Icons.replay_rounded, color: Colors.white70, size: 18),
+                onPressed: _replay,
+              ),
+            ),
         ],
       ),
     );

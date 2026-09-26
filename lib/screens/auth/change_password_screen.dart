@@ -1,5 +1,8 @@
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/base_scaffold_widget.dart';
+import 'package:booking_system_flutter/component/mison_account_sheets.dart';
+import 'package:booking_system_flutter/component/mison_discreet_cancel_button.dart';
+import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
@@ -10,6 +13,7 @@ import 'package:booking_system_flutter/utils/model_keys.dart';
 import 'package:booking_system_flutter/utils/pin_utils.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 
@@ -72,6 +76,28 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
     }
   }
 
+  void _deleteAccount() {
+    ifNotTester(() async {
+      final message = await showMisonDeleteAccountSheet(context);
+      if (message == null) return; // annulé
+
+      appStore.setLoading(true);
+      try {
+        await userService.removeDocument(appStore.uid);
+        await userService.deleteUser();
+      } catch (_) {}
+      await clearPreferences();
+      appStore.setLoading(false);
+
+      TopToast.show(message: message, type: TopToastType.success);
+      push(
+        DashboardScreen(),
+        isNewTask: true,
+        pageRouteAnimation: PageRouteAnimation.Fade,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -99,15 +125,17 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 focus: oldPasswordFocus,
                 nextFocus: newPasswordFocus,
                 obscureText: true,
-                keyboardType: pinKeyboardType,
+                // Code PIN : clavier numérique, chiffres uniquement
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 suffixPasswordVisibleWidget: ic_show.iconImage(size: 10).paddingAll(14),
                 suffixPasswordInvisibleWidget: ic_hide.iconImage(size: 10).paddingAll(14),
                 decoration: inputDecoration(
                   context,
-                  labelText: language.hintOldPasswordTxt,
+                  labelText: 'Ancien code PIN',
                 ),
                 isValidationRequired: true,
-                // Pas de limite à 4 chiffres : l'ancien mot de passe peut être plus long
+                // Pas de limite à 4 chiffres : un ancien code peut être plus long
                 validator: (val) {
                   if (val == null || val.isEmpty) {
                     return language.requiredText;
@@ -160,6 +188,23 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     changePassword();
                   });
                 },
+              ),
+              24.height,
+              // Déconnexion, en gris, avant la suppression du compte
+              AppButton(
+                text: language.logout,
+                color: Colors.grey.shade200,
+                textColor: Colors.grey.shade800,
+                elevation: 0,
+                width: context.width() - context.navigationBarHeight,
+                onTap: () => logout(context),
+              ),
+              16.height,
+              // Suppression du compte : dans « Sécurité », sous la modification du PIN
+              MisonDiscreetCancelButton(
+                label: language.lblDeleteAccount,
+                onTap: _deleteAccount,
+                expanded: true,
               ),
               24.height,
             ],

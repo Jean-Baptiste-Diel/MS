@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
+import 'package:booking_system_flutter/utils/call_status.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
@@ -37,6 +39,7 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
     with TickerProviderStateMixin {
   String _callerName = 'Votre ouvrier';
   bool _isAccepting = false;
+  StreamSubscription<String?>? _statusSub;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
 
@@ -61,6 +64,21 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
       FlutterRingtonePlayer().playRingtone(looping: true, volume: 1.0);
     }
     _loadCallerName();
+    _statusSub = callStatusStream(widget.orderId).listen(_onCallStatus);
+  }
+
+  /// L'appel a pris fin ailleurs : annulé par l'appelant, ou refusé depuis la
+  /// notification / CallKit. L'écran n'a plus lieu d'être.
+  void _onCallStatus(String? status) {
+    if (!mounted || _isAccepting) return;
+    if (status != kCallCancelled && status != kCallRejected) return;
+    FlutterRingtonePlayer().stop();
+    cancelIncomingCallNotification();
+    FlutterCallkitIncoming.endCall(widget.orderId).catchError((_) {});
+    if (status == kCallCancelled) {
+      TopToast.show(message: 'Appel manqué de $_callerName');
+    }
+    Navigator.pop(context);
   }
 
   Future<void> _loadCallerName() async {
@@ -118,18 +136,16 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
   Future<void> _decline() async {
     FlutterRingtonePlayer().stop();
     cancelIncomingCallNotification();
+    _statusSub?.cancel(); // notre propre refus ne doit pas refermer l'écran une 2e fois
     // Libère la session système : sans cela l'appel suivant reste muet.
     FlutterCallkitIncoming.endCall(widget.orderId).catchError((_) {});
-    await FirebaseFirestore.instance
-        .collection('call_status')
-        .doc(widget.orderId)
-        .set({'status': 'rejected', 'at': FieldValue.serverTimestamp()})
-        .catchError((_) {});
+    await markCallDeclined(widget.orderId);
     if (mounted) Navigator.pop(context);
   }
 
   @override
   void dispose() {
+    _statusSub?.cancel();
     FlutterRingtonePlayer().stop();
     _pulseController.dispose();
     super.dispose();

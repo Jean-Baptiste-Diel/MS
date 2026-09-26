@@ -9,6 +9,7 @@ import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_success_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
+import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -439,7 +440,7 @@ class _ServicePickerScreenState extends State<_ServicePickerScreen> {
           future: _future,
           builder: (_, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const MisonPageLoader();
             }
             if (snap.hasError) {
               return Center(child: Text(snap.error.toString()));

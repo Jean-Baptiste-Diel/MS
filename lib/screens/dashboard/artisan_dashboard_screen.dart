@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
+import 'package:booking_system_flutter/utils/artisan_arrival_reporter.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
@@ -17,6 +18,8 @@ import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:booking_system_flutter/component/mison_page_loader.dart';
+import 'package:booking_system_flutter/utils/auto_refresh_mixin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -132,7 +135,7 @@ class ArtisanHomeFragment extends StatefulWidget {
   State<ArtisanHomeFragment> createState() => _ArtisanHomeFragmentState();
 }
 
-class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
+class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefreshMixin {
   late Future<MisonOrderResponse> _future;
   UniqueKey _key = UniqueKey();
   bool _isAvailable = true;
@@ -162,10 +165,19 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
     LiveStream().on(LIVESTREAM_ARTISAN_HOME_REFRESH, (_) {
       if (mounted) setState(() => _load());
     });
+    startAutoRefresh();
+  }
+
+  /// Actualisation silencieuse (nouvelles commandes, statuts) sans clignotement.
+  @override
+  Future<void> onAutoRefresh() async {
+    final res = await getMisonOrders();
+    if (mounted) setState(() => _future = Future.value(res));
   }
 
   @override
   void dispose() {
+    stopAutoRefresh();
     _scrollController.dispose();
     LiveStream().dispose(LIVESTREAM_ARTISAN_HOME_REFRESH);
     _bgLocationTimer?.cancel();
@@ -178,7 +190,8 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
   void _syncLocationBroadcast(List<MisonOrder> orders) {
     MisonOrder? activeOrder;
     for (final o in orders) {
-      if (o.isActiveWithArtisan) { activeOrder = o; break; }
+      // Position envoyée seulement en route (plus une fois sur place).
+      if (o.canTrack) { activeOrder = o; break; }
     }
 
     if (activeOrder == null || activeOrder.id == null) {
@@ -210,6 +223,12 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
           'lng': pos.longitude,
           'updated_at': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
+        ArtisanArrivalReporter.check(
+          orderId: orderId,
+          destLat: double.tryParse(activeOrder!.latitude ?? ''),
+          destLng: double.tryParse(activeOrder.longitude ?? ''),
+          position: pos,
+        );
       } catch (e) {
         log('[Tracking] Erreur (dashboard): $e');
       }
@@ -323,7 +342,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                     clipBehavior: Clip.none,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.notifications_outlined, color: _headerDark, size: 26),
+                        icon: const Icon(Icons.notifications_outlined, color: _brandGold, size: 26),
                         onPressed: () {
                           artisanNotifBadge.value = 0;
                           setValue(ARTISAN_NOTIF_BADGE_KEY, 0);
@@ -338,7 +357,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                             constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE53935),
+                              color: _brandGold,
                               shape: count > 9 ? BoxShape.rectangle : BoxShape.circle,
                               borderRadius: count > 9 ? BorderRadius.circular(10) : null,
                               border: Border.all(color: Colors.white, width: 1.5),
@@ -415,7 +434,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> {
                 future: _future,
                 loadingWidget: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 60),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: MisonPageLoader(),
                 ),
                 errorBuilder: (error) => AppEmptyState(
                   type: AppEmptyStateType.error,
@@ -543,7 +562,7 @@ class _AvailabilityToggleState extends State<_AvailabilityToggle> {
 }
 
 /// Filtre appliqué à l'historique en touchant une carte de statistiques.
-enum _StatFilter { total, enCours, terminees, refusees }
+enum _StatFilter { total, enCours, terminees, annulees }
 
 class _DashboardBody extends StatefulWidget {
   final List<MisonOrder> orders;
@@ -584,7 +603,15 @@ class _DashboardBodyState extends State<_DashboardBody> {
     final total     = missions.length;
     final enCours   = missions.where((o) => o.isActiveWithArtisan).length;
     final terminees = missions.where((o) => o.isCompleted).length;
-    final refusees  = missions.where((o) => o.isRejected).length;
+    // Annulées par le client (CANCELLED). REJECTED n'est jamais posé par le
+    // serveur (seulement par les données de démo) : filtrer dessus seul
+    // donnait une liste toujours vide.
+    bool isAnnulee(MisonOrder o) => o.isCancelled || o.isRejected;
+    final annulees  = missions.where(isAnnulee).length;
+    // Occupé avec un client (même règle que le serveur) : pas de nouvelle
+    // commande tant que la prestation en cours n'est pas terminée.
+    final isBusy = missions.any((o) =>
+        o.isAssigned || o.isAccepted || o.isAwaitingTravelPayment || o.isInProgress);
 
     // Historique : filtré selon la carte touchée
     final List<MisonOrder> history;
@@ -606,10 +633,10 @@ class _DashboardBodyState extends State<_DashboardBody> {
         historyTitle = 'Commandes terminées';
         emptySubtitle = "Vous n'avez encore terminé aucune commande.";
         break;
-      case _StatFilter.refusees:
-        history = missions.where((o) => o.isRejected).toList();
-        historyTitle = 'Commandes refusées';
-        emptySubtitle = "Vous n'avez refusé aucune commande.";
+      case _StatFilter.annulees:
+        history = missions.where(isAnnulee).toList();
+        historyTitle = 'Commandes annulées';
+        emptySubtitle = "Aucune de vos commandes n'a été annulée.";
         break;
       case null:
         history = missions.take(5).toList();
@@ -644,13 +671,41 @@ class _DashboardBodyState extends State<_DashboardBody> {
                     isSelected: _filter == _StatFilter.terminees,
                     onTap: () => _toggleFilter(_StatFilter.terminees)),
                 12.width,
-                _StatCard(label: 'Refusées', value: refusees, color: rejected, icon: Icons.cancel_rounded,
-                    isSelected: _filter == _StatFilter.refusees,
-                    onTap: () => _toggleFilter(_StatFilter.refusees)),
+                _StatCard(label: 'Annulées', value: annulees, color: rejected, icon: Icons.cancel_rounded,
+                    isSelected: _filter == _StatFilter.annulees,
+                    onTap: () => _toggleFilter(_StatFilter.annulees)),
               ]),
             ],
           ),
         ),
+
+        // ── Occupé : explique pourquoi aucune nouvelle commande n'apparaît
+        if (isBusy)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: _brandGold.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _brandGold.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 18, color: _brandGold),
+                  8.width,
+                  Expanded(
+                    child: Text(
+                      'Vous avez une commande en cours. Les nouvelles commandes vous '
+                      'seront proposées une fois la prestation terminée.',
+                      style: secondaryTextStyle(size: 13, color: _brandGold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
 
         // ── Commandes urgentes (ASSIGNED)
         if (urgentes.isNotEmpty) ...[
@@ -1009,7 +1064,7 @@ class ArtisanOrdersFragment extends StatefulWidget {
 }
 
 class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AutoRefreshMixin {
   late TabController _tabController;
 
   late Future<MisonOrderResponse> _allFuture;
@@ -1026,6 +1081,13 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
     LiveStream().on(LIVESTREAM_ARTISAN_ORDERS_REFRESH, (_) {
       if (mounted) _reload();
     });
+    startAutoRefresh();
+  }
+
+  @override
+  Future<void> onAutoRefresh() async {
+    final res = await getMisonOrders();
+    if (mounted) setState(() => _allFuture = Future.value(res));
   }
 
   Future<void> _fetchPosition() async {
@@ -1091,6 +1153,7 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
 
   @override
   void dispose() {
+    stopAutoRefresh();
     _tabController.dispose();
     LiveStream().dispose(LIVESTREAM_ARTISAN_ORDERS_REFRESH);
     super.dispose();
@@ -1157,9 +1220,11 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
                   confirmLabel: order.needsArtisanConfirmation ? 'Oui, je confirme' : "Oui, j'accepte",
                 )
             : null,
-        onStart: (order.canStart && !order.needsArtisanConfirmation)
+        // Seulement une fois arrivé chez le client (avant : « Aller chez le
+        // client » depuis le détail de la commande).
+        onStart: (order.hasArrived && !order.needsArtisanConfirmation)
             ? () => _confirmAction(
-                  title: 'Démarrer la prestation',
+                  title: 'Commencer la prestation',
                   subtitle: 'Confirmez-vous être sur place et prêt à commencer ?',
                   action: () => artisanStartOrder(order.id!),
                   icon: Icons.play_circle_outline_rounded,
@@ -1271,7 +1336,7 @@ class _OrderTabState extends State<_OrderTab> with AutomaticKeepAliveClientMixin
       future: widget.future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const MisonPageLoader();
         }
         if (snapshot.hasError) {
           return AppEmptyState(
@@ -1549,7 +1614,7 @@ class _ArtisanOrderCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       onTap: onStart,
-                      child: Text('Démarrer la prestation', style: boldTextStyle(color: Colors.white, size: 14)),
+                      child: Text('Commencer la prestation', style: boldTextStyle(color: Colors.white, size: 14)),
                     ),
                   if (onRelease != null) ...[
                     8.height,

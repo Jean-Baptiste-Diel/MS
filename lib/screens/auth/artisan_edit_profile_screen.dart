@@ -12,6 +12,7 @@ import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:country_picker/country_picker.dart';
+import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vector_icons/flutter_vector_icons.dart';
 import 'package:http/http.dart' as http;
@@ -387,7 +388,7 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
             ),
           ),
           if (appStore.isLoading)
-            const Positioned.fill(child: AbsorbPointer(child: Center(child: CircularProgressIndicator()))),
+            const Positioned.fill(child: AbsorbPointer(child: MisonPageLoader())),
         ],
         ),
       ),

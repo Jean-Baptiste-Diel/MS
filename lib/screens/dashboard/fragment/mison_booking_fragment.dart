@@ -1,13 +1,14 @@
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/mison_cancel_order_sheet.dart';
+import 'package:booking_system_flutter/component/mison_discreet_cancel_button.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart';
-import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:booking_system_flutter/utils/auto_refresh_mixin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
@@ -25,14 +26,6 @@ class MisonBookingFragment extends StatelessWidget {
       backgroundColor: Colors.transparent,
       // Logo centré + fond de la page, comme les pages prestataire
       appBar: const MisonAppBar(title: 'Mes Commandes'),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => const MisonSearchServiceScreen().launch(context),
-        backgroundColor: kMisonGold,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: Text('Nouvelle Commande',
-            style: boldTextStyle(color: Colors.white, size: 14)),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       body: Stack(
         children: [
           const _MiseEnRelationTab(),
@@ -57,7 +50,7 @@ class _MiseEnRelationTab extends StatefulWidget {
 }
 
 class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, AutoRefreshMixin {
   late Future<MisonOrderResponse> _future;
   String? _selectedStatus;
   UniqueKey _key = UniqueKey();
@@ -109,12 +102,21 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
     LiveStream().on(LIVESTREAM_ORDERS_LIST_REFRESH, (_) {
       if (mounted) setState(() => _load());
     });
+    startAutoRefresh();
   }
 
   @override
   void dispose() {
+    stopAutoRefresh();
     LiveStream().dispose(LIVESTREAM_ORDERS_LIST_REFRESH);
     super.dispose();
+  }
+
+  /// Actualisation silencieuse : la liste reste affichée pendant le chargement.
+  @override
+  Future<void> onAutoRefresh() async {
+    final res = await getMisonOrders();
+    if (mounted) setState(() => _future = Future.value(res));
   }
 
   void _load() {
@@ -501,12 +503,20 @@ class MisonOrderItemComponent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Statut et annulation sur la même ligne
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Statut:', style: secondaryTextStyle(size: 13)),
-                    Text(_statusLabel(order.status),
-                        style: boldTextStyle(size: 13, color: _statusColor(order.status))),
+                    Text('Statut :', style: secondaryTextStyle(size: 13)),
+                    6.width,
+                    Expanded(
+                      child: Text(
+                        _statusLabel(order.status),
+                        style: boldTextStyle(size: 13, color: _statusColor(order.status)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (_canCancel) MisonDiscreetCancelButton(onTap: onCancel),
                   ],
                 ),
                 if (order.clientRating != null) ...[
@@ -543,30 +553,6 @@ class MisonOrderItemComponent extends StatelessWidget {
             ),
           ),
 
-          // Bouton annuler
-          if (_canCancel) ...[
-            14.height,
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              // Bouton rempli en rouge, texte blanc
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: onCancel,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  label: Text('Annuler la commande',
-                      style: boldTextStyle(color: Colors.white, size: 15)),
-                ),
-              ),
-            ),
-          ],
           18.height,
         ],
       ),

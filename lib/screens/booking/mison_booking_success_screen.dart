@@ -1,6 +1,7 @@
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
+import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,19 @@ class MisonBookingSuccessScreen extends StatelessWidget {
     required this.serviceName,
     required this.paymentMethod,
   }) : super(key: key);
+
+  /// Ouvre le détail de la commande qui vient d'être créée. Dessous, l'onglet
+  /// « Mes commandes » : le retour y mène, pas à cette page de validation.
+  void _openCreatedOrder(BuildContext context) {
+    final orderId = order.id;
+    final navigator = Navigator.of(context);
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => DashboardScreen(redirectToBooking: true)),
+      (_) => false,
+    );
+    if (orderId == null || orderId.isEmpty) return;
+    navigator.push(MaterialPageRoute(builder: (_) => MisonOrderDetailScreen(orderId: orderId)));
+  }
 
   String _formatDate(String? isoDate) {
     if (isoDate == null || isoDate.isEmpty) return '—';
@@ -223,13 +237,12 @@ class MisonBookingSuccessScreen extends StatelessWidget {
                     16.width,
                     Expanded(
                       child: AppButton(
-                        text: 'Mes commandes',
+                        text: 'Ma commande',
                         color: kMisonGold,
                         textColor: Colors.white,
                         shapeBorder: RoundedRectangleBorder(
                             borderRadius: radius(12)),
-                        onTap: () => DashboardScreen(redirectToBooking: true)
-                            .launch(context, isNewTask: true),
+                        onTap: () => _openCreatedOrder(context),
                       ),
                     ),
                   ],

@@ -14,6 +14,7 @@ import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/phone_utils.dart';
 import 'package:country_picker/country_picker.dart';
+import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_vector_icons/flutter_vector_icons.dart';
@@ -406,7 +407,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
               const Positioned.fill(
                 child: AbsorbPointer(
                   absorbing: true,
-                  child: Center(child: CircularProgressIndicator()),
+                  child: MisonPageLoader(),
                 ),
               ),
           ],

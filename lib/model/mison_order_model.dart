@@ -55,6 +55,9 @@ class MisonOrder {
   String? clientReview;
   String? createdAt;
   String? updatedAt;
+  String? enRouteAt;  // l'ouvrier est parti chez le client (« Aller chez le client »)
+  String? arrivedAt;  // l'ouvrier est arrivé à l'adresse
+  String? paymentMethod; // WAVE / ORANGE_MONEY une fois payé, sinon null
 
   MisonOrder({
     this.id,
@@ -75,6 +78,9 @@ class MisonOrder {
     this.clientReview,
     this.createdAt,
     this.updatedAt,
+    this.enRouteAt,
+    this.arrivedAt,
+    this.paymentMethod,
   });
 
   factory MisonOrder.fromJson(Map<String, dynamic> json) {
@@ -107,6 +113,9 @@ class MisonOrder {
       clientReview: json['client_review']?.toString(),
       createdAt: json['created_at']?.toString(),
       updatedAt: json['updated_at']?.toString(),
+      enRouteAt: json['en_route_at']?.toString(),
+      arrivedAt: json['arrived_at']?.toString(),
+      paymentMethod: json['payment_method']?.toString(),
     )..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null;
   }
 
@@ -202,7 +211,32 @@ class MisonOrder {
 
   /// Can track artisan location : dès que l'ouvrier est rattaché à la commande
   /// (accepté/affecté), pour que le client voie où il se trouve en approche.
-  bool get canTrack => isActiveWithArtisan;
+  /// Moyen de paiement lisible (récapitulatif prestataire).
+  String get paymentMethodLabel {
+    switch (paymentMethod) {
+      case 'WAVE':
+        return 'Wave';
+      case 'ORANGE_MONEY':
+        return 'Orange Money';
+      default:
+        // Pour le moment, seul Wave est proposé au client.
+        return isCompleted ? 'Wave' : 'Wave · en attente du paiement du client';
+    }
+  }
+
+  /// Commande acceptée, prestation pas encore commencée : c'est la phase du
+  /// trajet de l'ouvrier (« Aller chez le client » → arrivée → « Commencer »).
+  bool get isBeforeStart => artisan != null && (isAssigned || isAccepted || isAwaitingTravelPayment);
+
+  /// L'ouvrier a appuyé sur « Aller chez le client » et n'est pas encore arrivé.
+  bool get isEnRoute => isBeforeStart && (enRouteAt ?? '').isNotEmpty && (arrivedAt ?? '').isEmpty;
+
+  /// L'ouvrier est arrivé chez le client : il peut commencer la prestation.
+  bool get hasArrived => isBeforeStart && (arrivedAt ?? '').isNotEmpty;
+
+  /// Suivi en direct (mini-carte, position de l'ouvrier) : seulement pendant le
+  /// trajet. Avant le départ et une fois arrivé, plus de carte des deux côtés.
+  bool get canTrack => isEnRoute;
 }
 
 class MisonClient {

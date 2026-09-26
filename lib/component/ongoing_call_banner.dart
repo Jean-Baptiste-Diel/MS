@@ -61,7 +61,7 @@ class _Bar extends StatelessWidget {
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(16, 6, 10, 6),
             child: AnimatedBuilder(
               animation: session,
               builder: (_, __) => Row(
@@ -79,6 +79,20 @@ class _Bar extends StatelessWidget {
                     ),
                   ),
                   const Text('Revenir', style: TextStyle(color: Colors.white70)),
+                  const SizedBox(width: 8),
+                  // Raccrocher sans revenir sur l'écran d'appel.
+                  Material(
+                    color: Colors.redAccent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: session.hangUp,
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.call_end_rounded, color: Colors.white, size: 18),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

@@ -1983,6 +1983,18 @@ Future<MisonOrderDetailResponse> createWorkerRequest(MisonWorkerRequestModel req
   }
 }
 
+/// POST /api/orders/{id}/depart - L'ouvrier part chez le client (mini-carte)
+Future<MisonActionResponse> artisanDepart(String orderId) async {
+  final response = await buildHttpResponse('orders/$orderId/depart', method: HttpMethodType.POST);
+  return MisonActionResponse.fromJson(await handleResponse(response));
+}
+
+/// POST /api/orders/{id}/arrive - L'ouvrier est arrivé chez le client
+Future<MisonActionResponse> artisanArrive(String orderId) async {
+  final response = await buildHttpResponse('orders/$orderId/arrive', method: HttpMethodType.POST);
+  return MisonActionResponse.fromJson(await handleResponse(response));
+}
+
 /// POST /api/orders/{id}/start - Artisan démarre une commande (ACCEPTED → IN_PROGRESS)
 Future<MisonActionResponse> artisanStartOrder(String orderId) async {
   try {

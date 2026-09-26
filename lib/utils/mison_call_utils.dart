@@ -3,6 +3,7 @@ import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
 import 'package:booking_system_flutter/services/mison_call_session.dart';
+import 'package:booking_system_flutter/utils/call_status.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -31,6 +32,10 @@ Future<void> startMisonOrderCall(
     ));
     return;
   }
+
+  // Efface le refus / l'annulation d'un appel précédent AVANT de faire sonner
+  // l'appelé : sinon ce vieux statut couperait immédiatement le nouvel appel.
+  await resetCallStatus(orderId);
 
   // Await the SharedPreferences write before the API call triggers FCM.
   // data-only FCM (content-available:1) can arrive in the background isolate
