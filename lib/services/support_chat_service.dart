@@ -14,7 +14,7 @@ final String _WS_BASE = '${DOMAIN_URL.replaceFirst('https://', 'wss://').replace
 const String _CONVERSATIONS_ENDPOINT = '${BASE_URL}chat/conversations';
 
 enum MessageStatus { sent, pending, failed }
-enum MessageType { text, image, audio }
+enum MessageType { text, image, audio, call }
 
 class SupportChatMessage {
   final String id;
@@ -45,6 +45,11 @@ class SupportChatMessage {
 
   bool get isImage => messageType == MessageType.image;
   bool get isAudio => messageType == MessageType.audio;
+  bool get isCall => messageType == MessageType.call;
+
+  /// Appel : "completed:<secondes>", "missed" ou "declined" (voir le serveur).
+  String get callOutcome => content.split(':').first;
+  int get callDurationSeconds => int.tryParse(content.split(':').skip(1).firstOrNull ?? '') ?? 0;
 
   factory SupportChatMessage.fromJson(Map<String, dynamic> json) {
     final senderId = (json['sender_id'] ?? json['sender'])?.toString() ?? '';
@@ -64,7 +69,9 @@ class SupportChatMessage {
           ? MessageType.image
           : rawType == 'audio'
               ? MessageType.audio
-              : MessageType.text,
+              : rawType == 'call'
+                  ? MessageType.call
+                  : MessageType.text,
       status: MessageStatus.sent,
     );
   }

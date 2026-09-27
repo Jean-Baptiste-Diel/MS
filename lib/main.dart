@@ -121,6 +121,7 @@ void onNotificationTap(NotificationResponse details) {
   if (details.payload == null) return;
   try {
     final data = jsonDecode(details.payload!);
+    if (data is! Map) return;
     if (data['type'] == 'INCOMING_CALL') {
       final orderId = data['order_id']?.toString() ?? '';
       final channel = data['channel']?.toString() ?? '';
@@ -128,7 +129,11 @@ void onNotificationTap(NotificationResponse details) {
       navigatorKey.currentState?.push(MaterialPageRoute(
         builder: (_) => MisonIncomingCallScreen(orderId: orderId, channel: channel),
       ));
+      return;
     }
+    // Notification affichée app ouverte : même routage qu'un appui sur une
+    // notification système (détail de commande, chat, support…).
+    handleNotificationClick(RemoteMessage(data: Map<String, dynamic>.from(data)));
   } catch (_) {}
 }
 
@@ -216,7 +221,12 @@ void _listenCallKitEvents() {
         _openCallScreen(orderId, channel);
       case Event.actionCallDecline:
       case Event.actionCallTimeout:
-        markCallDeclined(orderId);
+        // Sonné sans réponse ≠ refusé : l'appelant voit « n'a pas répondu ».
+        if (event.event == Event.actionCallTimeout) {
+          markCallMissed(orderId);
+        } else {
+          markCallDeclined(orderId);
+        }
         FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
       case Event.actionCallEnded:
         // « Raccrocher » depuis la notification Android ou l'interface CallKit :

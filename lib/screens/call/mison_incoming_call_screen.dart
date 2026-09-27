@@ -71,7 +71,7 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
   /// notification / CallKit. L'écran n'a plus lieu d'être.
   void _onCallStatus(String? status) {
     if (!mounted || _isAccepting) return;
-    if (status != kCallCancelled && status != kCallRejected) return;
+    if (status != kCallCancelled && status != kCallRejected && status != kCallMissed) return;
     FlutterRingtonePlayer().stop();
     cancelIncomingCallNotification();
     FlutterCallkitIncoming.endCall(widget.orderId).catchError((_) {});

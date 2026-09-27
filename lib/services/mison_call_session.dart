@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
 import 'package:booking_system_flutter/utils/call_status.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
@@ -45,6 +46,11 @@ class MisonCallSession extends ChangeNotifier {
 
   RtcEngine? _engine;
   Timer? _timer;
+  Timer? _noAnswerTimer;
+
+  /// Appelant : sans réponse au bout de ce délai, l'appel se termine
+  /// (« n'a pas répondu ») et s'affiche comme appel manqué dans la conversation.
+  static const _noAnswerTimeout = Duration(seconds: 45);
   StreamSubscription<String?>? _callStatusSub;
 
   bool engineReady = false;
@@ -103,7 +109,12 @@ class MisonCallSession extends ChangeNotifier {
     }
 
     await _keepAliveInBackground();
-    if (isCaller) _listenCallStatus();
+    if (isCaller) {
+      _listenCallStatus();
+      _noAnswerTimer = Timer(_noAnswerTimeout, () {
+        if (!isConnected) _end(message: "$otherPartyName n'a pas répondu", noAnswer: true);
+      });
+    }
 
     final engine = createAgoraRtcEngine();
     _engine = engine;
@@ -218,8 +229,11 @@ class MisonCallSession extends ChangeNotifier {
 
   void _listenCallStatus() {
     _callStatusSub = callStatusStream(orderId).listen((status) {
-      if (status == kCallRejected && !isConnected) {
+      if (isConnected) return;
+      if (status == kCallRejected) {
         _end(message: "$otherPartyName a refusé l'appel", rejected: true);
+      } else if (status == kCallMissed) {
+        _end(message: "$otherPartyName n'a pas répondu", noAnswer: true);
       }
     });
   }
@@ -250,11 +264,22 @@ class MisonCallSession extends ChangeNotifier {
 
   Future<void> hangUp() => _end();
 
-  Future<void> _end({String? message, bool rejected = false}) async {
+  Future<void> _end({String? message, bool rejected = false, bool noAnswer = false}) async {
     if (ended) return;
     ended = true;
     endMessage = message;
     _timer?.cancel();
+    _noAnswerTimer?.cancel();
+
+    // Appelant : l'appel s'affiche dans la conversation de la commande
+    // (abouti avec sa durée, refusé, ou sans réponse / annulé).
+    if (isCaller && !micDenied) {
+      logOrderCall(
+        orderId,
+        outcome: isConnected ? 'completed' : (rejected ? 'declined' : 'missed'),
+        durationSeconds: seconds,
+      );
+    }
     _callStatusSub?.cancel();
     notifyListeners();
     if (current.value == this) current.value = null;
@@ -282,8 +307,12 @@ class MisonCallSession extends ChangeNotifier {
         log('MisonCallSession release: $e');
       }
     }
-    if (rejected) {
-      showSimpleLocalNotification(id: 9010, title: 'Appel refusé', body: message ?? '');
+    if (rejected || noAnswer) {
+      showSimpleLocalNotification(
+        id: 9010,
+        title: rejected ? 'Appel refusé' : 'Pas de réponse',
+        body: message ?? '',
+      );
     }
   }
 }

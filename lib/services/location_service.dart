@@ -61,17 +61,34 @@ Future<String> buildFullAddressFromLatLong(double latitude, double longitude) as
 
   log(place.toJson());
 
-  String address = '';
-
-  if (!place.name.isEmptyOrNull && !place.street.isEmptyOrNull && place.name != place.street) address = '${place.name.validate()}, ';
-  if (!place.street.isEmptyOrNull) address = '$address${place.street.validate()}';
-  if (!place.locality.isEmptyOrNull) address = '$address, ${place.locality.validate()}';
-  if (!place.administrativeArea.isEmptyOrNull) address = '$address, ${place.administrativeArea.validate()}';
-  if (!place.postalCode.isEmptyOrNull) address = '$address, ${place.postalCode.validate()}';
-  if (!place.country.isEmptyOrNull) address = '$address, ${place.country.validate()}';
+  // Seulement les morceaux renseignés, sans doublon : sans nom de rue (fréquent
+  // au Sénégal), l'ancienne concaténation donnait « , Pikine, Pikine, Senegal ».
+  final address = joinAddressParts([
+    if (!place.name.isEmptyOrNull && !place.street.isEmptyOrNull && place.name != place.street) place.name,
+    place.street,
+    place.subLocality,
+    place.locality,
+    place.administrativeArea,
+    place.postalCode,
+    place.country,
+  ]);
 
   setValue(CURRENT_ADDRESS, address);
   setValue(CITY_NAME, place.locality);
 
   return address;
+}
+
+
+/// Assemble une adresse : ignore les morceaux vides et les noms répétés
+/// (ex. ville et région toutes deux « Pikine »), séparés par « , ».
+String joinAddressParts(Iterable<String?> parts) {
+  final kept = <String>[];
+  for (final part in parts) {
+    final value = (part ?? '').trim();
+    if (value.isEmpty) continue;
+    if (kept.any((k) => k.toLowerCase() == value.toLowerCase())) continue;
+    kept.add(value);
+  }
+  return kept.join(', ');
 }

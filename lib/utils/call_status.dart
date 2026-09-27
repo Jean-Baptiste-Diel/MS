@@ -12,6 +12,8 @@ import 'package:nb_utils/nb_utils.dart';
 ///   s'arrête chez l'appelé.
 const kCallRejected = 'rejected';
 const kCallCancelled = 'cancelled';
+/// L'appel a sonné sans réponse chez l'appelé (délai dépassé).
+const kCallMissed = 'missed';
 
 DocumentReference<Map<String, dynamic>> _doc(String orderId) =>
     FirebaseFirestore.instance.collection('call_status').doc(orderId);
@@ -23,6 +25,9 @@ Future<void> _setStatus(String orderId, String status) =>
 
 /// L'appelé refuse l'appel.
 Future<void> markCallDeclined(String orderId) => _setStatus(orderId, kCallRejected);
+
+/// L'appel a sonné sans réponse chez l'appelé.
+Future<void> markCallMissed(String orderId) => _setStatus(orderId, kCallMissed);
 
 /// L'appelant raccroche avant que l'appelé ait répondu.
 Future<void> markCallCancelled(String orderId) => _setStatus(orderId, kCallCancelled);
@@ -58,8 +63,10 @@ void watchIncomingCall(String orderId) {
     if (id != orderId) return;
     switch (event.event) {
       case Event.actionCallDecline:
-      case Event.actionCallTimeout:
         markCallDeclined(orderId);
+        stop();
+      case Event.actionCallTimeout:
+        markCallMissed(orderId); // sonné sans réponse ≠ refusé
         stop();
       case Event.actionCallAccept:
       case Event.actionCallEnded:

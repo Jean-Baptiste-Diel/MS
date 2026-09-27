@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/screens/auth/otp_verification_screen.dart';
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/base_scaffold_body.dart';
 import 'package:booking_system_flutter/main.dart';
@@ -178,10 +179,34 @@ class _SignInScreenState extends State<SignInScreen> {
       final msg = e.toString();
       if (msg == kPendingApprovalError) {
         _showPendingApprovalSheet();
+      } else if (_isUnverifiedError(msg)) {
+        // Inscription jamais validée : nouveau code par SMS puis saisie.
+        _resumeOtpVerification(identifier);
       } else {
         TopToast.show(message: msg);
       }
     }
+  }
+
+  bool _isUnverifiedError(String msg) {
+    final m = msg.toLowerCase();
+    return m.contains('non verifie') || m.contains('non vérifié');
+  }
+
+  Future<void> _resumeOtpVerification(String identifier) async {
+    final isEmail = identifier.contains('@');
+    try {
+      await resendOtp({isEmail ? 'email' : 'phone': identifier}, purpose: 'verification');
+      TopToast.show(message: 'Compte non vérifié : un code vous a été envoyé par SMS.');
+    } catch (e) {
+      TopToast.show(message: e.toString(), type: TopToastType.error);
+    }
+    if (!mounted) return;
+    OTPVerificationScreen(
+      email: isEmail ? identifier : null,
+      phone: isEmail ? null : identifier,
+      isFromSignUp: true,
+    ).launch(context);
   }
 
   void _showPendingApprovalSheet() {

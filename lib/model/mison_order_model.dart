@@ -51,6 +51,8 @@ class MisonOrder {
   double? distanceKm;
   String? travelFee;       // e.g. "3000.00"
   String? realizationFee;  // e.g. "25000.00"
+  int? serverServiceFee;   // service_fee : frais de service Mison (100 FCFA)
+  int? serverClientTotal;  // client_total : prestation + frais de service
   int? clientRating;
   String? clientReview;
   String? createdAt;
@@ -58,6 +60,7 @@ class MisonOrder {
   String? enRouteAt;  // l'ouvrier est parti chez le client (« Aller chez le client »)
   String? arrivedAt;  // l'ouvrier est arrivé à l'adresse
   String? paymentMethod; // WAVE / ORANGE_MONEY une fois payé, sinon null
+  String? invoiceRequestedAt; // facture demandée au support
 
   MisonOrder({
     this.id,
@@ -74,6 +77,8 @@ class MisonOrder {
     this.distanceKm,
     this.travelFee,
     this.realizationFee,
+    this.serverServiceFee,
+    this.serverClientTotal,
     this.clientRating,
     this.clientReview,
     this.createdAt,
@@ -81,6 +86,7 @@ class MisonOrder {
     this.enRouteAt,
     this.arrivedAt,
     this.paymentMethod,
+    this.invoiceRequestedAt,
   });
 
   factory MisonOrder.fromJson(Map<String, dynamic> json) {
@@ -107,6 +113,8 @@ class MisonOrder {
           : null,
       travelFee: json['travel_fee']?.toString(),
       realizationFee: json['realization_fee']?.toString(),
+      serverServiceFee: num.tryParse(json['service_fee']?.toString() ?? '')?.toInt(),
+      serverClientTotal: num.tryParse(json['client_total']?.toString() ?? '')?.toInt(),
       clientRating: json['client_rating'] != null
           ? int.tryParse(json['client_rating'].toString())
           : null,
@@ -116,6 +124,7 @@ class MisonOrder {
       enRouteAt: json['en_route_at']?.toString(),
       arrivedAt: json['arrived_at']?.toString(),
       paymentMethod: json['payment_method']?.toString(),
+      invoiceRequestedAt: json['invoice_requested_at']?.toString(),
     )..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null;
   }
 
@@ -168,8 +177,22 @@ class MisonOrder {
   /// paiement de réalisation, en fin de prestation, reste dû.
   bool get isAwaitingAnyPayment => isAwaitingRealizationPayment;
 
-  /// Montant à payer selon le statut courant
-  String? get currentFeeAmount => isAwaitingRealizationPayment ? realizationFee : null;
+  /// Frais de service Mison ajoutés au prix de la prestation.
+  int get serviceFee => serverServiceFee ?? 100;
+
+  /// Prix de la prestation fixé par l'ouvrier (FCFA), null tant qu'il ne l'est pas.
+  int? get prestationPrice => num.tryParse(realizationFee ?? '')?.round();
+
+  /// Montant payé par le client : prestation + frais de service.
+  int? get clientTotal {
+    if (serverClientTotal != null) return serverClientTotal;
+    final price = prestationPrice;
+    return price == null ? null : price + serviceFee;
+  }
+
+  /// Montant à payer selon le statut courant (frais de service inclus).
+  String? get currentFeeAmount =>
+      isAwaitingRealizationPayment ? clientTotal?.toString() : null;
 
   /// Can rate: only completed orders without rating
   bool get canRate => isCompleted && clientRating == null;

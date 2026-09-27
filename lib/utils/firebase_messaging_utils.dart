@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:booking_system_flutter/screens/support_chat/support_chat_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
@@ -349,9 +350,28 @@ void handleNotificationClick(RemoteMessage message) {
     return;
   }
 
-  // Notifications Mison order
-  if (message.data.containsKey('mison_order_id')) {
-    final orderId = message.data['mison_order_id']?.toString() ?? '';
+  // Support (réponse de l'équipe, ex. facture) : ouvre le chat support
+  if (message.data['type'] == 'SUPPORT_MESSAGE') {
+    navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const SupportChatScreen()));
+    return;
+  }
+
+  // Appel manqué : la conversation de la commande, où l'appel est affiché
+  if (message.data['type'] == 'MISSED_CALL') {
+    final orderId = message.data['order_id']?.toString() ?? '';
+    if (orderId.isNotEmpty) {
+      navigatorKey.currentState?.push(MaterialPageRoute(
+        builder: (_) => MisonOrderChatScreen(orderId: orderId, peerName: ''),
+      ));
+    }
+    return;
+  }
+
+  // Notifications de commande (acceptée, en route, arrivé, frais, paiement,
+  // terminée, annulée…) : le serveur envoie order_id → détail de la commande.
+  // (mison_order_id : ancien format, conservé.)
+  if (message.data.containsKey('order_id') || message.data.containsKey('mison_order_id')) {
+    final orderId = (message.data['order_id'] ?? message.data['mison_order_id'])?.toString() ?? '';
     if (orderId.isNotEmpty) {
       navigatorKey.currentState!.push(
         MaterialPageRoute(
@@ -395,22 +415,12 @@ void showNotification(int id, String title, String message, RemoteMessage remote
   log('[showNotification] id=$id title="$title"');
   log('[showNotification] data=${remoteMessage.data}');
   log("User Message Image Url : ${remoteMessage.data["image_url"]} ");
+  // Pas de ré-initialisation ici : le plugin est initialisé une fois dans
+  // main() avec le gestionnaire d'appui global (onNotificationTap). Le
+  // ré-initialiser à chaque notification écrasait ce gestionnaire : un appui
+  // ouvrait la destination de la DERNIÈRE notification reçue, et cassait
+  // l'appui sur « Appel entrant ». Les données voyagent dans le payload.
   FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-
-  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@drawable/ic_stat_ic_notification');
-  var iOS = const DarwinInitializationSettings(
-    requestSoundPermission: false,
-    requestBadgePermission: false,
-    requestAlertPermission: false,
-  );
-  var macOS = iOS;
-  final InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid, iOS: iOS, macOS: macOS);
-  await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings,
-    onDidReceiveNotificationResponse: (details) {
-      handleNotificationClick(remoteMessage);
-    },
-  );
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
@@ -463,7 +473,13 @@ void showNotification(int id, String title, String message, RemoteMessage remote
   );
 
   log('[showNotification] calling show()');
-  await flutterLocalNotificationsPlugin.show(id, title, parseHtmlString(message), platformChannelSpecifics);
+  await flutterLocalNotificationsPlugin.show(
+    id,
+    title,
+    parseHtmlString(message),
+    platformChannelSpecifics,
+    payload: jsonEncode(remoteMessage.data),
+  );
   log('[showNotification] show() done');
   } catch (e, st) {
     log('[showNotification] ERROR: $e\n$st');

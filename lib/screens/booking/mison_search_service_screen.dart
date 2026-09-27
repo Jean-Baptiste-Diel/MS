@@ -12,7 +12,10 @@ import 'package:nb_utils/nb_utils.dart';
 class MisonSearchServiceScreen extends StatefulWidget {
   final bool showBackButton;
 
-  const MisonSearchServiceScreen({Key? key, this.showBackButton = true}) : super(key: key);
+  /// Texte tapé dans la barre de recherche de l'accueil.
+  final String initialQuery;
+
+  const MisonSearchServiceScreen({Key? key, this.showBackButton = true, this.initialQuery = ''}) : super(key: key);
 
   @override
   State<MisonSearchServiceScreen> createState() => _MisonSearchServiceScreenState();
@@ -29,6 +32,7 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
   @override
   void initState() {
     super.initState();
+    _searchCont.text = widget.initialQuery;
     _loadServices();
     _searchCont.addListener(_onSearchChanged);
   }
@@ -50,6 +54,8 @@ class _MisonSearchServiceScreenState extends State<MisonSearchServiceScreen> {
           _filtered = _allServices;
           _isLoading = false;
         });
+        // Recherche venue de l'accueil : filtre dès le chargement.
+        if (_searchCont.text.isNotEmpty) _onSearchChanged();
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);

@@ -161,9 +161,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      widget._usesEmail
-                          ? Icons.email_outlined
-                          : Icons.sms_outlined,
+                      Icons.sms_outlined, // code toujours envoyé par SMS
                       size: 40,
                       color: _brandGold,
                     ),
@@ -184,7 +182,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                         TextSpan(text: language.enterTheCodeSentTo),
                         TextSpan(text: '\n'),
                         TextSpan(
-                          text: widget._target,
+                          text: widget._usesEmail ? 'votre numéro de téléphone' : widget._target,
                           style: boldTextStyle(color: _brandGold),
                         ),
                       ],

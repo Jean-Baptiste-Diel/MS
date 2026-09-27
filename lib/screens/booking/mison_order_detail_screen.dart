@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/order_invoice_pdf.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'dart:math' show sin, cos, sqrt, atan2;
@@ -184,6 +185,19 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     return Geolocator.distanceBetween(
           _artisanPosition!.latitude, _artisanPosition!.longitude, lat, lon) /
         1000;
+  }
+
+  /// Facture PDF générée dans l'app et enregistrée sur le téléphone.
+  Future<void> _downloadInvoice(MisonOrder order) async {
+    appStore.setLoading(true);
+    try {
+      final where = await downloadOrderInvoice(order);
+      TopToast.show(message: 'Facture enregistrée dans $where', type: TopToastType.success);
+    } catch (e) {
+      TopToast.show(message: 'Impossible de générer la facture.', type: TopToastType.error);
+    } finally {
+      appStore.setLoading(false);
+    }
   }
 
   // ── Trajet de l'ouvrier : « Aller chez le client » → arrivée ────────────────
@@ -439,12 +453,12 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
       return;
     }
     const title = 'Frais de prestation';
-    const desc  = 'Ces frais correspondent à la prestation réalisée par l\'ouvrier.';
-    final feeRaw = order.currentFeeAmount;
-    final feeNum = num.tryParse(feeRaw ?? '');
-    final feeLabel = feeNum != null
-        ? '${feeNum.toStringAsFixed(0)} FCFA'
-        : (feeRaw != null ? '$feeRaw FCFA' : 'Montant non défini');
+    final total = order.clientTotal;
+    final price = order.prestationPrice;
+    final desc = price != null
+        ? 'Prestation ${formatFcfa(price)} + frais de service ${formatFcfa(order.serviceFee)}.'
+        : "Ces frais correspondent à la prestation réalisée par l'ouvrier.";
+    final feeLabel = total != null ? formatFcfa(total) : 'Montant non défini';
 
     showModalBottomSheet(
       context: context,
@@ -589,6 +603,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 onPay: () => _showPaymentModal(order),
                 paymentVerifying: _paymentVerifying,
                 onRated: () { init(); setState(() {}); },
+                onDownloadInvoice: () => _downloadInvoice(order),
                 onCall: () => _startCall(order),
                 onTrack: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => MisonTrackingScreen(
@@ -633,6 +648,7 @@ class _OrderDetailBody extends StatelessWidget {
   final VoidCallback onPay;
   final bool paymentVerifying;
   final VoidCallback onRated;
+  final VoidCallback onDownloadInvoice;
   final VoidCallback onCall;
   final VoidCallback onTrack;
   final VoidCallback onNavigate;
@@ -655,6 +671,7 @@ class _OrderDetailBody extends StatelessWidget {
     required this.onPay,
     this.paymentVerifying = false,
     required this.onRated,
+    required this.onDownloadInvoice,
     required this.onCall,
     required this.onTrack,
     required this.onNavigate,
@@ -944,6 +961,28 @@ class _OrderDetailBody extends StatelessWidget {
                       ),
                     ),
                   ]),
+                ],
+
+                // ── Prestation terminée : facture PDF (client et prestataire) ────
+                if (order.isCompleted) ...[
+                  16.height,
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: onDownloadInvoice,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: kMisonGold,
+                        side: const BorderSide(color: kMisonGold, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: const Icon(Icons.download_rounded),
+                      label: Text(
+                        'Télécharger la facture',
+                        style: boldTextStyle(size: 15, color: kMisonGold),
+                      ),
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -1422,6 +1461,12 @@ class _ArrivalRow extends StatelessWidget {
   }
 }
 
+/// « 10 100 FCFA »
+String formatFcfa(num value) {
+  final digits = value.toStringAsFixed(0);
+  return '${digits.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ')} FCFA';
+}
+
 /// Récapitulatif une fois les frais de prestation fixés.
 /// Prestataire : prix, client, prestation, paiement, adresse.
 /// Client : prix, prestation, mode de paiement.
@@ -1430,19 +1475,24 @@ class _ArtisanSummaryCard extends StatelessWidget {
   final bool forClient;
   const _ArtisanSummaryCard({required this.order, this.forClient = false});
 
-  String get _price {
-    final fee = num.tryParse(order.realizationFee ?? '');
-    if (fee == null) return '—';
-    final digits = fee.toStringAsFixed(0);
-    final grouped = digits.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ');
-    return '$grouped FCFA';
-  }
+  String _fcfa(int? value) => value == null ? '—' : formatFcfa(value);
 
   @override
   Widget build(BuildContext context) {
     final client = order.client?.fullName ?? '';
     return _InfoCard(children: [
-      _InfoRow(icon: Icons.payments_rounded, label: 'Prix de la prestation', value: _price),
+      _InfoRow(icon: Icons.payments_rounded, label: 'Prix de la prestation', value: _fcfa(order.prestationPrice)),
+      // Client : il paie la prestation + les frais de service Mison.
+      if (forClient) ...[
+        _Divider(),
+        _InfoRow(icon: Icons.receipt_rounded, label: 'Frais de service', value: _fcfa(order.serviceFee)),
+        _Divider(),
+        _InfoRow(
+          icon: Icons.account_balance_rounded,
+          label: order.isCompleted ? 'Total payé' : 'Total à payer',
+          value: _fcfa(order.clientTotal),
+        ),
+      ],
       if (!forClient) ...[
         _Divider(),
         _InfoRow(icon: Icons.person_rounded, label: 'Client', value: client.isNotEmpty ? client : '—'),

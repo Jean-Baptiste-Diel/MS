@@ -265,9 +265,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
     ).then((registerResponse) async {
       appStore.setLoading(false);
       TopToast.show(message: registerResponse.message.validate());
+      // Le code OTP est envoyé uniquement par SMS, au numéro saisi.
       OTPVerificationScreen(
-        email: emailCont.text.trim().isNotEmpty ? emailCont.text.trim() : null,
-        phone: emailCont.text.trim().isEmpty ? buildMobileNumber() : null,
+        phone: buildMobileNumber(),
         isFromSignUp: true,
       ).launch(context);
     }).catchError((e) {

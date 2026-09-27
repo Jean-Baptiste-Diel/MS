@@ -2,7 +2,7 @@ name: booking_system_flutter
 description: A new Flutter project.
 
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-version: 1.0.0+4
+version: 1.0.1+6
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -110,6 +110,7 @@ dependencies:
   flutter_callkit_incoming: ^2.3.2
   record: ^7.1.1
   audioplayers: ^6.8.1
+  pdf: ^3.12.0
 
 
 dev_dependencies:
@@ -134,6 +135,7 @@ flutter:
     - assets/newDashboard/
     - assets/json/
     - assets/logo/
+    - assets/fonts/invoice/
 
 
   fonts:

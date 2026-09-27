@@ -5,13 +5,14 @@ import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/component/mison_page_loader.dart';
+import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../../booking/mison_booking_form_screen.dart';
 
-/// Liste verticale des services Mison sur l'accueil : cartes pleine largeur
-/// (image, nom, description complète), qui défilent avec la page.
+/// Services Mison sur l'accueil : grille de 2 colonnes (image, nom,
+/// description), qui défile avec la page.
 class MisonServiceListComponent extends StatefulWidget {
   const MisonServiceListComponent({super.key});
 
@@ -34,12 +35,38 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
     setState(() { isLoading = true; errorMessage = null; });
     try {
       final response = await getMisonServices();
+      final list = response.data ?? [];
+      final ordered = await _sortByClientHabits(list);
       setState(() {
-        services = response.data ?? [];
+        services = ordered;
         isLoading = false;
       });
     } catch (e) {
       setState(() { errorMessage = 'Erreur: $e'; isLoading = false; });
+    }
+  }
+
+  /// Services que le client commande régulièrement : en premier, du plus
+  /// commandé au moins commandé. Les autres gardent leur ordre habituel.
+  /// Sans connexion (ou si l'historique est indisponible), ordre inchangé.
+  Future<List<MisonService>> _sortByClientHabits(List<MisonService> list) async {
+    if (!appStore.isLoggedIn || appStore.userType != USER_TYPE_USER) return list;
+    try {
+      final orders = (await getMisonOrders()).data ?? [];
+      final counts = <String, int>{};
+      for (final order in orders) {
+        final id = order.service?.id;
+        if (id != null && id.isNotEmpty) counts[id] = (counts[id] ?? 0) + 1;
+      }
+      if (counts.isEmpty) return list;
+      final indexed = list.asMap().entries.toList()
+        ..sort((a, b) {
+          final byCount = (counts[b.value.id] ?? 0).compareTo(counts[a.value.id] ?? 0);
+          return byCount != 0 ? byCount : a.key.compareTo(b.key); // tri stable
+        });
+      return indexed.map((e) => e.value).toList();
+    } catch (_) {
+      return list;
     }
   }
 
@@ -105,17 +132,20 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
               const MisonSearchServiceScreen().launch(context);
             },
           ).paddingSymmetric(horizontal: 16),
-          // Défilement vertical avec la page (plus de carrousel horizontal).
-          Padding(
+          // Grille de 2 colonnes, qui défile avec la page.
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Column(
-              children: [
-                for (final service in services) ...[
-                  _MisonServiceCard(service: service),
-                  16.height,
-                ],
-              ],
+            itemCount: services.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              // Hauteur fixe : image + nom (2 lignes) + description (3 lignes)
+              mainAxisExtent: 232,
             ),
+            itemBuilder: (context, index) => _MisonServiceCard(service: services[index]),
           ),
         ],
       ),
@@ -123,11 +153,13 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
   }
 }
 
-/// Carte individuelle de service Mison
+/// Carte de service dans la grille de l'accueil (2 colonnes).
 class _MisonServiceCard extends StatelessWidget {
   final MisonService service;
 
   const _MisonServiceCard({required this.service});
+
+  static const double _imageHeight = 112;
 
   @override
   Widget build(BuildContext context) {
@@ -136,73 +168,67 @@ class _MisonServiceCard extends StatelessWidget {
         MisonBookingFormScreen(service: service).launch(context);
       },
       child: Container(
-        width: double.infinity,
-        // Hauteur libre : la carte s'adapte à la description complète.
         decoration: boxDecorationWithRoundedCorners(
           borderRadius: radius(),
           backgroundColor: context.cardColor,
           border: appStore.isDarkMode ? Border.all(color: context.dividerColor) : null,
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
             // Image du service
             SizedBox(
-              height: 180,
+              height: _imageHeight,
               width: double.infinity,
               child: Stack(
                 children: [
                   CachedImageWidget(
                     url: service.imageUrl ?? '',
                     fit: BoxFit.cover,
-                    height: 180,
-                    width: context.width(),
+                    height: _imageHeight,
+                    width: context.width() / 2,
                     circle: false,
-                  ).cornerRadiusWithClipRRectOnly(
-                    topRight: defaultRadius.toInt(),
-                    topLeft: defaultRadius.toInt(),
                   ),
                   // Badge disponibilité
                   if (service.isAvailable == true)
                     Positioned(
-                      top: 12,
-                      left: 12,
+                      top: 8,
+                      left: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: boxDecorationWithShadow(
-                          backgroundColor: const Color.fromARGB(255, 255, 255, 255).withValues(alpha: 0.9),
+                          backgroundColor: Colors.white.withValues(alpha: 0.9),
                           borderRadius: radius(24),
                         ),
-                        child: Text(
-                          'DISPONIBLE',
-                          style: boldTextStyle(color: const Color.fromARGB(255, 2, 2, 2), size: 12),
-                        ),
+                        child: Text('DISPONIBLE', style: boldTextStyle(color: Colors.black, size: 9)),
                       ),
                     ),
                 ],
               ),
             ),
-            // Contenu textuel
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                16.height,
-                // Nom du service
-                Text(
-                  service.name.validate(),
-                  style: boldTextStyle(size: 16),
-                ).paddingSymmetric(horizontal: 16),
-                // Description complète, sans coupure
-                if (service.description.validate().isNotEmpty) ...[
-                  8.height,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    service.description.validate(),
-                    style: secondaryTextStyle(size: 14),
-                  ).paddingSymmetric(horizontal: 16),
+                    service.name.validate(),
+                    style: boldTextStyle(size: 14),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (service.description.validate().isNotEmpty) ...[
+                    4.height,
+                    Text(
+                      service.description.validate(),
+                      style: secondaryTextStyle(size: 12, height: 1.3),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
-                16.height,
-              ],
+              ),
             ),
           ],
         ),

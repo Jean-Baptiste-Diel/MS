@@ -372,7 +372,137 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     );
   }
 
+  /// Appel dans la conversation, façon WhatsApp : bulle alignée comme un
+  /// message (à droite si j'ai appelé), icône ronde, « Appel vocal » et, en
+  /// dessous, flèche de direction + durée ou issue. Un appui rappelle.
+  Widget _buildCallEvent(SupportChatMessage msg) {
+    final isMe = msg.isMe;
+    final onBubble = Colors.white;
+    final ok = isMe ? const Color(0xFF0B5D1E) : Colors.greenAccent.shade400;
+    final missedIncoming = !isMe && msg.callOutcome != 'completed';
+
+    final String title;
+    final String subtitle;
+    switch (msg.callOutcome) {
+      case 'completed':
+        final d = msg.callDurationSeconds;
+        title = 'Appel vocal';
+        subtitle = d >= 60 ? '${d ~/ 60} min ${(d % 60).toString().padLeft(2, '0')} s' : '$d s';
+      case 'declined':
+        title = isMe ? 'Appel vocal' : 'Appel vocal manqué';
+        subtitle = isMe ? 'Refusé' : 'Vous avez refusé';
+      default: // missed
+        title = isMe ? 'Appel vocal' : 'Appel vocal manqué';
+        subtitle = isMe ? 'Pas de réponse' : 'Appuyez pour rappeler';
+    }
+    final arrowColor = missedIncoming ? Colors.redAccent.shade100 : ok;
+    final arrow = isMe
+        ? Icons.north_east_rounded
+        : missedIncoming
+            ? Icons.call_missed_rounded
+            : Icons.south_west_rounded;
+
+    final canCallBack = widget.orderId != null && widget.callPeerName != null;
+    const radius16 = Radius.circular(16);
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: context.width() * 0.72, minWidth: 210),
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: isMe ? const Color(0xFFC99700) : const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.only(
+            topLeft: radius16,
+            topRight: radius16,
+            bottomLeft: Radius.circular(isMe ? 16 : 4),
+            bottomRight: Radius.circular(isMe ? 4 : 16),
+          ),
+          boxShadow: defaultBoxShadow(blurRadius: 4, spreadRadius: 0),
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: canCallBack
+                ? () => startMisonOrderCall(
+                      context,
+                      orderId: widget.orderId!,
+                      otherPartyName: widget.callPeerName!,
+                    )
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: onBubble.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          missedIncoming ? Icons.phone_missed_rounded : Icons.call_rounded,
+                          size: 21,
+                          color: missedIncoming ? Colors.redAccent.shade100 : onBubble,
+                        ),
+                      ),
+                      12.width,
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title,
+                              style: boldTextStyle(size: 15, color: onBubble),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            3.height,
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(arrow, size: 14, color: arrowColor),
+                                4.width,
+                                Flexible(
+                                  child: Text(
+                                    subtitle,
+                                    style: primaryTextStyle(size: 13, color: onBubble.withValues(alpha: 0.8)),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      8.width,
+                    ],
+                  ),
+                  2.height,
+                  Text(
+                    DateFormat('HH:mm').format(msg.createdAt),
+                    style: secondaryTextStyle(size: 11, color: onBubble.withValues(alpha: 0.7)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(SupportChatMessage msg) {
+    if (msg.isCall) return _buildCallEvent(msg);
     final isMe = msg.isMe;
     const Color bubbleMe = Color(0xFFC99700);
     const Color bubbleOther = Color(0xFF1A1A1A);

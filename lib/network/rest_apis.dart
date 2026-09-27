@@ -1983,6 +1983,26 @@ Future<MisonOrderDetailResponse> createWorkerRequest(MisonWorkerRequestModel req
   }
 }
 
+/// POST /api/orders/{id}/request-invoice - Demande de facture : postée dans le
+/// chat support du client, qui y recevra la facture.
+Future<MisonActionResponse> requestOrderInvoice(String orderId) async {
+  final response = await buildHttpResponse('orders/$orderId/request-invoice', method: HttpMethodType.POST);
+  return MisonActionResponse.fromJson(await handleResponse(response));
+}
+
+/// POST /api/orders/{id}/call-log - Fin d'un appel (envoyée par l'appelant) :
+/// l'appel s'affiche dans la conversation. [outcome] : completed / missed / declined.
+Future<void> logOrderCall(String orderId, {required String outcome, int durationSeconds = 0}) async {
+  try {
+    final response = await buildHttpResponse('orders/$orderId/call-log',
+        method: HttpMethodType.POST,
+        request: {'outcome': outcome, 'duration_seconds': durationSeconds});
+    await handleResponse(response);
+  } catch (e) {
+    log('logOrderCall: $e');
+  }
+}
+
 /// POST /api/orders/{id}/depart - L'ouvrier part chez le client (mini-carte)
 Future<MisonActionResponse> artisanDepart(String orderId) async {
   final response = await buildHttpResponse('orders/$orderId/depart', method: HttpMethodType.POST);

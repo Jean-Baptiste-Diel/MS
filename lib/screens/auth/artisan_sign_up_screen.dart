@@ -616,15 +616,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         isRegistering = false;
         appStore.setLoading(false);
         TopToast.show(message: response.message.validate());
-        final String email = emailCont.text.trim();
-        if (email.isEmpty) {
-          // Sans email, le compte artisan est créé déjà vérifié (pas d'OTP).
-          SignInScreen().launch(context,
-              isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
-          return;
-        }
+        // Numéro toujours validé par un code OTP reçu par SMS.
         OTPVerificationScreen(
-          email: email,
+          phone: buildMobileNumber(),
           isFromSignUp: true,
         ).launch(context);
       }).catchError((e) {

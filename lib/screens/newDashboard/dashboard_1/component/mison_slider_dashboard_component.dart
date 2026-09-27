@@ -7,7 +7,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
-import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/images.dart';
@@ -34,6 +33,15 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
   PageController sliderPageController = PageController(initialPage: 0);
   int _currentPage = 0;
   Timer? _timer;
+  final TextEditingController _searchCont = TextEditingController();
+
+  /// Ouvre « Rechercher un service » avec le texte tapé, puis vide la barre.
+  void _openSearch() {
+    final query = _searchCont.text.trim();
+    FocusScope.of(context).unfocus();
+    MisonSearchServiceScreen(initialQuery: query).launch(context);
+    _searchCont.clear();
+  }
 
   List<MisonService> _services = [];
   bool _isLoading = true;
@@ -106,6 +114,7 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
 
   @override
   void dispose() {
+    _searchCont.dispose();
     _timer?.cancel();
     sliderPageController.dispose();
     super.dispose();
@@ -186,53 +195,35 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
       children: [
         8.height,
         getSliderWidget(),
-        Row(
-          children: [
-            Observer(
-              builder: (context) {
-                return AppButton(
-                  padding: const EdgeInsets.all(0),
-                  width: context.width(),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: commonDecoration,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        ic_location.iconImage(color: appStore.isDarkMode ? Colors.white : Colors.black),
-                        8.width,
-                        Text(
-                          appStore.isCurrentLocation ? getStringAsync(CURRENT_ADDRESS) : language.lblLocationOff,
-                          style: secondaryTextStyle(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ).expand(),
-                        8.width,
-                        ic_active_location.iconImage(size: 24, color: appStore.isCurrentLocation ? kMisonGold : grey),
-                      ],
-                    ),
-                  ),
-                  onTap: () async {
-                    locationWiseService(context, () {
-                      widget.callback?.call();
-                    });
-                  },
-                );
-              },
-            ).expand(),
-            16.width,
-            GestureDetector(
-              onTap: () {
-                MisonSearchServiceScreen().launch(context);
-              },
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: commonDecoration,
-                child: ic_search.iconImage(color: kMisonGold),
+        // Vraie barre de recherche (comme dans « Rechercher un service ») :
+        // on tape ici, la validation ouvre les résultats.
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            controller: _searchCont,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _openSearch(),
+            decoration: InputDecoration(
+              hintText: 'Rechercher un service...',
+              hintStyle: secondaryTextStyle(),
+              prefixIcon: const Icon(Icons.search, color: kMisonGold),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.arrow_forward_rounded, color: kMisonGold),
+                onPressed: _openSearch,
+              ),
+              filled: true,
+              fillColor: context.cardColor,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: kMisonGold, width: 1.5),
               ),
             ),
-          ],
-        ).paddingAll(16),
+          ),
+        ),
       ],
     );
   }
