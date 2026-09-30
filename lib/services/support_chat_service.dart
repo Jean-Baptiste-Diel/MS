@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/log_redact.dart';
+import 'package:nb_utils/nb_utils.dart' as nb_log show log;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -7,7 +9,6 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:http/http.dart' as http;
-import 'package:nb_utils/nb_utils.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 final String _WS_BASE = '${DOMAIN_URL.replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://')}/ws/chat';
@@ -132,8 +133,8 @@ class SupportChatService {
 
   /// Crée ou récupère la conversation de support
   Future<String> createOrGetConversation() async {
-    log('SupportChat: POST $_CONVERSATIONS_ENDPOINT');
-    log('SupportChat: token = ${appStore.token.isEmpty ? "VIDE" : appStore.token.substring(0, 20)}...');
+    _log('SupportChat: POST $_CONVERSATIONS_ENDPOINT');
+    _log('SupportChat: token = ${appStore.token.isEmpty ? "VIDE" : appStore.token.substring(0, 20)}...');
 
     final response = await http.post(
       Uri.parse(_CONVERSATIONS_ENDPOINT),
@@ -144,7 +145,7 @@ class SupportChatService {
       },
     );
 
-    log('SupportChat: status=${response.statusCode} body=${response.body}');
+    _log('SupportChat: status=${response.statusCode} body=${response.body}');
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       final body = jsonDecode(response.body);
@@ -176,7 +177,7 @@ class SupportChatService {
       body: jsonEncode({'order_id': orderId}),
     );
 
-    log('OrderChat: status=${response.statusCode} body=${response.body}');
+    _log('OrderChat: status=${response.statusCode} body=${response.body}');
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       final body = jsonDecode(response.body);
@@ -210,19 +211,19 @@ class SupportChatService {
       onError: (e) {
         _isReady = false;
         if (!_connectionController.isClosed) _connectionController.add(false);
-        log('SupportChat WS error: $e');
+        _log('SupportChat WS error: $e');
       },
       onDone: () {
         _isReady = false;
         if (!_connectionController.isClosed) _connectionController.add(false);
-        log('SupportChat WS closed');
+        _log('SupportChat WS closed');
       },
     );
 
     await _channel!.ready;
     _isReady = true;
     if (!_connectionController.isClosed) _connectionController.add(true);
-    log('SupportChat WS ready');
+    _log('SupportChat WS ready');
   }
 
   /// Reconnecte le WS — rafraîchit le token si nécessaire
@@ -234,7 +235,7 @@ class SupportChatService {
       await connect(_conversationId!);
       return true;
     } catch (e) {
-      log('SupportChat reconnect error: $e');
+      _log('SupportChat reconnect error: $e');
       return false;
     }
   }
@@ -262,18 +263,18 @@ class SupportChatService {
       }
       // Les autres événements (ex: "typing") ne sont pas des messages : on les ignore.
     } catch (e) {
-      log('SupportChat parse error: $e');
+      _log('SupportChat parse error: $e');
     }
   }
 
   /// Envoie un message texte, retourne true si envoyé, false si WS non prêt
   bool sendMessage(String content) {
     if (_channel == null || !_isReady) {
-      log('SupportChat: tentative d\'envoi mais WS non prêt');
+      _log('SupportChat: tentative d\'envoi mais WS non prêt');
       return false;
     }
     _channel!.sink.add(jsonEncode({'type': 'message', 'content': content}));
-    log('SupportChat: message envoyé → $content');
+    _log('SupportChat: message envoyé → $content');
     return true;
   }
 
@@ -282,7 +283,7 @@ class SupportChatService {
     if (_conversationId == null) return null;
     final ext = file.path.split('.').last.toLowerCase();
     final size = await file.length();
-    log('SupportChat uploadImage: path=${file.path} ext=$ext size=${size}B');
+    _log('SupportChat uploadImage: path=${file.path} ext=$ext size=${size}B');
     final uri = Uri.parse('${BASE_URL}chat/conversations/$_conversationId/upload-image');
     final request = http.MultipartRequest('POST', uri)
       ..headers[HttpHeaders.authorizationHeader] = 'Bearer ${appStore.token}'
@@ -290,13 +291,13 @@ class SupportChatService {
     try {
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
-      log('SupportChat uploadImage: ${response.statusCode} ${response.body}');
+      _log('SupportChat uploadImage: ${response.statusCode} ${response.body}');
       if (response.statusCode == 200 || response.statusCode == 201) {
         final body = jsonDecode(response.body);
         return body['object_name']?.toString();
       }
     } catch (e) {
-      log('SupportChat uploadImage error: $e');
+      _log('SupportChat uploadImage error: $e');
     }
     return null;
   }
@@ -311,13 +312,13 @@ class SupportChatService {
     try {
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
-      log('SupportChat uploadAudio: ${response.statusCode} ${response.body}');
+      _log('SupportChat uploadAudio: ${response.statusCode} ${response.body}');
       if (response.statusCode == 200 || response.statusCode == 201) {
         final body = jsonDecode(response.body);
         return body['object_name']?.toString();
       }
     } catch (e) {
-      log('SupportChat uploadAudio error: $e');
+      _log('SupportChat uploadAudio error: $e');
     }
     return null;
   }
@@ -325,7 +326,7 @@ class SupportChatService {
   /// Envoie une note vocale via WS, retourne true si envoyé
   bool sendAudioMessage(String objectName) {
     if (_channel == null || !_isReady) {
-      log('SupportChat: tentative d\'envoi audio mais WS non prêt');
+      _log('SupportChat: tentative d\'envoi audio mais WS non prêt');
       return false;
     }
     _channel!.sink.add(jsonEncode({
@@ -339,7 +340,7 @@ class SupportChatService {
   /// Envoie un message image via WS, retourne true si envoyé
   bool sendImageMessage(String objectName) {
     if (_channel == null || !_isReady) {
-      log('SupportChat: tentative d\'envoi image mais WS non prêt');
+      _log('SupportChat: tentative d\'envoi image mais WS non prêt');
       return false;
     }
     _channel!.sink.add(jsonEncode({
@@ -347,7 +348,7 @@ class SupportChatService {
       'message_type': 'image',
       'content': objectName,
     }));
-    log('SupportChat: image envoyée → $objectName');
+    _log('SupportChat: image envoyée → $objectName');
     return true;
   }
 
@@ -360,3 +361,7 @@ class SupportChatService {
     _errorController.close();
   }
 }
+
+/// Journaux de ce fichier : données sensibles toujours masquées (jetons,
+/// codes, noms, numéros), voir log_redact.dart.
+void _log(Object? value) => nb_log.log(redactForLog(value));

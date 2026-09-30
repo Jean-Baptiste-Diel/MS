@@ -18,12 +18,19 @@ import 'package:permission_handler/permission_handler.dart';
 /// L'écran n'est qu'une vue : le quitter (flèche « réduire », navigation, app
 /// en arrière-plan) ne coupe pas l'appel. Seuls « Raccrocher », le départ de
 /// l'autre partie ou un refus y mettent fin.
+const kRouteEarpiece = 'earpiece';
+const kRouteSpeaker = 'speaker';
+const kRouteBluetooth = 'bluetooth';
+const kRouteWired = 'wired';
+
 class MisonCallSession extends ChangeNotifier {
   /// Appel en cours dans l'app (un seul à la fois).
   static final ValueNotifier<MisonCallSession?> current = ValueNotifier(null);
 
-  /// Canal natif iOS : CallKit garde la session audio (Agora n'y touche pas),
-  /// c'est donc l'app qui bascule la sortie haut-parleur / écouteur.
+  /// Canal natif de la sortie audio (écouteur / haut-parleur / Bluetooth).
+  /// iOS : CallKit garde la session audio (Agora n'y touche pas), c'est donc
+  /// l'app qui bascule la sortie. Android : Agora gère le haut-parleur, le
+  /// canal force l'écouteur ou le Bluetooth et liste les sorties.
   static const _audioRoute = MethodChannel('mison/audio_route');
 
   final String orderId;
@@ -56,9 +63,16 @@ class MisonCallSession extends ChangeNotifier {
   bool engineReady = false;
   bool isConnected = false;
   bool isMuted = false;
-  /// L'appel démarre sur l'écouteur (comme un appel téléphonique) ; l'utilisateur
-  /// active ou coupe le haut-parleur avec le bouton de l'écran d'appel.
-  bool isSpeakerOn = false;
+  /// Sortie audio : 'earpiece', 'speaker', 'bluetooth' ou 'wired'.
+  /// L'appel démarre sur l'écouteur (comme un appel téléphonique), ou sur le
+  /// casque Bluetooth s'il y en a un de connecté.
+  String audioRoute = kRouteEarpiece;
+
+  /// Un casque / des écouteurs Bluetooth sont connectés au téléphone.
+  bool bluetoothAvailable = false;
+  String bluetoothName = '';
+
+  bool get isSpeakerOn => audioRoute == kRouteSpeaker;
   bool micDenied = false;
   bool ended = false;
   int seconds = 0;
@@ -91,6 +105,10 @@ class MisonCallSession extends ChangeNotifier {
       isCaller: isCaller,
     );
     current.value = session;
+    // Casque branché / débranché pendant l'appel : le natif prévient.
+    _audioRoute.setMethodCallHandler((call) async {
+      if (call.method == 'routeChanged') await current.value?.refreshAudioRoutes();
+    });
     session._init();
     return session;
   }
@@ -136,7 +154,9 @@ class MisonCallSession extends ChangeNotifier {
         try {
           await FlutterCallkitIncoming.setCallConnected(orderId);
         } catch (_) {}
-        await _applySpeaker();
+        // Casque Bluetooth connecté : l'appel part dessus, sinon sur l'écouteur.
+        await refreshAudioRoutes();
+        await setAudioRoute(bluetoothAvailable ? kRouteBluetooth : kRouteEarpiece);
         engineReady = true;
         notifyListeners();
       },
@@ -150,13 +170,7 @@ class MisonCallSession extends ChangeNotifier {
       },
       onUserOffline: (connection, remoteUid, reason) => _end(message: 'Appel terminé'),
       // La sortie audio peut changer seule (casque, Bluetooth) : on reflète l'état réel.
-      onAudioRoutingChanged: (routing) {
-        final speaker = routing == AudioRoute.routeSpeakerphone.value();
-        if (speaker != isSpeakerOn && Platform.isAndroid) {
-          isSpeakerOn = speaker;
-          notifyListeners();
-        }
-      },
+      onAudioRoutingChanged: (_) => refreshAudioRoutes(),
       onError: (err, msg) => log('Agora error: $err $msg'),
     ));
 
@@ -244,22 +258,51 @@ class MisonCallSession extends ChangeNotifier {
     await _engine?.muteLocalAudioStream(isMuted);
   }
 
-  Future<void> toggleSpeaker() async {
-    isSpeakerOn = !isSpeakerOn;
-    notifyListeners();
-    await _applySpeaker();
+  /// Bouton « Haut-parleur » (sans casque Bluetooth) : haut-parleur ↔ écouteur.
+  Future<void> toggleSpeaker() =>
+      setAudioRoute(isSpeakerOn ? (bluetoothAvailable ? kRouteBluetooth : kRouteEarpiece) : kRouteSpeaker);
+
+  /// Lit les sorties disponibles et la sortie réellement utilisée.
+  Future<void> refreshAudioRoutes() async {
+    if (ended) return;
+    try {
+      final info = await _audioRoute.invokeMapMethod<String, dynamic>('getRoutes');
+      if (info == null) return;
+      bluetoothAvailable = info['bluetooth'] == true;
+      bluetoothName = info['bluetoothName']?.toString() ?? '';
+      final route = info['current']?.toString();
+      if (route != null && route.isNotEmpty) audioRoute = route;
+      notifyListeners();
+    } catch (e) {
+      log('MisonCallSession routes: $e');
+    }
   }
 
-  Future<void> _applySpeaker() async {
-    try {
-      if (Platform.isIOS) {
-        await _audioRoute.invokeMethod('setSpeaker', isSpeakerOn);
-      } else {
-        await _engine?.setEnableSpeakerphone(isSpeakerOn);
+  /// Bascule la sortie audio : écouteur, haut-parleur ou Bluetooth.
+  Future<void> setAudioRoute(String route) async {
+    // Android 12+ : le Bluetooth demande l'autorisation « Appareils à proximité »,
+    // demandée seulement quand l'utilisateur choisit son casque.
+    if (route == kRouteBluetooth && Platform.isAndroid) {
+      final status = await Permission.bluetoothConnect.request();
+      if (!status.isGranted && !status.isLimited && !status.isRestricted) {
+        // Android < 12 : l'autorisation n'existe pas et est considérée accordée.
+        if (status.isPermanentlyDenied) await openAppSettings();
+        return;
       }
-    } catch (e) {
-      log('MisonCallSession speaker: $e');
     }
+    audioRoute = route;
+    notifyListeners();
+    try {
+      if (Platform.isAndroid) {
+        await _engine?.setEnableSpeakerphone(route == kRouteSpeaker);
+      }
+      await _audioRoute.invokeMethod('setRoute', route);
+    } catch (e) {
+      log('MisonCallSession route: $e');
+    }
+    // Le système peut refuser (casque déconnecté entre-temps) : état réel.
+    await Future.delayed(const Duration(milliseconds: 400));
+    await refreshAudioRoutes();
   }
 
   Future<void> hangUp() => _end();

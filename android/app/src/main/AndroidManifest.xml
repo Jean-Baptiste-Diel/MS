@@ -29,7 +29,7 @@
         android:name="com.google.android.gms.permission.AD_ID"
         tools:node="remove" />
 
-    <application android:icon="@mipmap/ic_launcher" android:label="Mison Service" android:requestLegacyExternalStorage="true" tools:replace="android:label">
+    <application android:icon="@mipmap/ic_launcher" android:label="MISON" android:requestLegacyExternalStorage="true" tools:replace="android:label">
         <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_ic_notification" />
 
         <activity android:name=".MainActivity" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:launchMode="singleTop" android:exported="true" android:theme="@style/LaunchTheme" android:windowSoftInputMode="adjustResize" android:showWhenLocked="true" android:turnScreenOn="true">

@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/log_redact.dart';
+import 'package:nb_utils/nb_utils.dart' as nb_log show log;
 import 'dart:convert';
 
 import 'package:booking_system_flutter/main.dart';
@@ -147,7 +149,7 @@ class _AirtelMoneyDialogState extends State<AirtelMoneyDialog> {
       formKey.currentState!.save();
       appStore.isLoading = true;
       await authorizeAirtelClient(widget.paymentSetting).then((value) async {
-        log('acess tokn ${value.accessToken}');
+        _log('acess tokn ${value.accessToken}');
         await paymentAirtelClient(
                 reference: APP_NAME, txnId: transactionId, msisdn: _textFieldMSISDN.text.trim(), amount: widget.amount, accessToken: value.accessToken.validate(), currentPaymentMethod: widget.paymentSetting)
             .then((value) async {
@@ -239,8 +241,8 @@ Future<bool> checkAirtelPaymentStatus({
     return isSuccess;
   }
   await authorizeAirtelClient(currentPaymentMethod).then((value) async {
-    log('acess tokn ${value.accessToken}');
-    log('maxApiCallCount is $maxApiCallCount');
+    _log('acess tokn ${value.accessToken}');
+    _log('maxApiCallCount is $maxApiCallCount');
 
     res = AirtelPaymentResponse.fromJson(
       await handleResponse(
@@ -266,7 +268,7 @@ Future<bool> checkAirtelPaymentStatus({
       isSuccess = await checkAirtelPaymentStatus(txnId: txnId, loderOnOFF: loderOnOFF, currentPaymentMethod: currentPaymentMethod);
     } else {
       loderOnOFF(false);
-      log('return here');
+      _log('return here');
       return isSuccess;
     }
   });
@@ -289,7 +291,7 @@ Future<Response> airtelPayBuildHttpResponse(
     Response response;
     print('url : $url');
     if (method == HttpMethodType.POST) {
-      log('Request: ${jsonEncode(request)}');
+      _log('Request: ${jsonEncode(request)}');
       response = await http.post(url, body: jsonEncode(request), headers: headers);
     } else if (method == HttpMethodType.DELETE) {
       response = await delete(url, headers: headers);
@@ -299,7 +301,7 @@ Future<Response> airtelPayBuildHttpResponse(
       response = await get(url, headers: headers);
     }
 
-    log('Response (${method.name}) ${response.statusCode}: ${response.body}');
+    _log('Response (${method.name}) ${response.statusCode}: ${response.body}');
 
     return response;
   } else {
@@ -370,3 +372,7 @@ class AirtelMoneyResponseCodes {
   }
 }
 //endregion AirtelMoney
+
+/// Journaux de ce fichier : données sensibles toujours masquées (jetons,
+/// codes, noms, numéros), voir log_redact.dart.
+void _log(Object? value) => nb_log.log(redactForLog(value));

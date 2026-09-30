@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Mison Service</string>
+	<string>MISON</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Mison Service</string>
+	<string>MISON</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -93,11 +93,13 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Handyman Service app needs access to your device&apos;s location at all times to ensure seamless service delivery tailored to your precise location, even when the app is running in the background.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Mison Service utilise le microphone pour vos appels audio et vos notes vocales avec l&apos;artisan, le client ou le support.</string>
+	<string>MISON utilise le microphone pour vos appels audio et vos notes vocales avec l&apos;artisan, le client ou le support.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Handyman Service app requires access to Speech recognition when you will be used to determine which words you speak into this device microphone.</string>
+	<string>MISON app requires access to Speech recognition when you will be used to determine which words you speak into this device microphone.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Handyman Service app requires access to your device&apos;s photo library to enable you to upload your profile photo.</string>
+	<string>MISON app requires access to your device&apos;s photo library to enable you to upload your profile photo.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MISON requiert l'accès à votre galerie pour vous permettre d'enregistrer les reçus de paiement en image.</string>
 	<key>Privacy-Location Usage Description</key>
 	<string>Handyman Service app requires access to your device&apos;s location to enhance your experience by providing personalized service recommendations and finding nearby service providers based on your current location.</string>
 	<key>SKAdNetworkItems</key>

@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'package:booking_system_flutter/component/app_empty_state.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
@@ -168,6 +169,7 @@ class _ChatTile extends StatelessWidget {
               child: (peerPhoto != null && peerPhoto!.isNotEmpty)
                   ? CachedNetworkImage(
                       imageUrl: peerPhoto!,
+                      cacheKey: imageCacheKey(peerPhoto!),
                       fit: BoxFit.cover,
                       errorWidget: (_, __, ___) => _initial(initial),
                     )

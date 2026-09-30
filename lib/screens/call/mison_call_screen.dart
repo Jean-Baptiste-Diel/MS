@@ -123,6 +123,17 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
     super.dispose();
   }
 
+  Future<void> _showAudioRoutes() async {
+    await _session.refreshAudioRoutes();
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _AudioRouteSheet(session: _session),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final initials = widget.otherPartyName.trim().isNotEmpty
@@ -228,23 +239,94 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
                       size: 68,
                       onTap: _session.hangUp,
                     ),
-                    _CallButton(
-                      icon: _session.isSpeakerOn
-                          ? Icons.volume_up_rounded
-                          : Icons.volume_off_rounded,
-                      label: 'Haut-parleur',
-                      color: _session.isSpeakerOn
-                          ? primaryColor
-                          : Colors.white,
-                      iconColor: _session.isSpeakerOn ? Colors.white : appTextPrimaryColor,
-                      onTap: _session.toggleSpeaker,
-                    ),
+                    // Sans casque Bluetooth : bascule haut-parleur / écouteur.
+                    // Avec un casque : choix de la sortie, comme WhatsApp.
+                    if (_session.bluetoothAvailable)
+                      _CallButton(
+                        icon: _routeIcon(_session.audioRoute),
+                        label: 'Audio',
+                        color: _session.audioRoute == kRouteEarpiece ? Colors.white : primaryColor,
+                        iconColor: _session.audioRoute == kRouteEarpiece ? appTextPrimaryColor : Colors.white,
+                        onTap: _showAudioRoutes,
+                      )
+                    else
+                      _CallButton(
+                        icon: _session.isSpeakerOn
+                            ? Icons.volume_up_rounded
+                            : Icons.volume_off_rounded,
+                        label: 'Haut-parleur',
+                        color: _session.isSpeakerOn
+                            ? primaryColor
+                            : Colors.white,
+                        iconColor: _session.isSpeakerOn ? Colors.white : appTextPrimaryColor,
+                        onTap: _session.toggleSpeaker,
+                      ),
                   ],
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+IconData _routeIcon(String route) {
+  switch (route) {
+    case kRouteSpeaker:
+      return Icons.volume_up_rounded;
+    case kRouteBluetooth:
+      return Icons.bluetooth_audio_rounded;
+    case kRouteWired:
+      return Icons.headphones_rounded;
+    default:
+      return Icons.phone_in_talk_rounded;
+  }
+}
+
+/// Choix de la sortie audio : téléphone, haut-parleur ou casque Bluetooth.
+class _AudioRouteSheet extends StatelessWidget {
+  final MisonCallSession session;
+  const _AudioRouteSheet({required this.session});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget option(String route, String label) {
+      final selected = session.audioRoute == route ||
+          (route == kRouteEarpiece && session.audioRoute == kRouteWired);
+      return ListTile(
+        leading: Icon(_routeIcon(route), color: selected ? primaryColor : appTextPrimaryColor),
+        title: Text(label, style: primaryTextStyle(size: 15, weight: selected ? FontWeight.bold : null)),
+        trailing: selected ? Icon(Icons.check_rounded, color: primaryColor) : null,
+        onTap: () {
+          Navigator.pop(context);
+          session.setAudioRoute(route);
+        },
+      );
+    }
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          12.height,
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          12.height,
+          Text('Sortie audio', style: boldTextStyle(size: 16)),
+          8.height,
+          option(kRouteBluetooth, session.bluetoothName.isNotEmpty ? session.bluetoothName : 'Bluetooth'),
+          option(kRouteEarpiece, 'Téléphone'),
+          option(kRouteSpeaker, 'Haut-parleur'),
+          8.height,
+        ],
       ),
     );
   }

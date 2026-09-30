@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/image_pick_sizes.dart';
+import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -612,6 +614,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       borderRadius: BorderRadius.circular(8),
       child: CachedNetworkImage(
         imageUrl: url,
+        cacheKey: imageCacheKey(url),
         width: 200,
         height: 200,
         fit: BoxFit.cover,
@@ -668,13 +671,16 @@ class _ChatInputState extends State<ChatInput> {
   static const _maxRecordDuration = Duration(minutes: 2);
   static const _minRecordDuration = Duration(seconds: 1);
   static const _cancelSlideDistance = 90.0;
+  static const _lockSlideDistance = 55.0;
 
   final _recorder = AudioRecorder();
   Future<void>? _recorderStarting;
   Timer? _recordTimer;
   bool _isRecording = false;
+  bool _isLocked = false;
   Duration _recordElapsed = Duration.zero;
   double _slideDx = 0;
+  Offset? _pointerDownPos;
   bool _hasText = false;
 
   bool get _slideCancels => _slideDx < -_cancelSlideDistance;
@@ -702,6 +708,7 @@ class _ChatInputState extends State<ChatInput> {
     HapticFeedback.mediumImpact();
     setState(() {
       _isRecording = true;
+      _isLocked = false;
       _recordElapsed = Duration.zero;
       _slideDx = 0;
     });
@@ -721,7 +728,10 @@ class _ChatInputState extends State<ChatInput> {
     if (!_isRecording) return;
     _recordTimer?.cancel();
     final elapsed = _recordElapsed;
-    setState(() => _isRecording = false);
+    setState(() {
+      _isRecording = false;
+      _isLocked = false;
+    });
 
     // L'appui a pu être relâché avant la fin du démarrage de l'enregistreur.
     try {
@@ -767,8 +777,9 @@ class _ChatInputState extends State<ChatInput> {
   Future<void> _pickImage(ImageSource source) async {
     final picked = await _picker.pickImage(
       source: source,
-      imageQuality: 85,
-      maxWidth: 1920,
+      imageQuality: kChatPhotoQuality,
+      maxWidth: kChatPhotoMaxSide,
+      maxHeight: kChatPhotoMaxSide,
     );
     if (picked == null || !mounted) return;
     setState(() => _selectedImage = File(picked.path));
@@ -893,26 +904,55 @@ class _ChatInputState extends State<ChatInput> {
                     ),
                   ),
                   8.width,
-                  Container(
-                    decoration: boxDecorationDefault(borderRadius: radius(40), color: kMisonGold),
-                    child: _isUploading
-                        ? const SizedBox(
-                            width: 48,
-                            height: 48,
-                            child: Center(
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              ),
-                            ),
-                          )
-                        : (_hasText || _selectedImage != null)
-                            ? IconButton(
-                                icon: const Icon(Icons.send_rounded, color: Colors.white),
-                                onPressed: widget.enabled ? _send : null,
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        decoration: boxDecorationDefault(borderRadius: radius(40), color: kMisonGold),
+                        child: _isUploading
+                            ? const SizedBox(
+                                width: 48,
+                                height: 48,
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  ),
+                                ),
                               )
-                            : _buildMicButton(),
+                            : (_hasText || _selectedImage != null)
+                                ? IconButton(
+                                    icon: const Icon(Icons.send_rounded, color: Colors.white),
+                                    onPressed: widget.enabled ? _send : null,
+                                  )
+                                : _buildMicButton(),
+                      ),
+                      if (_isRecording && !_isLocked)
+                        Positioned(
+                          bottom: 56,
+                          right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, -2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.arrow_upward_rounded,
+                              color: Colors.grey,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -924,21 +964,52 @@ class _ChatInputState extends State<ChatInput> {
   }
 
   Widget _buildMicButton() {
-    return GestureDetector(
-      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Maintenez le micro pour enregistrer une note vocale.')),
-      ),
-      onLongPressStart: widget.enabled ? (_) => _startRecording() : null,
-      onLongPressMoveUpdate: (d) {
-        if (_isRecording) setState(() => _slideDx = d.offsetFromOrigin.dx);
+    return Listener(
+      onPointerDown: (e) {
+        // Enregistrement verrouillé : le bouton est devenu « envoyer ».
+        if (_isRecording && _isLocked) {
+          _stopRecording(send: true);
+          return;
+        }
+        if (widget.enabled && !_isUploading && !_isRecording) {
+          _pointerDownPos = e.position;
+          _startRecording();
+        }
       },
-      onLongPressEnd: (_) => _stopRecording(send: !_slideCancels),
-      onLongPressCancel: () => _stopRecording(send: false),
+      onPointerMove: (e) {
+        if (_isRecording && _pointerDownPos != null) {
+          final dx = e.position.dx - _pointerDownPos!.dx;
+          final dy = e.position.dy - _pointerDownPos!.dy;
+          setState(() {
+            _slideDx = dx;
+            if (dy < -_lockSlideDistance && !_isLocked) {
+              _isLocked = true;
+              HapticFeedback.heavyImpact();
+            }
+          });
+          if (dx < -_cancelSlideDistance) {
+            _stopRecording(send: false);
+            _pointerDownPos = null;
+          }
+        }
+      },
+      onPointerUp: (e) {
+        if (_isRecording && !_isLocked) {
+          _stopRecording(send: !_slideCancels);
+        }
+        _pointerDownPos = null;
+      },
+      onPointerCancel: (e) {
+        if (_isRecording && !_isLocked) {
+          _stopRecording(send: false);
+        }
+        _pointerDownPos = null;
+      },
       child: SizedBox(
         width: 48,
         height: 48,
         child: Icon(
-          _isRecording ? Icons.mic : Icons.mic_none_rounded,
+          _isRecording ? (_isLocked ? Icons.send_rounded : Icons.mic_rounded) : Icons.mic_none_rounded,
           color: widget.enabled ? Colors.white : Colors.white54,
         ),
       ),
@@ -946,21 +1017,39 @@ class _ChatInputState extends State<ChatInput> {
   }
 
   Widget _buildRecordingIndicator() {
-    final cancelling = _slideCancels;
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: boxDecorationDefault(borderRadius: radius(24), color: context.scaffoldBackgroundColor),
+      decoration: boxDecorationDefault(
+        borderRadius: radius(24),
+        color: context.cardColor,
+        border: Border.all(color: kMisonGold.withValues(alpha: 0.5), width: 1),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.fiber_manual_record, color: Colors.red, size: 14),
+          const Icon(Icons.fiber_manual_record, color: Colors.red, size: 12),
+          6.width,
+          Text(_formatElapsed(_recordElapsed), style: boldTextStyle(size: 13)),
           8.width,
-          Text(_formatElapsed(_recordElapsed), style: boldTextStyle(size: 14)),
-          const Spacer(),
-          Text(
-            cancelling ? 'Relâchez pour annuler' : '‹ Glissez pour annuler',
-            style: secondaryTextStyle(size: 13, color: cancelling ? Colors.red : null),
+          Expanded(
+            child: Text(
+              _isLocked ? 'Touchez ➤ pour envoyer' : '‹ Glissez pour annuler · ↑ verrouiller',
+              style: secondaryTextStyle(size: 11, color: Colors.grey.shade600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+            ),
           ),
+          if (_isLocked) ...[
+            4.width,
+            InkWell(
+              onTap: () => _stopRecording(send: false),
+              child: const Padding(
+                padding: EdgeInsets.all(4.0),
+                child: Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
+              ),
+            ),
+          ],
         ],
       ),
     );

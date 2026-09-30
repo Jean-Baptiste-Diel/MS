@@ -13,6 +13,8 @@ class MainActivity: FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Sortie audio des appels : écouteur / haut-parleur / Bluetooth.
+        AudioRouteHandler(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
         // Enregistre un fichier (facture PDF) dans le dossier Téléchargements.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mison/files")
             .setMethodCallHandler { call, result ->

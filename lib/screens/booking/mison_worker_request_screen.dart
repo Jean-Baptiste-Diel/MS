@@ -304,7 +304,9 @@ class _MisonWorkerRequestScreenState extends State<MisonWorkerRequestScreen> {
                   child: NominatimAddressField(
                     controller: _addressCont,
                     hintText: 'Rechercher une adresse...',
-                    countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+                    // Commandes : suggestions limitées à la région de Dakar (Sénégal).
+                    countryCodes: const ['sn'],
+                    bbox: kDakarRegionBbox,
                     decoration: InputDecoration(
                       hintText: 'Rechercher une adresse...',
                       hintStyle: secondaryTextStyle(),

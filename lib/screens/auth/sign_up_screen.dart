@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/image_pick_sizes.dart';
 import 'dart:io';
 
 import 'package:booking_system_flutter/component/animated_dropdown.dart';
@@ -311,7 +312,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   Navigator.pop(context);
                   try {
                     await _handleImageSelection(
-                        await _picker.pickImage(source: ImageSource.gallery));
+                        await _picker.pickImage(
+                            source: ImageSource.gallery,
+                            maxWidth: kProfilePhotoMaxSide,
+                            maxHeight: kProfilePhotoMaxSide,
+                            imageQuality: kProfilePhotoQuality));
                   } catch (_) { TopToast.show(message: 'Erreur lors de la sélection'); }
                 },
               ),
@@ -324,7 +329,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     Navigator.pop(context);
                     try {
                       await _handleImageSelection(
-                          await _picker.pickImage(source: ImageSource.camera));
+                          await _picker.pickImage(
+                              source: ImageSource.camera,
+                              maxWidth: kProfilePhotoMaxSide,
+                              maxHeight: kProfilePhotoMaxSide,
+                              imageQuality: kProfilePhotoQuality));
                     } catch (_) { TopToast.show(message: 'Erreur lors de la prise de photo'); }
                   },
                 ),

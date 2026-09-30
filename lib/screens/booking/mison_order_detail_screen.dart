@@ -1,4 +1,6 @@
-import 'package:booking_system_flutter/utils/order_invoice_pdf.dart';
+import 'package:booking_system_flutter/utils/image_cache_key.dart';
+import 'package:booking_system_flutter/component/mison_receipt_sheet.dart';
+import 'package:booking_system_flutter/screens/booking/mison_order_searching_screen.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'dart:math' show sin, cos, sqrt, atan2;
@@ -187,17 +189,25 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         1000;
   }
 
-  /// Facture PDF générée dans l'app et enregistrée sur le téléphone.
+  /// Téléchargement direct du reçu en image JPEG (.jpg) dans le téléphone.
   Future<void> _downloadInvoice(MisonOrder order) async {
-    appStore.setLoading(true);
     try {
-      final where = await downloadOrderInvoice(order);
-      TopToast.show(message: 'Facture enregistrée dans $where', type: TopToastType.success);
+      final where = await downloadOrderInvoiceJpeg(context, order);
+      TopToast.show(
+        message: 'Reçu JPEG enregistré dans $where',
+        type: TopToastType.success,
+      );
     } catch (e) {
-      TopToast.show(message: 'Impossible de générer la facture.', type: TopToastType.error);
-    } finally {
-      appStore.setLoading(false);
+      TopToast.show(
+        message: 'Impossible de télécharger le reçu JPEG.',
+        type: TopToastType.error,
+      );
     }
+  }
+
+  /// Ouvre DIRECTEMENT le menu Share Sheet natif (WhatsApp, Mail, Save Image, Save to Files, etc.) avec le reçu en image.
+  void _shareInvoice(MisonOrder order) {
+    shareMisonReceiptDirectly(context, order);
   }
 
   // ── Trajet de l'ouvrier : « Aller chez le client » → arrivée ────────────────
@@ -604,6 +614,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 paymentVerifying: _paymentVerifying,
                 onRated: () { init(); setState(() {}); },
                 onDownloadInvoice: () => _downloadInvoice(order),
+                onShareInvoice: () => _shareInvoice(order),
                 onCall: () => _startCall(order),
                 onTrack: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => MisonTrackingScreen(
@@ -649,6 +660,7 @@ class _OrderDetailBody extends StatelessWidget {
   final bool paymentVerifying;
   final VoidCallback onRated;
   final VoidCallback onDownloadInvoice;
+  final VoidCallback onShareInvoice;
   final VoidCallback onCall;
   final VoidCallback onTrack;
   final VoidCallback onNavigate;
@@ -672,6 +684,7 @@ class _OrderDetailBody extends StatelessWidget {
     this.paymentVerifying = false,
     required this.onRated,
     required this.onDownloadInvoice,
+    required this.onShareInvoice,
     required this.onCall,
     required this.onTrack,
     required this.onNavigate,
@@ -788,6 +801,26 @@ class _OrderDetailBody extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+
+                // ── Client : recherche en cours → carte radar des prestataires ──
+                if (_isClient && order.isPending && order.artisan == null &&
+                    (order.latitude ?? '').isNotEmpty) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: () => MisonOrderSearchingScreen(orderId: order.id!, initialOrder: order).launch(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: kMisonGold,
+                        side: const BorderSide(color: kMisonGold, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: const Icon(Icons.radar_rounded),
+                      label: Text('Voir la recherche sur la carte', style: boldTextStyle(size: 15, color: kMisonGold)),
+                    ),
+                  ),
+                  20.height,
+                ],
 
                 // ── Client : Noter — en haut quand prestation terminée ───────
                 if (_isClient && order.canRate) ...[
@@ -963,25 +996,50 @@ class _OrderDetailBody extends StatelessWidget {
                   ]),
                 ],
 
-                // ── Prestation terminée : facture PDF (client et prestataire) ────
+                // ── Prestation terminée : Télécharger & Partager la facture ────
                 if (order.isCompleted) ...[
                   16.height,
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: OutlinedButton.icon(
-                      onPressed: onDownloadInvoice,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: kMisonGold,
-                        side: const BorderSide(color: kMisonGold, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 50,
+                          child: OutlinedButton.icon(
+                            onPressed: onDownloadInvoice,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: kMisonGold,
+                              side: const BorderSide(color: kMisonGold, width: 1.5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            icon: const Icon(Icons.download_rounded),
+                            label: Text(
+                              'Télécharger',
+                              style: boldTextStyle(size: 14, color: kMisonGold),
+                            ),
+                          ),
+                        ),
                       ),
-                      icon: const Icon(Icons.download_rounded),
-                      label: Text(
-                        'Télécharger la facture',
-                        style: boldTextStyle(size: 15, color: kMisonGold),
+                      12.width,
+                      Expanded(
+                        child: SizedBox(
+                          height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: onShareInvoice,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: kMisonGold,
+                              foregroundColor: Colors.black,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            icon: const Icon(Icons.share_rounded, color: Colors.black),
+                            label: Text(
+                              'Partager',
+                              style: boldTextStyle(size: 14, color: Colors.black),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ],
@@ -1121,6 +1179,7 @@ class _ArtisanAvatar extends StatelessWidget {
       child: hasUrl
           ? CachedNetworkImage(
               imageUrl: url!.trim(),
+              cacheKey: imageCacheKey(url!.trim()),
               fit: BoxFit.cover,
               width: size,
               height: size,
@@ -1419,6 +1478,14 @@ class _ArrivalRow extends StatelessWidget {
   Widget build(BuildContext context) {
     const icon = Icons.access_time_rounded;
     if (order.isPending) {
+      // Recherche par étapes (5 → 10 → 15 km), puis prise en charge par l'équipe.
+      if (order.isSearchHandledByTeam) {
+        return const _InfoRow(
+          icon: Icons.support_agent_rounded,
+          label: 'Ouvrier',
+          value: 'Votre demande est en cours : notre équipe vous trouve un ouvrier.',
+        );
+      }
       return const _InfoRow(icon: icon, label: 'Ouvrier', value: "Recherche d'un ouvrier en cours…");
     }
     // Trajet de l'ouvrier : pas encore parti → en route (heure d'arrivée) → arrivé

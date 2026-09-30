@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/image_pick_sizes.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -216,7 +217,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _getFromGallery() async {
-    pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1800, maxHeight: 1800);
+    pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: kProfilePhotoMaxSide, maxHeight: kProfilePhotoMaxSide, imageQuality: kProfilePhotoQuality);
     if (pickedFile != null) {
       imageFile = File(pickedFile!.path);
       setState(() {});
@@ -224,7 +225,7 @@ class EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _getFromCamera() async {
-    pickedFile = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1800, maxHeight: 1800);
+    pickedFile = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: kProfilePhotoMaxSide, maxHeight: kProfilePhotoMaxSide, imageQuality: kProfilePhotoQuality);
     if (pickedFile != null) {
       imageFile = File(pickedFile!.path);
       setState(() {});

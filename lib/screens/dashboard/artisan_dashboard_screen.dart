@@ -148,6 +148,13 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
   Timer? _bgLocationTimer;
   String? _bgTrackedOrderId;
 
+  // Prestataire LIBRE, app ouverte : position envoyée au serveur toutes les
+  // 20 s, pour apparaître (en mouvement) sur la carte des clients qui cherchent.
+  static const _presenceInterval = Duration(seconds: 20);
+  Timer? _presenceTimer;
+  bool _hasActiveOrder = false;
+  bool _presenceInFlight = false;
+
   static const double _expandedHeight = 208.0;
   static const double _toolbarHeight = 72.0;
 
@@ -157,6 +164,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
     _load();
     _restoreBadge();
     _fetchPosition();
+    _loadAvailability();
     _scrollController.addListener(() {
       final collapsed = _scrollController.hasClients &&
           _scrollController.offset > (_expandedHeight - _toolbarHeight);
@@ -166,6 +174,65 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
       if (mounted) setState(() => _load());
     });
     startAutoRefresh();
+    _presenceTimer = Timer.periodic(_presenceInterval, (_) => _sendPresence());
+  }
+
+  // ── Bouton « Disponible / Indisponible » : enregistré sur le serveur ─────
+  bool _availabilitySaving = false;
+
+  Future<void> _loadAvailability() async {
+    try {
+      final available = await getArtisanAvailability();
+      if (mounted) setState(() => _isAvailable = available);
+    } catch (e) {
+      log('[Availability] $e');
+    }
+  }
+
+  Future<void> _setAvailability(bool value) async {
+    if (_availabilitySaving) return;
+    final previous = _isAvailable;
+    setState(() {
+      _isAvailable = value;
+      _availabilitySaving = true;
+    });
+    try {
+      final saved = await setArtisanAvailability(value);
+      if (!mounted) return;
+      setState(() => _isAvailable = saved);
+      TopToast.show(
+        message: saved
+            ? 'Vous êtes disponible : les nouvelles commandes vous sont proposées.'
+            : 'Vous êtes indisponible : vous ne recevez plus de nouvelles commandes.',
+        type: TopToastType.success,
+      );
+      onAutoRefresh(); // commandes disponibles affichées / masquées
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isAvailable = previous);
+      TopToast.show(message: "Impossible d'enregistrer votre disponibilité. Réessayez.", type: TopToastType.error);
+    } finally {
+      if (mounted) setState(() => _availabilitySaving = false);
+    }
+  }
+
+  Future<void> _sendPresence() async {
+    final foreground = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    if (!foreground || !_isAvailable || _hasActiveOrder || _presenceInFlight) return;
+    _presenceInFlight = true;
+    try {
+      // Jamais de demande d'autorisation ici : seulement si déjà accordée.
+      final perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+      );
+      await postArtisanLocation(pos.latitude, pos.longitude);
+    } catch (e) {
+      log('[Presence] $e');
+    } finally {
+      _presenceInFlight = false;
+    }
   }
 
   /// Actualisation silencieuse (nouvelles commandes, statuts) sans clignotement.
@@ -181,6 +248,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
     _scrollController.dispose();
     LiveStream().dispose(LIVESTREAM_ARTISAN_HOME_REFRESH);
     _bgLocationTimer?.cancel();
+    _presenceTimer?.cancel();
     super.dispose();
   }
 
@@ -188,6 +256,10 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
   // Démarre/arrête automatiquement selon qu'il a (ou non) une commande en
   // cours, sans dépendre de l'écran de détail de la commande.
   void _syncLocationBroadcast(List<MisonOrder> orders) {
+    // Occupé (commande acceptée ou en cours) : il n'apparaît plus comme libre.
+    final wasBusy = _hasActiveOrder;
+    _hasActiveOrder = orders.any((o) => o.artisan != null && (o.isActiveWithArtisan || o.isInProgress));
+    if (wasBusy && !_hasActiveOrder) _sendPresence();
     MisonOrder? activeOrder;
     for (final o in orders) {
       // Position envoyée seulement en route (plus une fois sur place).
@@ -417,7 +489,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
                             // Disponibilité : bouton on / off à droite de la salutation
                             _AvailabilityToggle(
                               value: _isAvailable,
-                              onChanged: (v) => setState(() => _isAvailable = v),
+                              onChanged: _setAvailability,
                             ),
                           ],
                         ),
@@ -447,7 +519,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) _syncLocationBroadcast(orders);
                   });
-                  return _DashboardBody(orders: orders, artisanPosition: _artisanPosition);
+                  return _DashboardBody(orders: orders, artisanPosition: _artisanPosition, isAvailable: _isAvailable);
                 },
               ),
             ),
@@ -567,7 +639,9 @@ enum _StatFilter { total, enCours, terminees, annulees }
 class _DashboardBody extends StatefulWidget {
   final List<MisonOrder> orders;
   final Position? artisanPosition;
-  const _DashboardBody({required this.orders, this.artisanPosition});
+  /// Bouton « Disponible / Indisponible » de l'accueil.
+  final bool isAvailable;
+  const _DashboardBody({required this.orders, this.artisanPosition, this.isAvailable = true});
 
   @override
   State<_DashboardBody> createState() => _DashboardBodyState();
@@ -678,6 +752,34 @@ class _DashboardBodyState extends State<_DashboardBody> {
             ],
           ),
         ),
+
+        // ── Indisponible (bouton de l'accueil) : pas de nouvelles commandes
+        if (!widget.isAvailable && !isBusy)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.do_not_disturb_on_outlined, size: 18, color: Colors.grey.shade600),
+                  8.width,
+                  Expanded(
+                    child: Text(
+                      'Vous êtes indisponible : vous ne recevez plus de nouvelles commandes. '
+                      'Vos commandes en cours continuent normalement.',
+                      style: secondaryTextStyle(size: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
 
         // ── Occupé : explique pourquoi aucune nouvelle commande n'apparaît
         if (isBusy)
@@ -1561,11 +1663,14 @@ class _ArtisanOrderCard extends StatelessWidget {
             ),
           ),
 
-          // Distance badge (commandes à traiter uniquement)
+          // Distance badge (commandes à traiter uniquement) : plus utile une
+          // fois chez le client (prestation en cours) ni en attente du paiement.
           if (distanceKm != null &&
               order.status != 'CANCELLED' &&
               order.status != 'REJECTED' &&
-              order.status != 'COMPLETED')
+              order.status != 'COMPLETED' &&
+              !order.isInProgress &&
+              !order.isAwaitingRealizationPayment)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Container(

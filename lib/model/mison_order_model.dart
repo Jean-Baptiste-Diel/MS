@@ -61,6 +61,8 @@ class MisonOrder {
   String? arrivedAt;  // l'ouvrier est arrivé à l'adresse
   String? paymentMethod; // WAVE / ORANGE_MONEY une fois payé, sinon null
   String? invoiceRequestedAt; // facture demandée au support
+  int? searchRadiusKm; // recherche progressive : 5, puis 10, puis 15 km
+  String? searchExhaustedAt; // personne trouvé : le back-office prend le relais
 
   MisonOrder({
     this.id,
@@ -87,6 +89,8 @@ class MisonOrder {
     this.arrivedAt,
     this.paymentMethod,
     this.invoiceRequestedAt,
+    this.searchRadiusKm,
+    this.searchExhaustedAt,
   });
 
   factory MisonOrder.fromJson(Map<String, dynamic> json) {
@@ -125,6 +129,8 @@ class MisonOrder {
       arrivedAt: json['arrived_at']?.toString(),
       paymentMethod: json['payment_method']?.toString(),
       invoiceRequestedAt: json['invoice_requested_at']?.toString(),
+      searchRadiusKm: num.tryParse(json['search_radius_km']?.toString() ?? '')?.toInt(),
+      searchExhaustedAt: json['search_exhausted_at']?.toString(),
     )..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null;
   }
 
@@ -193,6 +199,9 @@ class MisonOrder {
   /// Montant à payer selon le statut courant (frais de service inclus).
   String? get currentFeeAmount =>
       isAwaitingRealizationPayment ? clientTotal?.toString() : null;
+
+  /// Aucun prestataire trouvé dans le rayon maximal : l'équipe Mison s'en occupe.
+  bool get isSearchHandledByTeam => isPending && (searchExhaustedAt ?? '').isNotEmpty;
 
   /// Can rate: only completed orders without rating
   bool get canRate => isCompleted && clientRating == null;

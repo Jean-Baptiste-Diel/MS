@@ -119,7 +119,7 @@ Remarque importante: l'API que vous avez fourni (`/api/services`) retourne des c
 - Endpoint: `POST auth/register/artisan` (multipart/form-data)
 - Champs requis (client-side checks):
   - `email`, `password`, `phone`, `first_name`, `last_name`, `service` (clé), `experience_years`, `bio`, `address`
-  - Fichiers: `profile_picture` (selfie), `identity_document`
+  - Fichiers: `profile_picture` (selfie), `identity_document` (recto), `identity_document_back` (verso)
 
 Notes:
 - L'app vérifie la présence de `service` (clé fournie par l'UI). Backend doit accepter `service` (id ou slug). Préférence: accepter `service` comme `service_id` (int). Si backend n'accepte que le nom, le client devra envoyer le nom (ou on mettra à jour le client pour envoyer l'id).

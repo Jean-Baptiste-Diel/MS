@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
@@ -83,6 +84,7 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                           child: (artisan.profilePictureUrl ?? '').trim().isNotEmpty
                               ? CachedNetworkImage(
                                   imageUrl: artisan.profilePictureUrl!.trim(),
+                                  cacheKey: imageCacheKey(artisan.profilePictureUrl!.trim()),
                                   fit: BoxFit.cover,
                                   placeholder: (_, __) => const Center(
                                     child: SizedBox(

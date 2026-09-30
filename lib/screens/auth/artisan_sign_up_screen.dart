@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/image_pick_sizes.dart';
 import 'dart:io';
 
 import 'package:booking_system_flutter/component/animated_dropdown.dart';
@@ -67,8 +68,10 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
 
   XFile? profileImageFile;
   Uint8List? profileImageBytes;
-  XFile? identityFile;
-  Uint8List? identityBytes;
+  XFile? identityFrontFile;
+  Uint8List? identityFrontBytes;
+  XFile? identityBackFile;
+  Uint8List? identityBackBytes;
   XFile? professionProofFile;
   Uint8List? professionProofBytes;
   final ImagePicker _picker = ImagePicker();
@@ -268,12 +271,22 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     }
   }
 
-  Future<void> _handleIdentitySelection(XFile? file) async {
+  Future<void> _handleIdentityFrontSelection(XFile? file) async {
     if (file != null) {
       final bytes = await file.readAsBytes();
       setState(() {
-        identityFile = file;
-        identityBytes = bytes;
+        identityFrontFile = file;
+        identityFrontBytes = bytes;
+      });
+    }
+  }
+
+  Future<void> _handleIdentityBackSelection(XFile? file) async {
+    if (file != null) {
+      final bytes = await file.readAsBytes();
+      setState(() {
+        identityBackFile = file;
+        identityBackBytes = bytes;
       });
     }
   }
@@ -288,7 +301,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     }
   }
 
-  void _pickFromSheet(String title, Function(XFile?) onSelect) {
+  void _pickFromSheet(String title, Function(XFile?) onSelect,
+      {double maxSide = kDocumentMaxSide, int quality = kDocumentQuality}) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -296,14 +310,16 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         title: title,
         onGallery: () async {
           Navigator.pop(context);
-          final f = await _picker.pickImage(source: ImageSource.gallery);
+          final f = await _picker.pickImage(
+              source: ImageSource.gallery, maxWidth: maxSide, maxHeight: maxSide, imageQuality: quality);
           onSelect(f);
         },
         onCamera: kIsWeb
             ? null
             : () async {
                 Navigator.pop(context);
-                final f = await _picker.pickImage(source: ImageSource.camera);
+                final f = await _picker.pickImage(
+                    source: ImageSource.camera, maxWidth: maxSide, maxHeight: maxSide, imageQuality: quality);
                 onSelect(f);
               },
       ),
@@ -311,9 +327,12 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   }
 
   Future<void> pickImage() async =>
-      _pickFromSheet('Photo de profil', _handleImageSelection);
-  Future<void> pickIdentityDocument() async =>
-      _pickFromSheet('Pièce d\'identité', _handleIdentitySelection);
+      _pickFromSheet('Photo de profil', _handleImageSelection,
+          maxSide: kProfilePhotoMaxSide, quality: kProfilePhotoQuality);
+  Future<void> pickIdentityDocumentFront() async =>
+      _pickFromSheet('Pièce d\'identité (Recto)', _handleIdentityFrontSelection);
+  Future<void> pickIdentityDocumentBack() async =>
+      _pickFromSheet('Pièce d\'identité (Verso)', _handleIdentityBackSelection);
   Future<void> pickProfessionProof() async =>
       _pickFromSheet('Preuve de profession', _handleProfessionProofSelection);
 
@@ -431,9 +450,14 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['profileImage'] = 'Photo de profil requise';
           v = false;
         }
-        if (identityFile == null &&
-            (identityBytes == null || identityBytes!.isEmpty)) {
-          fieldErrors['identity'] = 'Pièce d\'identité requise';
+        if (identityFrontFile == null &&
+            (identityFrontBytes == null || identityFrontBytes!.isEmpty)) {
+          fieldErrors['identityFront'] = 'Pièce d\'identité (Recto) requise';
+          v = false;
+        }
+        if (identityBackFile == null &&
+            (identityBackBytes == null || identityBackBytes!.isEmpty)) {
+          fieldErrors['identityBack'] = 'Pièce d\'identité (Verso) requise';
           v = false;
         }
         if (!isAcceptedTc) {
@@ -593,9 +617,13 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       if (!kIsWeb && profileImageFile != null) {
         profilePictureFile = File(profileImageFile!.path);
       }
-      File? identityDocumentFile;
-      if (!kIsWeb && identityFile != null) {
-        identityDocumentFile = File(identityFile!.path);
+      File? identityFrontDocumentFile;
+      if (!kIsWeb && identityFrontFile != null) {
+        identityFrontDocumentFile = File(identityFrontFile!.path);
+      }
+      File? identityBackDocumentFile;
+      if (!kIsWeb && identityBackFile != null) {
+        identityBackDocumentFile = File(identityBackFile!.path);
       }
       File? professionProofDocumentFile;
       if (!kIsWeb && professionProofFile != null) {
@@ -606,9 +634,12 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         profilePicture: profilePictureFile,
         profilePictureBytes: profileImageBytes,
         profilePictureFileName: profileImageFile?.name,
-        identityDocument: identityDocumentFile,
-        identityDocumentBytes: identityBytes,
-        identityDocumentFileName: identityFile?.name,
+        identityDocument: identityFrontDocumentFile,
+        identityDocumentBytes: identityFrontBytes,
+        identityDocumentFileName: identityFrontFile?.name,
+        identityDocumentBack: identityBackDocumentFile,
+        identityDocumentBackBytes: identityBackBytes,
+        identityDocumentBackFileName: identityBackFile?.name,
         professionProof: professionProofDocumentFile,
         professionProofBytes: professionProofBytes,
         professionProofFileName: professionProofFile?.name,
@@ -1527,7 +1558,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             hintText: isLoadingLocation
                 ? 'Récupération...'
                 : 'Recherchez une adresse...',
-            countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+            // Prestataires : adresse dans la région de Dakar (Sénégal).
+            countryCodes: const ['sn'],
+            bbox: kDakarRegionBbox,
             decoration: InputDecoration(
               hintText: isLoadingLocation
                   ? 'Récupération...'
@@ -1600,27 +1633,51 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         16.height,
 
         _docUploadZone(
-          label: 'Pièce d\'identité',
+          label: 'Pièce d\'identité (Recto)',
           required: true,
-          errorKey: 'identity',
-          isUploaded: identityFile != null,
-          previewBytes: identityBytes,
+          errorKey: 'identityFront',
+          isUploaded: identityFrontFile != null,
+          previewBytes: identityFrontBytes,
           isCircle: false,
           accentColor: _brandGold,
           icon: Icons.badge_outlined,
-          hint: 'CNI · Passeport · Permis',
+          hint: 'CNI · Passeport · Permis (Face avant)',
           onTap: () {
-            pickIdentityDocument();
-            setState(() => fieldErrors.remove('identity'));
+            pickIdentityDocumentFront();
+            setState(() => fieldErrors.remove('identityFront'));
           },
-          onRemove: identityFile != null
+          onRemove: identityFrontFile != null
               ? () => setState(() {
-                    identityFile = null;
-                    identityBytes = null;
+                    identityFrontFile = null;
+                    identityFrontBytes = null;
                   })
               : null,
         ),
-        _fieldError('identity'),
+        _fieldError('identityFront'),
+        16.height,
+
+        _docUploadZone(
+          label: 'Pièce d\'identité (Verso)',
+          required: true,
+          errorKey: 'identityBack',
+          isUploaded: identityBackFile != null,
+          previewBytes: identityBackBytes,
+          isCircle: false,
+          accentColor: _brandGold,
+          icon: Icons.badge_outlined,
+          hint: 'CNI · Permis (Face arrière)',
+          onTap: () {
+            pickIdentityDocumentBack();
+            setState(() => fieldErrors.remove('identityBack'));
+          },
+          onRemove: identityBackFile != null
+              ? () => setState(() {
+                    identityBackFile = null;
+                    identityBackBytes = null;
+                  })
+              : null,
+        ),
+        _fieldError('identityBack'),
         16.height,
 
         _docUploadZone(

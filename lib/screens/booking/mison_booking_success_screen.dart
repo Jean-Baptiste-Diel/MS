@@ -2,6 +2,7 @@ import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart';
+import 'package:booking_system_flutter/screens/booking/mison_order_searching_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
@@ -30,7 +31,13 @@ class MisonBookingSuccessScreen extends StatelessWidget {
       (_) => false,
     );
     if (orderId == null || orderId.isEmpty) return;
-    navigator.push(MaterialPageRoute(builder: (_) => MisonOrderDetailScreen(orderId: orderId)));
+    // En attente d'un prestataire : écran de recherche (carte + radar).
+    final searching = order.isPending && (order.latitude ?? '').isNotEmpty;
+    navigator.push(MaterialPageRoute(
+      builder: (_) => searching
+          ? MisonOrderSearchingScreen(orderId: orderId, initialOrder: order)
+          : MisonOrderDetailScreen(orderId: orderId),
+    ));
   }
 
   String _formatDate(String? isoDate) {

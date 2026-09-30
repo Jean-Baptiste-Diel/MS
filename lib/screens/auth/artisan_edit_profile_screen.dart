@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/image_pick_sizes.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -121,7 +122,11 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
       mobileCont.text.isEmpty ? '' : '+${selectedCountry.phoneCode}${mobileCont.text.trim()}';
 
   Future<void> _pickImage(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source, maxWidth: 1800, maxHeight: 1800);
+    final picked = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: kProfilePhotoMaxSide,
+        maxHeight: kProfilePhotoMaxSide,
+        imageQuality: kProfilePhotoQuality);
     if (picked != null) setState(() => profileImageFile = File(picked.path));
   }
 
@@ -356,7 +361,9 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
                     child: NominatimAddressField(
                       controller: addressCont,
                       hintText: 'Votre adresse...',
-                      countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+                      // Prestataires : adresse dans la région de Dakar (Sénégal).
+                      countryCodes: const ['sn'],
+                      bbox: kDakarRegionBbox,
                       onSelected: (s) => setState(() { addressLat = s.lat; addressLon = s.lon; }),
                     ),
                   ),

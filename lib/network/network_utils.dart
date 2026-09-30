@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/log_redact.dart';
+import 'package:nb_utils/nb_utils.dart' as nb_log show log;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -78,18 +80,18 @@ Future<bool> _tryRefreshToken() async {
         if (newRefresh != null && newRefresh.isNotEmpty) {
           await appStore.setRefreshToken(newRefresh);
         }
-        log('Access token refreshed');
+        _log('Access token refreshed');
         _refreshCompleter!.complete(true);
         return true;
       }
     }
 
     // 401 ou 400 = refresh token expiré/blacklisté → rediriger vers login
-    log('Refresh token invalide (status ${response.statusCode})');
+    _log('Refresh token invalide (status ${response.statusCode})');
     _refreshCompleter!.complete(false);
     return false;
   } catch (e) {
-    log('Token refresh error: $e');
+    _log('Token refresh error: $e');
     _refreshCompleter!.complete(false);
     return false;
   } finally {
@@ -111,7 +113,7 @@ Map<String, String> buildHeaderTokens() {
   header.putIfAbsent(CustomHeader.LanguageCode, () => appStore.selectedLanguageCode);
   header.addAll(defaultHeaders());
 
-  log(jsonEncode(header));
+  _log(jsonEncode(header));
   return header;
 }
 
@@ -119,7 +121,7 @@ Uri buildBaseUrl(String endPoint) {
   Uri url = Uri.parse(endPoint);
   if (!endPoint.startsWith('http')) url = Uri.parse('$BASE_URL$endPoint');
 
-  log('URL: ${url.toString()}');
+  _log('URL: ${url.toString()}');
 
   return url;
 }
@@ -159,7 +161,7 @@ Future<Response> buildHttpResponse(
 
   try {
     if (method == HttpMethodType.POST) {
-      log('Request: ${jsonEncode(request)}');
+      _log('Request: ${jsonEncode(request)}');
       response = await http.post(url, body: jsonEncode(request), headers: headers);
     } else if (method == HttpMethodType.DELETE) {
       response = await delete(url, headers: headers);
@@ -323,15 +325,15 @@ Future<void> sendMultiPartRequest(MultipartRequest multiPartRequest, {Function(d
           onError?.call(errorSomethingWentWrong);
         }
       } on Exception catch (e) {
-        log(e);
+        _log(e);
         onError?.call(errorSomethingWentWrong);
       }
     }
   } on SocketException catch (e) {
-    log(e.toString());
+    _log(e.toString());
     onError?.call(language.internetNotAvailable);
   } on Exception catch (e) {
-    log(e.toString());
+    _log(e.toString());
     onError?.call(errorSomethingWentWrong);
   }
 }
@@ -346,12 +348,12 @@ void apiPrint({
   String methodtype = "",
   bool hasRequest = false,
 }) {
-  log("┌───────────────────────────────────────────────────────────────────────────────────────────────────────");
-  log("\u001b[93mUrl: \u001B[39m $url");
-  log("\u001b[93mHeader: \u001B[39m \u001b[96m$headers\u001B[39m");
-  if (request.isNotEmpty) log("\u001b[93mRequest: \u001B[39m \u001b[96m$request\u001B[39m");
-  log('Response ($methodtype) $statusCode: $responseBody');
-  log("└───────────────────────────────────────────────────────────────────────────────────────────────────────");
+  _log("┌───────────────────────────────────────────────────────────────────────────────────────────────────────");
+  _log("\u001b[93mUrl: \u001B[39m $url");
+  _log("\u001b[93mHeader: \u001B[39m \u001b[96m$headers\u001B[39m");
+  if (request.isNotEmpty) _log("\u001b[93mRequest: \u001B[39m \u001b[96m$request\u001B[39m");
+  _log('Response ($methodtype) $statusCode: $responseBody');
+  _log("└───────────────────────────────────────────────────────────────────────────────────────────────────────");
 }
 
 Map<String, String> buildHeaderForStripe(String stripeKeyPayment) {
@@ -434,3 +436,7 @@ Future<dynamic> getRemoteDataFromUrl({
     return null;
   }
 }
+
+/// Journaux de ce fichier : données sensibles toujours masquées (jetons,
+/// codes, noms, numéros), voir log_redact.dart.
+void _log(Object? value) => nb_log.log(redactForLog(value));

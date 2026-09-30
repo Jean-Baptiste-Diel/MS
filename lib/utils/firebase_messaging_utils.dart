@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/log_redact.dart';
+import 'package:nb_utils/nb_utils.dart' as nb_log show log;
 import 'dart:convert';
 import 'dart:io';
 
@@ -89,7 +91,7 @@ Future<void> showIncomingCallNotification({
       payload: jsonEncode({'type': 'INCOMING_CALL', 'order_id': orderId, 'channel': channel}),
     );
   } catch (e) {
-    log('[showIncomingCallNotification] $e');
+    _log('[showIncomingCallNotification] $e');
   }
 }
 
@@ -150,7 +152,7 @@ Future<void> createNotificationChannel() async {
 Future<void> initFirebaseMessaging() async {
   await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, provisional: false, sound: true);
   await registerNotificationListeners().catchError((e) {
-    log('Notification Listener REGISTRATION ERROR: $e');
+    _log('Notification Listener REGISTRATION ERROR: $e');
   });
 }
 
@@ -166,21 +168,21 @@ Future<bool> subscribeToFirebaseTopic() async {
         apnsToken = await FirebaseMessaging.instance.getAPNSToken();
       }
 
-      log('Apn Token=========${apnsToken}');
+      _log('Apn Token=========${apnsToken}');
     }
 
     final fcmToken = await FirebaseMessaging.instance.getToken();
-    log('════════════════════════════════════════════');
-    log('FCM TOKEN: $fcmToken');
-    log('════════════════════════════════════════════');
+    _log('════════════════════════════════════════════');
+    _log('FCM TOKEN: $fcmToken');
+    _log('════════════════════════════════════════════');
 
     await FirebaseMessaging.instance.subscribeToTopic('user_${appStore.userId}').then((value) {
       result = true;
-      log("topic-----subscribed----> user_${appStore.userId}");
+      _log("topic-----subscribed----> user_${appStore.userId}");
     });
     await FirebaseMessaging.instance.subscribeToTopic(USER_APP_TAG).then((value) {
       result = true;
-      log("topic-----subscribed----> $USER_APP_TAG");
+      _log("topic-----subscribed----> $USER_APP_TAG");
     });
   }
 
@@ -192,11 +194,11 @@ Future<bool> unsubscribeFirebaseTopic(int userId) async {
   bool result = appStore.isSubscribedForPushNotification;
   await FirebaseMessaging.instance.unsubscribeFromTopic('user_$userId').then((_) {
     result = false;
-    log("topic-----unsubscribed----> user_$userId");
+    _log("topic-----unsubscribed----> user_$userId");
   });
   await FirebaseMessaging.instance.unsubscribeFromTopic(USER_APP_TAG).then((_) {
     result = false;
-    log("topic-----unsubscribed----> $USER_APP_TAG");
+    _log("topic-----unsubscribed----> $USER_APP_TAG");
   });
 
   await appStore.setPushNotificationSubscriptionStatus(result);
@@ -228,7 +230,7 @@ void emitOrderListRefresh({bool badge = true}) {
 
 /// Handler top-level — appelé depuis main() avant runApp() via [registerForegroundMessageListener].
 void _handleForegroundMessage(RemoteMessage message) {
-  log('[FCM onMessage] ════ notification=${message.notification?.title} data=${message.data}');
+  _log('[FCM onMessage] ════ notification=${message.notification?.title} data=${message.data}');
 
   if (message.data['type'] == 'INCOMING_CALL') {
     final orderId = message.data['order_id']?.toString() ?? '';
@@ -264,22 +266,22 @@ void _handleForegroundMessage(RemoteMessage message) {
 void _showForegroundNotification(RemoteMessage message) {
   final notif = message.notification;
   if (notif == null) {
-    log('[FCM onMessage] → notification field is null, skipping showNotification');
+    _log('[FCM onMessage] → notification field is null, skipping showNotification');
     return;
   }
   if (Platform.isIOS) return;
-  log('[FCM onMessage] → showNotification title="${notif.title}" body="${notif.body}"');
+  _log('[FCM onMessage] → showNotification title="${notif.title}" body="${notif.body}"');
   showNotification(currentTimeStamp(), notif.title ?? '', parseHtmlString(notif.body ?? ''), message);
 }
 
 /// Enregistre le listener foreground UNE SEULE FOIS depuis main() avant runApp().
 void registerForegroundMessageListener() {
   FirebaseMessaging.onMessage.listen(_handleForegroundMessage, onError: (e) {
-    log('[FCM onMessage] stream error: $e');
+    _log('[FCM onMessage] stream error: $e');
   });
 
   FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-    log('[FCM] token refreshed → sending to backend');
+    _log('[FCM] token refreshed → sending to backend');
     saveFcmTokenToBackend(newToken);
   });
 }
@@ -291,7 +293,7 @@ Future<void> registerNotificationListeners() async {
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
     handleNotificationClick(message);
   }, onError: (e) {
-    log("onMessageOpenedApp Error $e");
+    _log("onMessageOpenedApp Error $e");
   });
 
   // getInitialMessage — app fermée, user tape la notif
@@ -300,7 +302,7 @@ Future<void> registerNotificationListeners() async {
       handleNotificationClick(message);
     }
   }).catchError((e) {
-    log("getInitialMessage error : $e");
+    _log("getInitialMessage error : $e");
   });
 }
 
@@ -412,9 +414,9 @@ void handleNotificationClick(RemoteMessage message) {
 
 void showNotification(int id, String title, String message, RemoteMessage remoteMessage) async {
   try {
-  log('[showNotification] id=$id title="$title"');
-  log('[showNotification] data=${remoteMessage.data}');
-  log("User Message Image Url : ${remoteMessage.data["image_url"]} ");
+  _log('[showNotification] id=$id title="$title"');
+  _log('[showNotification] data=${remoteMessage.data}');
+  _log("User Message Image Url : ${remoteMessage.data["image_url"]} ");
   // Pas de ré-initialisation ici : le plugin est initialisé une fois dans
   // main() avec le gestionnaire d'appui global (onNotificationTap). Le
   // ré-initialiser à chaque notification écrasait ce gestionnaire : un appui
@@ -472,7 +474,7 @@ void showNotification(int id, String title, String message, RemoteMessage remote
     macOS: darwinPlatformChannelSpecifics,
   );
 
-  log('[showNotification] calling show()');
+  _log('[showNotification] calling show()');
   await flutterLocalNotificationsPlugin.show(
     id,
     title,
@@ -480,8 +482,12 @@ void showNotification(int id, String title, String message, RemoteMessage remote
     platformChannelSpecifics,
     payload: jsonEncode(remoteMessage.data),
   );
-  log('[showNotification] show() done');
+  _log('[showNotification] show() done');
   } catch (e, st) {
-    log('[showNotification] ERROR: $e\n$st');
+    _log('[showNotification] ERROR: $e\n$st');
   }
 }
+
+/// Journaux de ce fichier : données sensibles toujours masquées (jetons,
+/// codes, noms, numéros), voir log_redact.dart.
+void _log(Object? value) => nb_log.log(redactForLog(value));

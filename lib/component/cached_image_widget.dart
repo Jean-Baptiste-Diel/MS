@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -69,6 +70,7 @@ class CachedImageWidget extends StatelessWidget {
           );
         },
         imageUrl: url,
+        cacheKey: imageCacheKey(url),
         height: height,
         width: width ?? height,
         fit: fit,

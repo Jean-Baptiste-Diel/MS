@@ -458,7 +458,9 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
           child: NominatimAddressField(
             controller: zoneCont,
             hintText: 'Rechercher une adresse...',
-            countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+            // Commandes : suggestions limitées à la région de Dakar (Sénégal).
+            countryCodes: const ['sn'],
+            bbox: kDakarRegionBbox,
             onSelected: (s) => setState(() {
               zoneLat = s.lat;
               zoneLon = s.lon;

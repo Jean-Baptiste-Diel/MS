@@ -30,25 +30,82 @@ import flutter_callkit_incoming
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  // MARK: - Haut-parleur pendant un appel
+  // MARK: - Sortie audio pendant un appel (écouteur / haut-parleur / Bluetooth)
 
-  /// CallKit possede la session audio (Agora configure pour ne pas y toucher) :
-  /// setEnableSpeakerphone d'Agora est alors sans effet. La sortie est basculee
+  /// CallKit possède la session audio (Agora configuré pour ne pas y toucher) :
+  /// setEnableSpeakerphone d'Agora est alors sans effet. La sortie est basculée
   /// ici, directement sur la session audio.
+  private var audioRouteChannel: FlutterMethodChannel?
+
   private func registerAudioRouteChannel() {
     guard let registrar = self.registrar(forPlugin: "MisonAudioRoute") else { return }
     let channel = FlutterMethodChannel(name: "mison/audio_route", binaryMessenger: registrar.messenger())
-    channel.setMethodCallHandler { call, result in
-      guard call.method == "setSpeaker" else {
-        result(FlutterMethodNotImplemented)
-        return
-      }
-      let speakerOn = (call.arguments as? Bool) ?? true
+    audioRouteChannel = channel
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else { return }
       do {
-        try AVAudioSession.sharedInstance().overrideOutputAudioPort(speakerOn ? .speaker : .none)
-        result(nil)
+        switch call.method {
+        case "setSpeaker":
+          let speakerOn = (call.arguments as? Bool) ?? true
+          try self.setRoute(speakerOn ? "speaker" : "earpiece")
+          result(nil)
+        case "setRoute":
+          try self.setRoute((call.arguments as? String) ?? "earpiece")
+          result(nil)
+        case "getRoutes":
+          result(self.currentRoutes())
+        default:
+          result(FlutterMethodNotImplemented)
+        }
       } catch {
         result(FlutterError(code: "AUDIO_ROUTE", message: error.localizedDescription, details: nil))
+      }
+    }
+    // Casque Bluetooth connecté / déconnecté pendant l'appel : Dart rafraîchit.
+    NotificationCenter.default.addObserver(
+      forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      self?.audioRouteChannel?.invokeMethod("routeChanged", arguments: nil)
+    }
+  }
+
+  private static let bluetoothPorts: Set<AVAudioSession.Port> = [.bluetoothHFP, .bluetoothA2DP, .bluetoothLE]
+
+  private func bluetoothInput() -> AVAudioSessionPortDescription? {
+    AVAudioSession.sharedInstance().availableInputs?.first { $0.portType == .bluetoothHFP }
+  }
+
+  private func currentRoutes() -> [String: Any] {
+    let session = AVAudioSession.sharedInstance()
+    let output = session.currentRoute.outputs.first
+    let current: String
+    switch output?.portType {
+    case .builtInSpeaker?: current = "speaker"
+    case .headphones?, .usbAudio?: current = "wired"
+    case let port? where AppDelegate.bluetoothPorts.contains(port): current = "bluetooth"
+    default: current = "earpiece"
+    }
+    let bt = bluetoothInput()
+    let btOutput = session.currentRoute.outputs.first { AppDelegate.bluetoothPorts.contains($0.portType) }
+    return [
+      "current": current,
+      "bluetooth": bt != nil || btOutput != nil,
+      "bluetoothName": bt?.portName ?? btOutput?.portName ?? "",
+    ]
+  }
+
+  private func setRoute(_ route: String) throws {
+    let session = AVAudioSession.sharedInstance()
+    switch route {
+    case "speaker":
+      try session.overrideOutputAudioPort(.speaker)
+    case "bluetooth":
+      try session.overrideOutputAudioPort(.none)
+      if let bt = bluetoothInput() { try session.setPreferredInput(bt) }
+    default: // écouteur du téléphone
+      try session.overrideOutputAudioPort(.none)
+      if let mic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+        try session.setPreferredInput(mic)
       }
     }
   }

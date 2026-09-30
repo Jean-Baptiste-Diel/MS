@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/log_redact.dart';
+import 'package:nb_utils/nb_utils.dart' as nb_log show log;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -120,7 +122,7 @@ Future<BaseResponseModel> createUser(
         filename: fileName));
   }
 
-  log("Register Request: ${jsonEncode(multiPartRequest.fields)}");
+  _log("Register Request: ${jsonEncode(multiPartRequest.fields)}");
 
   await sendMultiPartRequest(
     multiPartRequest,
@@ -152,6 +154,9 @@ Future<BaseResponseModel> createArtisan(
   File? identityDocument,
   Uint8List? identityDocumentBytes,
   String? identityDocumentFileName,
+  File? identityDocumentBack,
+  Uint8List? identityDocumentBackBytes,
+  String? identityDocumentBackFileName,
   File? professionProof,
   Uint8List? professionProofBytes,
   String? professionProofFileName,
@@ -194,12 +199,21 @@ Future<BaseResponseModel> createArtisan(
     return completer.future;
   }
 
-  // Identity document (single file) obligatoire
+  // Identity document (Recto) obligatoire
   bool hasIdentityDocument =
       (identityDocument != null && identityDocument.existsSync()) ||
           (identityDocumentBytes != null && identityDocumentBytes.isNotEmpty);
   if (!hasIdentityDocument) {
-    completer.completeError('La pièce d\'identité est requise');
+    completer.completeError('La pièce d\'identité (recto) est requise');
+    return completer.future;
+  }
+
+  // Identity document (Verso) obligatoire
+  bool hasIdentityDocumentBack =
+      (identityDocumentBack != null && identityDocumentBack.existsSync()) ||
+          (identityDocumentBackBytes != null && identityDocumentBackBytes.isNotEmpty);
+  if (!hasIdentityDocumentBack) {
+    completer.completeError('La pièce d\'identité (verso) est requise');
     return completer.future;
   }
 
@@ -240,16 +254,25 @@ Future<BaseResponseModel> createArtisan(
         filename: fileName));
   }
 
-  // Ajouter pièce d'identité (identity_document)
+  // Pièce d'identité : recto (identity_document) et verso (identity_document_back),
+  // chacun envoyé une seule fois.
   if (identityDocument != null && identityDocument.existsSync()) {
     multiPartRequest.files.add(await MultipartFile.fromPath(
         'identity_document', identityDocument.path));
   } else if (identityDocumentBytes != null &&
       identityDocumentBytes.isNotEmpty) {
-    String fileName = identityDocumentFileName ?? 'identity_document.jpg';
     multiPartRequest.files.add(MultipartFile.fromBytes(
         'identity_document', identityDocumentBytes,
-        filename: fileName));
+        filename: identityDocumentFileName ?? 'identity_document.jpg'));
+  }
+  if (identityDocumentBack != null && identityDocumentBack.existsSync()) {
+    multiPartRequest.files.add(await MultipartFile.fromPath(
+        'identity_document_back', identityDocumentBack.path));
+  } else if (identityDocumentBackBytes != null &&
+      identityDocumentBackBytes.isNotEmpty) {
+    multiPartRequest.files.add(MultipartFile.fromBytes(
+        'identity_document_back', identityDocumentBackBytes,
+        filename: identityDocumentBackFileName ?? 'identity_document_back.jpg'));
   }
 
   // Ajouter preuve de profession (profession_proof) - optionnel
@@ -263,8 +286,8 @@ Future<BaseResponseModel> createArtisan(
         filename: fileName));
   }
 
-  log("Artisan Register Request Fields: ${jsonEncode(multiPartRequest.fields)}");
-  log("Artisan Register Request Files: ${multiPartRequest.files.length}");
+  _log("Artisan Register Request Fields: ${jsonEncode(multiPartRequest.fields)}");
+  _log("Artisan Register Request Files: ${multiPartRequest.files.length}");
 
   await sendMultiPartRequest(
     multiPartRequest,
@@ -324,7 +347,7 @@ Future<UserData> getUserDetail(int id, {bool forceUpdate = true}) async {
   lastSyncedTimeStamp = lastSyncedTimeStamp.add(Duration(minutes: 5));
 
   if (!forceUpdate && lastSyncedTimeStamp.isAfter(currentTimeStamp)) {
-    log('User details was synced recently');
+    _log('User details was synced recently');
 
     /// Throw empty string so that in this case no toast message will be shown
     throw '';
@@ -380,11 +403,11 @@ Future<void> saveUserData(UserData data,
 
   /// Envoyer le FCM token au backend Mison
   FirebaseMessaging.instance.getToken().then((token) {
-    log('════════════════════════════════════════════');
-    log('FCM TOKEN: $token');
-    log('════════════════════════════════════════════');
+    _log('════════════════════════════════════════════');
+    _log('FCM TOKEN: $token');
+    _log('════════════════════════════════════════════');
     if (token != null) saveFcmTokenToBackend(token);
-  }).catchError((e) { log('FCM getToken error: $e'); return null; });
+  }).catchError((e) { _log('FCM getToken error: $e'); return null; });
 
   // Sync new configurations for secret keys
   if (forceSyncAppConfigurations)
@@ -443,7 +466,7 @@ Future<void> clearPreferences() async {
   try {
     FirebaseAuth.instance.signOut();
   } catch (e) {
-    print(e);
+    _log(e);
   }
 
   appStore.setUserWalletAmount();
@@ -459,7 +482,7 @@ Future<void> logout(BuildContext context) async {
   }
 
   appStore.setLoading(true);
-  logoutApi().catchError((e) => log(e.toString()));
+  logoutApi().catchError((e) => _log(e.toString()));
 
   await clearPreferences();
   if (cachedWalletHistoryList != null && cachedWalletHistoryList!.isNotEmpty) {
@@ -478,7 +501,7 @@ Future<void> logoutApi() async {
         request: request, method: HttpMethodType.POST));
   } catch (e) {
     // Continue logout even if API fails
-    log('Logout API error: $e');
+    _log('Logout API error: $e');
   }
 }
 
@@ -604,7 +627,7 @@ Future<void> getAppConfigurations(
   lastSyncedTimeStamp = lastSyncedTimeStamp.add(Duration(minutes: 5));
 
   if (lastSyncedTimeStamp.isAfter(currentTimeStamp)) {
-    log('App Configurations was synced recently');
+    _log('App Configurations was synced recently');
   } else {
     // Utilisation de valeurs par défaut au lieu de l'appel API
     // TODO: Implémenter l'endpoint /api/configurations sur votre backend si vous avez besoin de configs dynamiques
@@ -656,7 +679,7 @@ Future<num> getUserWalletBalance() async {
     return res.balance.validate();
   } catch (e) {
     appStore.setLoading(false);
-    log(e);
+    _log(e);
     return appStore.userWalletAmount;
   }
 }
@@ -707,7 +730,7 @@ Future<BaseResponseModel> walletTopUp(Map req) async {
 
     return res;
   } catch (e) {
-    log(e);
+    _log(e);
     appStore.setLoading(false);
     TopToast.show(message: e.toString(), type: TopToastType.error);
     throw e;
@@ -1847,6 +1870,40 @@ Future<MisonOrderResponse> getMisonOrders({String? status}) async {
 }
 
 /// GET /api/orders/{id} - Détails d'une commande spécifique
+/// GET / POST /api/artisans/availability — bouton « Disponible / Indisponible »
+/// de l'accueil du prestataire. Retourne l'état enregistré sur le serveur.
+Future<bool> getArtisanAvailability() async {
+  final body = await handleResponse(await buildHttpResponse('artisans/availability', method: HttpMethodType.GET));
+  return body['data']?['is_available'] != false;
+}
+
+Future<bool> setArtisanAvailability(bool isAvailable) async {
+  final body = await handleResponse(await buildHttpResponse(
+    'artisans/availability',
+    request: {'is_available': isAvailable},
+    method: HttpMethodType.POST,
+  ));
+  return body['data']?['is_available'] != false;
+}
+
+/// POST /api/artisans/location — position du prestataire libre (app ouverte),
+/// affichée aux clients qui cherchent un prestataire.
+Future<void> postArtisanLocation(double latitude, double longitude) async {
+  await handleResponse(await buildHttpResponse(
+    'artisans/location',
+    request: {'latitude': latitude, 'longitude': longitude},
+    method: HttpMethodType.POST,
+  ));
+}
+
+/// GET /api/orders/{id}/nearby-artisans — écran de recherche du client :
+/// positions approximatives des prestataires disponibles autour de lui.
+Future<Map<String, dynamic>> getOrderNearbyArtisans(String orderId) async {
+  final response = await buildHttpResponse('orders/$orderId/nearby-artisans', method: HttpMethodType.GET);
+  final body = await handleResponse(response);
+  return (body is Map && body['data'] is Map) ? Map<String, dynamic>.from(body['data']) : <String, dynamic>{};
+}
+
 Future<MisonOrderDetailResponse> getMisonOrderDetail(String orderId) async {
   try {
     final response = await buildHttpResponse('orders/$orderId', method: HttpMethodType.GET);
@@ -1881,7 +1938,7 @@ Future<void> saveFcmTokenToBackend(String fcmToken) async {
       request: {'fcm_token': fcmToken},
     );
   } catch (e) {
-    log('saveFcmToken error: $e');
+    _log('saveFcmToken error: $e');
   }
 }
 
@@ -1974,9 +2031,9 @@ Future<MisonOrderDetailResponse> createWorkerRequest(MisonWorkerRequestModel req
       request: request.toJson(),
       method: HttpMethodType.POST,
     );
-    log('createWorkerRequest → ${request.toJson()}');
+    _log('createWorkerRequest → ${request.toJson()}');
     final res = MisonOrderDetailResponse.fromJson(await handleResponse(response));
-    log('createWorkerRequest ← ${res.message}');
+    _log('createWorkerRequest ← ${res.message}');
     return res;
   } catch (e) {
     throw e;
@@ -1999,7 +2056,7 @@ Future<void> logOrderCall(String orderId, {required String outcome, int duration
         request: {'outcome': outcome, 'duration_seconds': durationSeconds});
     await handleResponse(response);
   } catch (e) {
-    log('logOrderCall: $e');
+    _log('logOrderCall: $e');
   }
 }
 
@@ -2129,7 +2186,7 @@ Future<void> refreshPushTokens() async {
     final token = await FirebaseMessaging.instance.getToken();
     if (token != null && token.isNotEmpty) await saveFcmTokenToBackend(token);
   } catch (e) {
-    log('refreshPushTokens error: $e');
+    _log('refreshPushTokens error: $e');
   }
 }
 
@@ -2143,8 +2200,12 @@ Future<void> saveVoipTokenToBackend(String voipToken) async {
       request: {'voip_token': voipToken},
     );
   } catch (e) {
-    log('saveVoipToken error: $e');
+    _log('saveVoipToken error: $e');
   }
 }
 
 //endregion Mison API
+
+/// Journaux de ce fichier : données sensibles toujours masquées (jetons,
+/// codes, noms, numéros), voir log_redact.dart.
+void _log(Object? value) => nb_log.log(redactForLog(value));

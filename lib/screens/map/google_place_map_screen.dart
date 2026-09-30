@@ -42,7 +42,9 @@ class _GooglePlaceMapScreenState extends State<GooglePlaceMapScreen> {
               child: NominatimAddressField(
                 controller: _controller,
                 hintText: 'Rechercher une adresse...',
-                countryCodes: const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+                // Commandes : suggestions limitées à la région de Dakar (Sénégal).
+                countryCodes: const ['sn'],
+                bbox: kDakarRegionBbox,
                 decoration: InputDecoration(
                   hintText: 'Rechercher une adresse...',
                   hintStyle: secondaryTextStyle(),

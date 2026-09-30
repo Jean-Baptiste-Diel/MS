@@ -122,6 +122,14 @@ class NominatimSuggestion {
   }
 }
 
+/// Région de Dakar (Dakar, Pikine, Guédiawaye, Keur Massar, Rufisque,
+/// Diamniadio, Bargny…) : zone d'intervention des commandes client.
+/// Format Photon : ouest, sud, est, nord.
+const String kDakarRegionBbox = '-17.55,14.55,-17.05,14.90';
+
+/// Afrique de l'Ouest (Mauritanie/Sénégal → Niger/Bénin).
+const String kWestAfricaBbox = '-17.5,4.3,16.0,27.3';
+
 /// Champ d'adresse avec autocomplétion Nominatim (sans clé API).
 /// Callback [onSelected] reçoit la suggestion avec mainText, subText, lat, lon.
 class NominatimAddressField extends StatefulWidget {
@@ -129,6 +137,10 @@ class NominatimAddressField extends StatefulWidget {
   final String hintText;
   final InputDecoration? decoration;
   final List<String> countryCodes;
+
+  /// Zone où chercher (voir [kDakarRegionBbox]) : seules les adresses de
+  /// cette zone sont proposées.
+  final String bbox;
   final void Function(NominatimSuggestion suggestion)? onSelected;
 
   /// Widget optionnel affiché à droite du champ (ex: bouton "Ma position"),
@@ -140,7 +152,8 @@ class NominatimAddressField extends StatefulWidget {
     required this.controller,
     this.hintText = 'Rechercher une adresse...',
     this.decoration,
-    this.countryCodes = const ['sn', 'ml', 'ci', 'bf', 'gn', 'ne', 'tg', 'bj', 'mr', 'gm'],
+    this.countryCodes = const ['sn'],
+    this.bbox = kDakarRegionBbox,
     this.onSelected,
     this.suffixButton,
   }) : super(key: key);
@@ -168,14 +181,12 @@ class _NominatimAddressFieldState extends State<NominatimAddressField> {
   static const double _biasLat = 14.6928;
   static const double _biasLon = -17.4467;
 
-  // Boîte englobante Afrique de l'Ouest (Mauritanie/Sénégal → Niger/Bénin).
   // Photon ne fait qu'un boost de pertinence avec lat/lon seuls : pour une
   // requête courte/ambiguë ("plat", "da"...), les résultats mondiaux les plus
   // "importants" (Europe, etc.) passent souvent devant les résultats locaux et
   // finissent tous filtrés par countrycode côté client → liste vide. Le bbox
-  // restreint la recherche elle-même à la zone, donc les résultats remontés
-  // sont déjà pertinents.
-  static const String _westAfricaBbox = '-17.5,4.3,16.0,27.3';
+  // (widget.bbox) restreint la recherche elle-même à la zone, donc les
+  // résultats remontés sont déjà pertinents.
 
   Future<void> _search(String query) async {
     if (query.trim().length < 2) {
@@ -195,7 +206,7 @@ class _NominatimAddressFieldState extends State<NominatimAddressField> {
         '&limit=15'
         '&lat=$_biasLat'
         '&lon=$_biasLon'
-        '&bbox=$_westAfricaBbox',
+        '&bbox=${widget.bbox}',
       );
 
       final response = await http

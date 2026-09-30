@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/component/mison_view_all_button.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
@@ -144,6 +145,7 @@ class ArtisanCard extends StatelessWidget {
               child: (artisan.profilePictureUrl ?? '').trim().isNotEmpty
                   ? CachedNetworkImage(
                       imageUrl: artisan.profilePictureUrl!.trim(),
+                      cacheKey: imageCacheKey(artisan.profilePictureUrl!.trim()),
                       fit: BoxFit.cover,
                       errorWidget: (_, __, ___) => _initial(artisan),
                     )

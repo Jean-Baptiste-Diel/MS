@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
@@ -53,8 +54,62 @@ List<LatLng> decodePolyline(String encoded) {
   return points;
 }
 
-/// Calcule l'itinéraire en voiture de [origin] à [destination], ou null en cas d'échec.
-Future<RouteEta?> fetchDrivingRoute(LatLng origin, LatLng destination) async {
+// ── Limitation des appels Google Directions (payants) ──────────────────────
+// Tous les écrans (détail, suivi en direct…) partagent le même cache : un seul
+// appel pour une même destination, tant que l'ouvrier n'a pas beaucoup bougé.
+// Entre deux appels, l'heure d'arrivée reste celle déjà calculée.
+
+/// Nouvel itinéraire seulement si l'ouvrier a bougé de plus de cette distance…
+const double kRouteRefreshMoveMeters = 1500;
+
+/// … ou si le dernier calcul date de plus de ce délai (trafic qui évolue).
+const Duration kRouteMaxAge = Duration(minutes: 5);
+
+/// En dessous de ce délai, jamais de nouvel appel (même s'il a beaucoup bougé).
+const Duration kRouteMinInterval = Duration(seconds: 90);
+
+class _CachedRoute {
+  final LatLng origin;
+  final DateTime at;
+  final RouteEta eta;
+  const _CachedRoute(this.origin, this.at, this.eta);
+}
+
+final Map<String, _CachedRoute> _routeCache = {};
+final Map<String, Future<RouteEta?>> _routeInFlight = {};
+
+String _destKey(LatLng d) => '${d.latitude.toStringAsFixed(4)},${d.longitude.toStringAsFixed(4)}';
+
+/// Itinéraire en voiture de [origin] à [destination], en limitant les appels
+/// payants : réutilise le dernier calcul tant que l'ouvrier a peu bougé.
+Future<RouteEta?> fetchDrivingRoute(LatLng origin, LatLng destination) {
+  final key = _destKey(destination);
+  final cached = _routeCache[key];
+  if (cached != null) {
+    final age = DateTime.now().difference(cached.at);
+    final moved = Geolocator.distanceBetween(
+      cached.origin.latitude, cached.origin.longitude, origin.latitude, origin.longitude,
+    );
+    if (age < kRouteMinInterval || (age < kRouteMaxAge && moved < kRouteRefreshMoveMeters)) {
+      // Même heure d'arrivée qu'au dernier calcul : on retire le temps écoulé.
+      final remaining = (cached.eta.seconds - age.inSeconds).clamp(60, 1 << 30);
+      return Future.value(RouteEta(
+        seconds: remaining,
+        durationText: '${(remaining / 60).ceil()} min',
+        distanceText: cached.eta.distanceText,
+        distanceMeters: cached.eta.distanceMeters,
+        encodedPolyline: cached.eta.encodedPolyline,
+      ));
+    }
+  }
+  // Deux écrans qui demandent en même temps : un seul appel.
+  return _routeInFlight[key] ??= _fetchDrivingRouteFromGoogle(origin, destination).then((eta) {
+    if (eta != null) _routeCache[key] = _CachedRoute(origin, DateTime.now(), eta);
+    return eta;
+  }).whenComplete(() => _routeInFlight.remove(key));
+}
+
+Future<RouteEta?> _fetchDrivingRouteFromGoogle(LatLng origin, LatLng destination) async {
   final uri = Uri.parse(
     'https://maps.googleapis.com/maps/api/directions/json'
     '?origin=${origin.latitude},${origin.longitude}'
