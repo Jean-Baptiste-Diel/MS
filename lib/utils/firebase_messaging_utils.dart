@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/utils/log_redact.dart';
 import 'package:nb_utils/nb_utils.dart' as nb_log show log;
 import 'dart:convert';
@@ -18,6 +19,7 @@ import '../main.dart';
 import '../network/rest_apis.dart';
 import '../screens/booking/booking_detail_screen.dart';
 import '../screens/booking/mison_order_detail_screen.dart';
+import '../screens/booking/mison_order_searching_screen.dart';
 import '../screens/call/mison_call_screen.dart';
 import '../screens/call/mison_incoming_call_screen.dart';
 import '../screens/chat/mison_order_chat_screen.dart';
@@ -241,7 +243,17 @@ void _handleForegroundMessage(RemoteMessage message) {
   // Message du chat de commande : la notification suffit, l'écran de chat
   // reçoit le message par WebSocket s'il est ouvert.
   if (message.data['type'] == 'ORDER_CHAT_MESSAGE') {
+    ChatUnreadStore.refresh();
     _showForegroundNotification(message);
+    return;
+  }
+  if (message.data['type'] == 'SUPPORT_MESSAGE') ChatUnreadStore.refresh();
+
+  // Commande prise par un autre prestataire (notification invisible) : elle
+  // disparaît tout de suite des listes ; son détail, s'il est ouvert, se
+  // recharge et indique qu'elle n'est plus disponible.
+  if (message.data['type'] == 'ORDER_TAKEN') {
+    emitOrderListRefresh(badge: false);
     return;
   }
 
@@ -364,6 +376,25 @@ void handleNotificationClick(RemoteMessage message) {
     if (orderId.isNotEmpty) {
       navigatorKey.currentState?.push(MaterialPageRoute(
         builder: (_) => MisonOrderChatScreen(orderId: orderId, peerName: ''),
+      ));
+    }
+    return;
+  }
+
+  // Commande confirmée, prestataire trouvé ou désisté : le suivi sur la carte
+  // (il passe tout seul au détail si la commande est déjà terminée). Déjà
+  // affiché : rien à faire, il se met à jour de lui-même.
+  const followTypes = {'ORDER_CONFIRMED', 'ORDER_ACCEPTED', 'ORDER_ARTISAN_RELEASED'};
+  if (followTypes.contains(message.data['type'])) {
+    final type = message.data['type'];
+    final orderId = message.data['order_id']?.toString() ?? '';
+    if (orderId.isNotEmpty && MisonOrderSearchingScreen.openOrderId != orderId) {
+      navigatorKey.currentState?.push(MaterialPageRoute(
+        builder: (_) => MisonOrderSearchingScreen(
+          orderId: orderId,
+          justConfirmed: type == 'ORDER_CONFIRMED',
+          artisanReleased: type == 'ORDER_ARTISAN_RELEASED',
+        ),
       ));
     }
     return;

@@ -7,6 +7,8 @@ import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_success_screen.dart';
+import 'package:booking_system_flutter/screens/booking/mison_order_searching_screen.dart';
+import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
@@ -78,9 +80,22 @@ class _MisonConfirmBookingScreenState
       final response = await createMisonOrder(request);
       setState(() => _isLoading = false);
 
-      if (response.data != null) {
+      final order = response.data;
+      if (!mounted) return;
+      if (order != null && (order.id ?? '').isNotEmpty && order.isPending && (order.latitude ?? '').isNotEmpty) {
+        // Commande confirmée : directement la recherche sur la carte, avec
+        // « Mes commandes » dessous pour le retour.
+        final navigator = Navigator.of(context);
+        navigator.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => DashboardScreen(redirectToBooking: true)),
+          (_) => false,
+        );
+        navigator.push(MaterialPageRoute(
+          builder: (_) => MisonOrderSearchingScreen(orderId: order.id!, initialOrder: order, justConfirmed: true),
+        ));
+      } else if (order != null) {
         MisonBookingSuccessScreen(
-          order: response.data!,
+          order: order,
           serviceName: widget.service.name ?? '',
           paymentMethod: '',
         ).launch(context, isNewTask: true);

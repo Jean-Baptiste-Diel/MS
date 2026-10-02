@@ -62,6 +62,7 @@ class MisonOrder {
   String? paymentMethod; // WAVE / ORANGE_MONEY une fois payé, sinon null
   String? invoiceRequestedAt; // facture demandée au support
   int? searchRadiusKm; // recherche progressive : 5, puis 10, puis 15 km
+  String? searchStartedAt; // début (ou redémarrage après désistement) de la recherche
   String? searchExhaustedAt; // personne trouvé : le back-office prend le relais
 
   MisonOrder({
@@ -90,6 +91,7 @@ class MisonOrder {
     this.paymentMethod,
     this.invoiceRequestedAt,
     this.searchRadiusKm,
+    this.searchStartedAt,
     this.searchExhaustedAt,
   });
 
@@ -130,6 +132,7 @@ class MisonOrder {
       paymentMethod: json['payment_method']?.toString(),
       invoiceRequestedAt: json['invoice_requested_at']?.toString(),
       searchRadiusKm: num.tryParse(json['search_radius_km']?.toString() ?? '')?.toInt(),
+      searchStartedAt: json['search_started_at']?.toString(),
       searchExhaustedAt: json['search_exhausted_at']?.toString(),
     )..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null;
   }
@@ -237,9 +240,12 @@ class MisonOrder {
 
   /// L'ouvrier peut se désister — après avoir accepté lui-même comme après une
   /// affectation par l'admin. La commande retourne dans le pool.
+  /// Plus possible une fois arrivé chez le client : il doit commencer la
+  /// prestation (ou passer par le support).
   bool get canReleaseByArtisan =>
       artisan != null &&
-      (isAssigned || isAccepted || isAwaitingTravelPayment || isInProgress);
+      (isAssigned || isAccepted || isAwaitingTravelPayment) &&
+      (arrivedAt ?? '').isEmpty;
 
   /// Can track artisan location : dès que l'ouvrier est rattaché à la commande
   /// (accepté/affecté), pour que le client voie où il se trouve en approche.

@@ -5,7 +5,7 @@ import 'package:booking_system_flutter/component/mison_discreet_cancel_button.da
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
-import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart';
+import 'package:booking_system_flutter/screens/booking/mison_order_searching_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/utils/auto_refresh_mixin.dart';
@@ -291,8 +291,8 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
                 itemBuilder: (_, i) {
                   final order = orders[i];
                   return GestureDetector(
-                    onTap: () => MisonOrderDetailScreen(
-                            orderId: order.id ?? '')
+                    // Commande en cours : directement le suivi sur la carte.
+                    onTap: () => MisonOrderSearchingScreen.screenFor(order)
                         .launch(context),
                     child: MisonOrderItemComponent(
                       order: order,

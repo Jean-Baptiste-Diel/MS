@@ -86,7 +86,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
       id: orderId,
       nameCaller: caller,
-      appName: 'Mison',
+      appName: 'MISON',
       type: 0, // audio
       textAccept: 'Accepter',
       textDecline: 'Refuser',

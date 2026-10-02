@@ -7,9 +7,8 @@ import 'package:booking_system_flutter/screens/booking/mison_confirm_booking_scr
 import 'package:booking_system_flutter/services/location_service.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
-import 'package:booking_system_flutter/utils/constant.dart';
-import 'package:booking_system_flutter/utils/permissions.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:intl/intl.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
@@ -43,28 +42,93 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   TimeOfDay? selectedTime;
 
   bool _isLocatingZone = false;
+  /// Étape affichée sous le champ pendant « Ma position ».
+  String? _locateStep;
+  /// Précision (m) de la position trouvée, affichée une fois l'adresse remplie.
+  double? _locatedAccuracy;
 
+  /// « Ma position » : remplit la zone d'intervention avec l'adresse actuelle.
+  ///
+  /// 1. Seule l'autorisation de localisation est demandée.
+  /// 2. Une position récente déjà connue du téléphone s'affiche tout de suite ;
+  ///    sinon le GPS est interrogé, 12 s au plus (repli : dernière position).
+  /// 3. L'adresse est retrouvée à partir de la position ; si elle ne l'est pas,
+  ///    la position est quand même gardée (« Ma position actuelle »).
   Future<void> _fillZoneWithCurrentLocation() async {
-    setState(() => _isLocatingZone = true);
+    if (_isLocatingZone) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isLocatingZone = true;
+      _locateStep = 'Localisation en cours…';
+      _locatedAccuracy = null;
+    });
     try {
-      final granted = await Permissions.cameraFilesAndLocationPermissionsGranted();
-      await setValue(PERMISSION_STATUS, granted);
-      if (!granted || !mounted) return;
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        TopToast.show(message: 'Activez la localisation de votre téléphone, puis réessayez.');
+        await Geolocator.openLocationSettings();
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        TopToast.show(message: 'Autorisez la localisation de Mison dans les réglages du téléphone.');
+        await Geolocator.openAppSettings();
+        return;
+      }
+      if (permission == LocationPermission.denied) {
+        TopToast.show(message: 'Localisation refusée : saisissez votre adresse.');
+        return;
+      }
 
-      final position = await getUserLocationPosition();
-      final address = await buildFullAddressFromLatLong(position.latitude, position.longitude);
+      // Position récente (moins de 2 min) : immédiate, inutile d'attendre le GPS.
+      Position? position = await Geolocator.getLastKnownPosition();
+      final recent = position != null &&
+          DateTime.now().difference(position.timestamp) < const Duration(minutes: 2) &&
+          position.accuracy <= 100;
+      if (!recent) {
+        try {
+          position = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 12),
+            ),
+          );
+        } catch (_) {
+          // GPS trop long (intérieur) : dernière position connue, si elle existe.
+          if (position == null) rethrow;
+          TopToast.show(message: 'Position approximative : vérifiez l\'adresse.');
+        }
+      }
+      if (!mounted) return;
+
+      setState(() => _locateStep = 'Recherche de l\'adresse…');
+      String address;
+      try {
+        address = await buildFullAddressFromLatLong(position.latitude, position.longitude)
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {
+        address = 'Ma position actuelle';
+      }
       if (!mounted) return;
 
       setState(() {
         zoneCont.text = address;
-        zoneLat = position.latitude;
+        zoneLat = position!.latitude;
         zoneLon = position.longitude;
+        _locatedAccuracy = position.accuracy;
       });
     } catch (e) {
       log(e);
-      TopToast.show(message: 'Impossible de récupérer votre position');
+      TopToast.show(message: 'Impossible de récupérer votre position. Saisissez votre adresse.');
     } finally {
-      if (mounted) setState(() => _isLocatingZone = false);
+      if (mounted) {
+        setState(() {
+          _isLocatingZone = false;
+          _locateStep = null;
+        });
+      }
     }
   }
 
@@ -464,28 +528,65 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
             onSelected: (s) => setState(() {
               zoneLat = s.lat;
               zoneLon = s.lon;
+              _locatedAccuracy = null; // adresse choisie dans les suggestions
             }),
-            suffixButton: IconButton(
-              onPressed: _isLocatingZone ? null : _fillZoneWithCurrentLocation,
-              icon: _isLocatingZone
-                  ? SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: kMisonGold),
-                    )
-                  : Icon(Icons.my_location_rounded, color: kMisonGold, size: 20),
-              tooltip: 'Utiliser ma position actuelle',
+            // « Ma position » en toutes lettres (plutôt qu'une icône de cible).
+            suffixButton: Padding(
+              padding: const EdgeInsets.only(right: 4),
+              // Le bouton garde son texte (grisé) pendant la recherche : la
+              // progression s'affiche sous le champ, pas en cercle ici.
+              child: TextButton(
+                onPressed: _isLocatingZone ? null : _fillZoneWithCurrentLocation,
+                style: TextButton.styleFrom(
+                  foregroundColor: kMisonGold,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  'Ma position',
+                  style: boldTextStyle(size: 13, color: _isLocatingZone ? Colors.grey : kMisonGold),
+                ),
+              ),
             ),
           ),
         ),
-        if (zoneLat != null && zoneLon != null)
+        if (_locateStep != null)
           Padding(
-            padding: const EdgeInsets.only(top: 4, left: 2),
+            padding: const EdgeInsets.only(top: 8, left: 2, right: 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: LinearProgressIndicator(
+                    minHeight: 3,
+                    color: kMisonGold,
+                    backgroundColor: kMisonGold.withValues(alpha: 0.15),
+                  ),
+                ),
+                6.height,
+                Row(
+                  children: [
+                    const Icon(Icons.location_searching_rounded, size: 14, color: kMisonGold),
+                    6.width,
+                    Text(_locateStep!, style: secondaryTextStyle(size: 13, color: kMisonGold)),
+                  ],
+                ),
+              ],
+            ),
+          )
+        else if (zoneLat != null && zoneLon != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 2),
             child: Row(
               children: [
-                Icon(Icons.gps_fixed_rounded, size: 12, color: Colors.green.shade600),
-                4.width,
+                Icon(Icons.check_circle_rounded, size: 14, color: Colors.green.shade600),
+                6.width,
                 Text(
-                  '${zoneLat!.toStringAsFixed(4)}, ${zoneLon!.toStringAsFixed(4)}',
+                  _locatedAccuracy != null
+                      ? 'Position détectée (à ~${_locatedAccuracy!.round()} m près)'
+                      : 'Adresse localisée sur la carte',
                   style: secondaryTextStyle(size: 13, color: Colors.green.shade600),
                 ),
               ],
@@ -533,7 +634,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
           12.height,
           _PromiseItem(icon: Icons.check_circle, text: 'Annulation possible à tout moment avant le rendez-vous'),
           _PromiseItem(icon: Icons.access_time, text: 'Disponible 24h/24'),
-          _PromiseItem(icon: Icons.security, text: 'Garanti par 3R Mison et payer en toute sécurité'),
+          _PromiseItem(icon: Icons.security, text: 'Garanti par Mison Service et payer en toute sécurité'),
           _PromiseItem(icon: Icons.lock, text: 'Un paiement sûr et sécurisé'),
         ],
       ),

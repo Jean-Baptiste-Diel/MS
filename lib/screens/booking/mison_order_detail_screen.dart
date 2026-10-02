@@ -1490,7 +1490,11 @@ class _ArrivalRow extends StatelessWidget {
     }
     // Trajet de l'ouvrier : pas encore parti → en route (heure d'arrivée) → arrivé
     if (order.hasArrived) {
-      return const _InfoRow(icon: Icons.where_to_vote_rounded, label: 'Ouvrier', value: 'Arrivé chez vous');
+      return const _InfoRow(
+        icon: Icons.where_to_vote_rounded,
+        label: 'Ouvrier',
+        value: 'Arrivé chez vous · demandez-lui de lancer la prestation dans l\'app',
+      );
     }
     if (order.isBeforeStart && !order.isEnRoute) {
       return _InfoRow(

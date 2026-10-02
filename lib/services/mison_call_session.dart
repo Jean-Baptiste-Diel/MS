@@ -202,7 +202,7 @@ class MisonCallSession extends ChangeNotifier {
       await FlutterCallkitIncoming.startCall(CallKitParams(
         id: orderId,
         nameCaller: otherPartyName,
-        appName: 'Mison',
+        appName: 'MISON',
         handle: otherPartyName,
         type: 0, // audio
         extra: {'order_id': orderId, 'channel': channel},

@@ -70,13 +70,13 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                           isSelected: _selected == 'INDIVIDUAL',
                           assetIcon: ic_profile2,
                           title: 'Particulier',
-                          tag: 'Je cherche un ouvrier',
+                          tag: 'Je cherche un prestataire',
                           description:
-                              'Publiez votre projet en quelques secondes, comparez des prestataires '
-                              'vérifiés et réservez le professionnel qu\'il vous faut — rapidement et en toute confiance.',
+                              'Trouvez un professionnel de confiance près de chez vous en quelques secondes, '
+                              'suivez son arrivée et payez en toute sécurité une fois le travail terminé.',
                           features: const [
-                            'Devis gratuits',
-                            'Ouvriers vérifiés',
+                            'Prestataires vérifiés',
+                            'Suivi en direct',
                             'Paiement sécurisé',
                           ],
                           accentColor: _kBrandDark,

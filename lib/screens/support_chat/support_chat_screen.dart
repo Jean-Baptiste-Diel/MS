@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/utils/image_pick_sizes.dart';
 import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'dart:async';
@@ -255,6 +256,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
 
   @override
   void dispose() {
+    ChatUnreadStore.refresh(); // pastilles à jour en revenant à la liste
     for (final t in _pendingTimers.values) {
       t.cancel();
     }
@@ -678,8 +680,14 @@ class _ChatInputState extends State<ChatInput> {
   Timer? _recordTimer;
   bool _isRecording = false;
   bool _isLocked = false;
+  bool _isPaused = false;
   Duration _recordElapsed = Duration.zero;
   double _slideDx = 0;
+  // 0 → 1 : progression du glissement vers le cadenas (comme WhatsApp).
+  double _slideUp = 0;
+  // Point rouge qui clignote pendant l'enregistrement.
+  Timer? _blinkTimer;
+  bool _dotVisible = true;
   Offset? _pointerDownPos;
   bool _hasText = false;
 
@@ -709,8 +717,14 @@ class _ChatInputState extends State<ChatInput> {
     setState(() {
       _isRecording = true;
       _isLocked = false;
+      _isPaused = false;
       _recordElapsed = Duration.zero;
       _slideDx = 0;
+      _slideUp = 0;
+      _dotVisible = true;
+    });
+    _blinkTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (mounted && !_isPaused) setState(() => _dotVisible = !_dotVisible);
     });
     // AAC mono 64 kb/s : ~0,5 Mo par minute, qualité voix suffisante.
     _recorderStarting = _recorder.start(
@@ -718,7 +732,7 @@ class _ChatInputState extends State<ChatInput> {
       path: path,
     );
     _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
+      if (!mounted || _isPaused) return;
       setState(() => _recordElapsed += const Duration(seconds: 1));
       if (_recordElapsed >= _maxRecordDuration) _stopRecording(send: true);
     });
@@ -727,10 +741,13 @@ class _ChatInputState extends State<ChatInput> {
   Future<void> _stopRecording({required bool send}) async {
     if (!_isRecording) return;
     _recordTimer?.cancel();
+    _blinkTimer?.cancel();
     final elapsed = _recordElapsed;
     setState(() {
       _isRecording = false;
       _isLocked = false;
+      _isPaused = false;
+      _slideUp = 0;
     });
 
     // L'appui a pu être relâché avant la fin du démarrage de l'enregistreur.
@@ -768,6 +785,24 @@ class _ChatInputState extends State<ChatInput> {
     } finally {
       if (mounted) setState(() => _isUploading = false);
       file.delete().catchError((_) => file);
+    }
+  }
+
+  /// Enregistrement verrouillé : pause / reprise (comme WhatsApp).
+  Future<void> _togglePause() async {
+    try {
+      await _recorderStarting;
+      if (_isPaused) {
+        await _recorder.resume();
+      } else {
+        await _recorder.pause();
+      }
+      if (mounted) setState(() {
+        _isPaused = !_isPaused;
+        _dotVisible = true;
+      });
+    } catch (e) {
+      log('record pause: $e');
     }
   }
 
@@ -855,6 +890,7 @@ class _ChatInputState extends State<ChatInput> {
   @override
   void dispose() {
     _recordTimer?.cancel();
+    _blinkTimer?.cancel();
     _recorder.dispose();
     _textController.dispose();
     _focusNode.dispose();
@@ -874,6 +910,9 @@ class _ChatInputState extends State<ChatInput> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_selectedImage != null) _buildPreview(),
+            if (_isRecording && _isLocked)
+              _buildLockedRecordingBar()
+            else
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
@@ -928,29 +967,12 @@ class _ChatInputState extends State<ChatInput> {
                                   )
                                 : _buildMicButton(),
                       ),
+                      // Cadenas au-dessus du micro : glisser vers le haut verrouille.
                       if (_isRecording && !_isLocked)
                         Positioned(
-                          bottom: 56,
-                          right: 4,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.15),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, -2),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.arrow_upward_rounded,
-                              color: Colors.grey,
-                              size: 18,
-                            ),
-                          ),
+                          bottom: 58 + 24 * _slideUp,
+                          right: 2,
+                          child: _LockHint(progress: _slideUp),
                         ),
                     ],
                   ),
@@ -982,6 +1004,7 @@ class _ChatInputState extends State<ChatInput> {
           final dy = e.position.dy - _pointerDownPos!.dy;
           setState(() {
             _slideDx = dx;
+            _slideUp = (-dy / _lockSlideDistance).clamp(0.0, 1.0);
             if (dy < -_lockSlideDistance && !_isLocked) {
               _isLocked = true;
               HapticFeedback.heavyImpact();
@@ -1017,6 +1040,8 @@ class _ChatInputState extends State<ChatInput> {
   }
 
   Widget _buildRecordingIndicator() {
+    // Le texte suit le doigt et s'efface à mesure qu'on glisse vers l'annulation.
+    final cancelProgress = (-_slideDx / _cancelSlideDistance).clamp(0.0, 1.0);
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1027,29 +1052,90 @@ class _ChatInputState extends State<ChatInput> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.fiber_manual_record, color: Colors.red, size: 12),
-          6.width,
-          Text(_formatElapsed(_recordElapsed), style: boldTextStyle(size: 13)),
-          8.width,
-          Expanded(
-            child: Text(
-              _isLocked ? 'Touchez ➤ pour envoyer' : '‹ Glissez pour annuler · ↑ verrouiller',
-              style: secondaryTextStyle(size: 11, color: Colors.grey.shade600),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-            ),
+          Opacity(
+            opacity: _dotVisible ? 1 : 0.15,
+            child: const Icon(Icons.mic_rounded, color: Colors.red, size: 20),
           ),
-          if (_isLocked) ...[
-            4.width,
-            InkWell(
-              onTap: () => _stopRecording(send: false),
-              child: const Padding(
-                padding: EdgeInsets.all(4.0),
-                child: Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
+          6.width,
+          Text(_formatElapsed(_recordElapsed), style: boldTextStyle(size: 14)),
+          Expanded(
+            child: Transform.translate(
+              offset: Offset(_slideDx.clamp(-_cancelSlideDistance, 0.0) * 0.6, 0),
+              child: Opacity(
+                opacity: 1 - cancelProgress * 0.8,
+                child: Text(
+                  '‹  Glisser pour annuler',
+                  style: secondaryTextStyle(size: 13, color: Colors.grey.shade600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Enregistrement verrouillé, comme WhatsApp : chrono en haut ; poubelle,
+  /// pause / reprise et envoyer en bas. Le doigt peut être relâché.
+  Widget _buildLockedRecordingBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Opacity(
+                opacity: _isPaused || _dotVisible ? 1 : 0.15,
+                child: Icon(Icons.fiber_manual_record, color: _isPaused ? Colors.grey : Colors.red, size: 14),
+              ),
+              8.width,
+              Text(_formatElapsed(_recordElapsed), style: boldTextStyle(size: 16)),
+              12.width,
+              Expanded(
+                child: Text(
+                  _isPaused ? 'En pause' : 'Enregistrement…',
+                  style: secondaryTextStyle(size: 13),
+                ),
+              ),
+            ],
+          ),
+          10.height,
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Supprimer',
+                onPressed: () => _stopRecording(send: false),
+                icon: Icon(Icons.delete_outline_rounded, color: Colors.grey.shade700, size: 28),
+              ),
+              const Spacer(),
+              InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _togglePause,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.red, width: 2),
+                  ),
+                  child: Icon(_isPaused ? Icons.mic_rounded : Icons.pause_rounded, color: Colors.red),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                decoration: boxDecorationDefault(borderRadius: radius(40), color: kMisonGold),
+                child: IconButton(
+                  tooltip: 'Envoyer',
+                  onPressed: () => _stopRecording(send: true),
+                  icon: const Icon(Icons.send_rounded, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1075,6 +1161,40 @@ class _ChatInputState extends State<ChatInput> {
           IconButton(
             icon: const Icon(Icons.close, size: 20),
             onPressed: _isUploading ? null : () => setState(() => _selectedImage = null),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Cadenas au-dessus du micro pendant l'enregistrement (comme WhatsApp) :
+/// ouvert avec une flèche vers le haut, il se ferme et passe au doré à mesure
+/// que le doigt glisse vers lui.
+class _LockHint extends StatelessWidget {
+  final double progress;
+  const _LockHint({required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color.lerp(Colors.grey.shade600, kMisonGold, progress)!;
+    return Container(
+      width: 44,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(progress >= 0.95 ? Icons.lock_rounded : Icons.lock_open_rounded, color: color, size: 22),
+          Opacity(
+            opacity: 1 - progress,
+            child: Icon(Icons.keyboard_arrow_up_rounded, color: Colors.grey.shade500, size: 22),
           ),
         ],
       ),

@@ -39,6 +39,9 @@ class ArtisanArrivalReporter {
       await artisanArrive(orderId);
       _reported.add(orderId);
       OrderEvents.emit(orderId); // rafraîchit le détail : bouton « Commencer »
+      // Rappel « Commencer » dans la barre de notifications (voir StartReminder),
+      // même si aucun écran de la commande n'est ouvert.
+      getMisonOrderDetail(orderId).ignore();
       return true;
     } catch (e) {
       log('ArtisanArrivalReporter: $e');

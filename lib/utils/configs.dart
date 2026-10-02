@@ -9,6 +9,7 @@ var defaultPrimaryColor = Color(0xFFF4BB16);
 const DOMAIN_URL = 'https://api.mison.app';
 const BASE_URL = '$DOMAIN_URL/api/';
 
+
 const DEFAULT_LANGUAGE = 'fr';
 
 //Note: For FIREBASE_SERVER_CLIENT_ID ---> Go to android/app/google-services.json

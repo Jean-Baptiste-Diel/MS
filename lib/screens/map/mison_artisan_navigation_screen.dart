@@ -1,18 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
-import 'package:booking_system_flutter/utils/colors.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:booking_system_flutter/utils/artisan_arrival_reporter.dart';
 import 'package:booking_system_flutter/utils/route_eta.dart';
-import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'package:latlong2/latlong.dart';
 
 
 // ── Step model ───────────────────────────────────────────────────────────────
@@ -54,7 +54,10 @@ class MisonArtisanNavigationScreen extends StatefulWidget {
 
 class _MisonArtisanNavigationScreenState
     extends State<MisonArtisanNavigationScreen> {
-  final MapController _mapController = MapController();
+  GoogleMapController? _map;
+  double _zoom = 16;
+  BitmapDescriptor? _artisanIcon;
+  BitmapDescriptor? _clientIcon;
   final FlutterTts _tts = FlutterTts();
 
   Position? _currentPos;
@@ -75,8 +78,9 @@ class _MisonArtisanNavigationScreenState
     super.initState();
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
     ));
+    _buildIcons();
     _initTts();
     _startNavigation();
   }
@@ -198,16 +202,7 @@ class _MisonArtisanNavigationScreenState
       if (steps.isNotEmpty) _speak(steps.first.instruction);
 
       if (coords.length > 1) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          try {
-            _mapController.fitCamera(
-              CameraFit.coordinates(
-                coordinates: coords,
-                padding: const EdgeInsets.fromLTRB(40, 120, 40, 160),
-              ),
-            );
-          } catch (_) {}
-        });
+        WidgetsBinding.instance.addPostFrameCallback((_) => _fitRoute(coords));
       }
     } catch (e) {
       if (mounted) {
@@ -243,12 +238,7 @@ class _MisonArtisanNavigationScreenState
     });
 
     if (_isFollowing) {
-      try {
-        _mapController.move(
-          LatLng(pos.latitude, pos.longitude),
-          _mapController.camera.zoom,
-        );
-      } catch (_) {}
+      _map?.animateCamera(CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), _zoom));
     }
 
     _checkStepProgress(pos);
@@ -425,6 +415,84 @@ class _MisonArtisanNavigationScreenState
     }
   }
 
+  // ── Carte ─────────────────────────────────────────────────────────────────
+
+  /// Tout l'itinéraire à l'écran.
+  void _fitRoute(List<LatLng> points) {
+    if (_map == null || points.length < 2) return;
+    var south = points.first.latitude, north = south;
+    var west = points.first.longitude, east = west;
+    for (final p in points) {
+      south = math.min(south, p.latitude);
+      north = math.max(north, p.latitude);
+      west = math.min(west, p.longitude);
+      east = math.max(east, p.longitude);
+    }
+    _map!.animateCamera(CameraUpdate.newLatLngBounds(
+      LatLngBounds(southwest: LatLng(south, west), northeast: LatLng(north, east)),
+      60,
+    ));
+  }
+
+  /// Icônes rondes aux couleurs Mison, comme sur l'écran du client : flèche
+  /// dorée (prestataire, tournée selon son cap) et maison sombre (client).
+  Future<void> _buildIcons() async {
+    final artisan = await _roundIcon(background: kMisonGold, glyph: Icons.navigation_rounded);
+    final client = await _roundIcon(background: kMisonDark, glyph: Icons.home_rounded);
+    if (!mounted) return;
+    setState(() {
+      _artisanIcon = artisan;
+      _clientIcon = client;
+    });
+  }
+
+  Future<BitmapDescriptor> _roundIcon({required Color background, required IconData glyph}) async {
+    const double size = 120;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, size, size));
+    const center = Offset(size / 2, size / 2);
+    canvas.drawCircle(
+      center,
+      size / 2 - 6,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.22)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+    canvas.drawCircle(center, size / 2 - 10, Paint()..color = Colors.white);
+    canvas.drawCircle(center, size / 2 - 17, Paint()..color = background);
+    final painter = TextPainter(textDirection: TextDirection.ltr)
+      ..text = TextSpan(
+        text: String.fromCharCode(glyph.codePoint),
+        style: TextStyle(fontSize: size * 0.42, fontFamily: glyph.fontFamily, package: glyph.fontPackage, color: Colors.white),
+      )
+      ..layout();
+    painter.paint(canvas, center - Offset(painter.width / 2, painter.height / 2));
+    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List(), width: 44, height: 44);
+  }
+
+  Set<Marker> _markers(Position? pos) => {
+        Marker(
+          markerId: const MarkerId('client'),
+          position: LatLng(widget.destLat, widget.destLng),
+          icon: _clientIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          anchor: const Offset(0.5, 0.5),
+          infoWindow: InfoWindow(title: 'Client', snippet: widget.serviceAddress),
+        ),
+        if (pos != null)
+          Marker(
+            markerId: const MarkerId('artisan'),
+            position: LatLng(pos.latitude, pos.longitude),
+            icon: _artisanIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+            anchor: const Offset(0.5, 0.5),
+            // Cap GPS (0° = nord) fourni par le téléphone
+            rotation: pos.heading,
+            flat: true,
+            zIndexInt: 2,
+          ),
+      };
+
   // ── Formatters ───────────────────────────────────────────────────────────
 
   String _fmtDist(double m) {
@@ -444,6 +512,7 @@ class _MisonArtisanNavigationScreenState
   void dispose() {
     _positionSub?.cancel();
     _tts.stop();
+    _map?.dispose();
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
@@ -462,139 +531,58 @@ class _MisonArtisanNavigationScreenState
             : null;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
+      // Logo centré, comme les autres pages
+      appBar: MisonAppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: kMisonDark),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: Column(
         children: [
-          // ── Header instruction ────────────────────────────────────────────
-          Container(
-            color: primaryColor,
-            child: SafeArea(
-              bottom: false,
-              child: _buildHeader(currentStep),
-            ),
-          ),
-
-          // ── Map ───────────────────────────────────────────────────────────
+          // ── Carte ─────────────────────────────────────────────────────────
           Expanded(
             child: Stack(
               children: [
-                // Map (even during loading — show destination)
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: pos != null
-                        ? LatLng(pos.latitude, pos.longitude)
-                        : LatLng(widget.destLat, widget.destLng),
-                    initialZoom: 14,
-                    onPositionChanged: (_, hasGesture) {
-                      if (hasGesture && _isFollowing) {
-                        setState(() => _isFollowing = false);
-                      }
+                // Toucher la carte arrête de suivre la position.
+                Listener(
+                  onPointerDown: (_) {
+                    if (_isFollowing) setState(() => _isFollowing = false);
+                  },
+                  child: GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: pos != null
+                          ? LatLng(pos.latitude, pos.longitude)
+                          : LatLng(widget.destLat, widget.destLng),
+                      zoom: 14,
+                    ),
+                    onMapCreated: (c) {
+                      _map = c;
+                      if (_routePoints.length > 1) _fitRoute(_routePoints);
                     },
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.misonservice.app',
-                    ),
-                    if (_routePoints.isNotEmpty)
-                      PolylineLayer(
-                        polylines: [
-                          Polyline(
-                            points: _routePoints,
-                            color: primaryColor,
-                            strokeWidth: 5.5,
-                          ),
-                        ],
-                      ),
-                    MarkerLayer(
-                      markers: [
-                        // Destination
-                        Marker(
-                          point: LatLng(widget.destLat, widget.destLng),
-                          width: 40,
-                          height: 50,
-                          child: const Icon(
-                            Icons.location_on,
-                            color: Colors.redAccent,
-                            size: 40,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black45,
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                              )
-                            ],
-                          ),
+                    onCameraMove: (p) => _zoom = p.zoom,
+                    markers: _markers(pos),
+                    polylines: {
+                      if (_routePoints.isNotEmpty)
+                        Polyline(
+                          polylineId: const PolylineId('route'),
+                          points: _routePoints,
+                          color: kMisonGold,
+                          width: 6,
+                          startCap: Cap.roundCap,
+                          endCap: Cap.roundCap,
+                          jointType: JointType.round,
                         ),
-                        // Position ouvrier
-                        if (pos != null)
-                          Marker(
-                            point: LatLng(pos.latitude, pos.longitude),
-                            width: 36,
-                            height: 36,
-                            rotate: false,
-                            child: Transform.rotate(
-                              // pos.heading = cap GPS en degrés (0° = nord), fourni par le device
-                              angle: pos.heading * (3.141592653589793 / 180),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.blueAccent,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 2.5,
-                                  ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black38,
-                                      blurRadius: 6,
-                                    )
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.navigation_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
+                    },
+                    zoomControlsEnabled: false,
+                    myLocationButtonEnabled: false,
+                    mapToolbarEnabled: false,
+                    compassEnabled: false,
+                  ),
                 ),
 
-                // Loading overlay
-                if (_isLoading)
-                  Container(
-                    color: Colors.black45,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 18),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A2A3D),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const MisonPageLoader(),
-                            const SizedBox(height: 14),
-                            const Text(
-                              'Calcul de l\'itinéraire…',
-                              style: TextStyle(
-                                  color: Colors.white70, fontSize: 15),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Error overlay
+                // Erreur
                 if (!_isLoading && _error != null)
                   Positioned(
                     left: 16,
@@ -611,19 +599,15 @@ class _MisonArtisanNavigationScreenState
                         children: [
                           Text(
                             _error!,
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 15),
+                            style: const TextStyle(color: Colors.white, fontSize: 15),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 10),
                           TextButton.icon(
                             style: TextButton.styleFrom(
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.15),
+                              backgroundColor: Colors.white.withValues(alpha: 0.15),
                               foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             onPressed: _fetchRoute,
                             icon: const Icon(Icons.refresh_rounded, size: 16),
@@ -634,36 +618,34 @@ class _MisonArtisanNavigationScreenState
                     ),
                   ),
 
-                // Floating buttons
+                // Boutons flottants
                 if (!_isLoading)
                   Positioned(
                     right: 14,
-                    bottom: 140,
+                    bottom: 20,
                     child: Column(
                       children: [
-                        // Recenter
+                        // Recentrer sur ma position
                         _FloatBtn(
                           icon: Icons.my_location_rounded,
-                          color:
-                              _isFollowing ? primaryColor : Colors.white,
-                          iconColor:
-                              _isFollowing ? Colors.white : primaryColor,
+                          color: _isFollowing ? kMisonGold : Colors.white,
+                          iconColor: _isFollowing ? Colors.white : kMisonGold,
                           onTap: () {
                             setState(() => _isFollowing = true);
                             if (pos != null) {
-                              _mapController.move(
-                                LatLng(pos.latitude, pos.longitude),
-                                16,
+                              _zoom = 16;
+                              _map?.animateCamera(
+                                CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 16),
                               );
                             }
                           },
                         ),
                         const SizedBox(height: 10),
-                        // Recalculate
+                        // Recalculer
                         _FloatBtn(
                           icon: Icons.refresh_rounded,
                           color: Colors.white,
-                          iconColor: primaryColor,
+                          iconColor: kMisonGold,
                           onTap: _fetchRoute,
                         ),
                       ],
@@ -673,14 +655,27 @@ class _MisonArtisanNavigationScreenState
             ),
           ),
 
-          // ── Bottom bar ────────────────────────────────────────────────────
-          if (!_isLoading && _error == null)
-            Container(
-              color: const Color(0xFF1A2A3D),
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-              child: SafeArea(
-                top: false,
-                child: Row(
+          // ── En bas : prochaine instruction, distance et temps restants ─────
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, -4)),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildHeader(currentStep),
+                  if (!_isLoading && _error == null) ...[
+                    const SizedBox(height: 14),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Row(
                   children: [
                     Expanded(
                       child: Column(
@@ -689,59 +684,57 @@ class _MisonArtisanNavigationScreenState
                         children: [
                           Text(
                             _fmtDist(_remainingDistanceM),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                            ),
+                            style: const TextStyle(color: kMisonDark, fontSize: 24, fontWeight: FontWeight.w800),
                           ),
                           Text(
                             _fmtEta(_remainingDistanceM),
-                            style: const TextStyle(
-                              color: Colors.white60,
-                              fontSize: 15,
-                            ),
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
                           ),
-                          const SizedBox(height: 14),
                         ],
                       ),
                     ),
-                    // Destination label
+                    // Destination
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.redAccent.withValues(alpha: 0.12),
+                        color: kMisonGold.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: Colors.redAccent.withValues(alpha: 0.35),
-                        ),
+                        border: Border.all(color: kMisonGold.withValues(alpha: 0.35)),
                       ),
-                      child: Column(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.location_on_rounded,
-                              color: Colors.redAccent, size: 18),
-                          const SizedBox(height: 2),
-                          const Text(
+                          Icon(Icons.home_rounded, color: kMisonGold, size: 18),
+                          SizedBox(width: 6),
+                          Text(
                             'Client',
-                            style: TextStyle(
-                              color: Colors.redAccent,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
+                            style: TextStyle(color: kMisonGold, fontWeight: FontWeight.w700, fontSize: 14),
                           ),
-                          const SizedBox(height: 14),
                         ],
                       ),
                     ),
                   ],
-                ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
+          ),
         ],
       ),
     );
+  }
+
+  /// Distance jusqu'à la prochaine manœuvre (« Dans 200 m »), sauf pour
+  /// l'arrivée, qui a déjà sa distance dans l'instruction.
+  String? _distanceToStep(_NavStep? step) {
+    final pos = _currentPos;
+    if (step == null || pos == null || _arrived || _currentStepIndex >= _steps.length - 1) return null;
+    final meters = Geolocator.distanceBetween(
+      pos.latitude, pos.longitude, step.location.latitude, step.location.longitude,
+    );
+    return 'Dans ${_fmtDist(meters)}';
   }
 
   /// L'étape « arrivée » ne dit « Vous êtes arrivé » qu'une fois réellement
@@ -755,74 +748,53 @@ class _MisonArtisanNavigationScreenState
     return step.instruction;
   }
 
+  /// Carte dorée : prochaine manœuvre, sa distance et l'adresse du client.
   Widget _buildHeader(_NavStep? step) {
-    if (_isLoading) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                  color: Colors.white, strokeWidth: 2.5),
-            ),
-            SizedBox(width: 12),
-            Text(
-              'Recherche de position…',
-              style: TextStyle(color: Colors.white, fontSize: 15),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 12, 8),
+    final inDistance = _isLoading ? null : _distanceToStep(step);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: kMisonGold,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: kMisonGold.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                color: Colors.white, size: 20),
-            onPressed: () => Navigator.pop(context),
-          ),
           Container(
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              step?.icon ?? Icons.navigation_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
+            child: _isLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                  )
+                : Icon(step?.icon ?? Icons.navigation_rounded, color: Colors.white, size: 26),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  _headerInstruction(step),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
+                if (inDistance != null)
+                  Text(
+                    inDistance,
+                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
                   ),
+                Text(
+                  _isLoading ? 'Recherche de position…' : _headerInstruction(step),
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700, height: 1.3),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (widget.serviceAddress.isNotEmpty)
                   Text(
                     widget.serviceAddress,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 15,
-                    ),
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 14),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

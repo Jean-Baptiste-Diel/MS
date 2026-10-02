@@ -620,38 +620,6 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
                         ],
                       ),
                       12.height,
-                    ] else if (_artisanPosition == null) ...[
-                      // Skeleton / waiting
-                      Container(
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Center(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 14, height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.grey.shade400,
-                                ),
-                              ),
-                              8.width,
-                              Text(
-                                'Calcul de l\'itinéraire…',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      12.height,
                     ],
 
                     // Address row

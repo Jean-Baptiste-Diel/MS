@@ -492,7 +492,7 @@ class MisonReceiptCardWidget extends StatelessWidget {
                     'assets/logo/logo_transparent.png',
                     height: 50,
                     errorBuilder: (_, __, ___) => Text(
-                      'MISON SERVICES',
+                      'MISON',
                       style: boldTextStyle(size: 20, color: _gold),
                     ),
                   ),

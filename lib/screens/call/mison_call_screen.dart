@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold;
 import 'package:booking_system_flutter/services/mison_call_session.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:flutter/material.dart';
@@ -175,17 +176,17 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
                       height: 110,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: primaryColor.withValues(alpha: 0.12),
+                        color: kMisonGold.withValues(alpha: 0.12),
                         border: Border.all(
                           color: _session.isConnected
                               ? Colors.green.withValues(alpha: 0.6)
-                              : primaryColor.withValues(alpha: 0.4),
+                              : kMisonGold.withValues(alpha: 0.4),
                           width: 2.5,
                         ),
                       ),
                       child: Center(
                         child: Text(initials,
-                            style: boldTextStyle(size: 44, color: primaryColor)),
+                            style: boldTextStyle(size: 44, color: kMisonGold)),
                       ),
                     ),
                     28.height,
@@ -245,7 +246,7 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
                       _CallButton(
                         icon: _routeIcon(_session.audioRoute),
                         label: 'Audio',
-                        color: _session.audioRoute == kRouteEarpiece ? Colors.white : primaryColor,
+                        color: _session.audioRoute == kRouteEarpiece ? Colors.white : kMisonGold,
                         iconColor: _session.audioRoute == kRouteEarpiece ? appTextPrimaryColor : Colors.white,
                         onTap: _showAudioRoutes,
                       )
@@ -256,7 +257,7 @@ class _MisonCallScreenState extends State<MisonCallScreen> {
                             : Icons.volume_off_rounded,
                         label: 'Haut-parleur',
                         color: _session.isSpeakerOn
-                            ? primaryColor
+                            ? kMisonGold
                             : Colors.white,
                         iconColor: _session.isSpeakerOn ? Colors.white : appTextPrimaryColor,
                         onTap: _session.toggleSpeaker,
@@ -296,9 +297,9 @@ class _AudioRouteSheet extends StatelessWidget {
       final selected = session.audioRoute == route ||
           (route == kRouteEarpiece && session.audioRoute == kRouteWired);
       return ListTile(
-        leading: Icon(_routeIcon(route), color: selected ? primaryColor : appTextPrimaryColor),
+        leading: Icon(_routeIcon(route), color: selected ? kMisonGold : appTextPrimaryColor),
         title: Text(label, style: primaryTextStyle(size: 15, weight: selected ? FontWeight.bold : null)),
-        trailing: selected ? Icon(Icons.check_rounded, color: primaryColor) : null,
+        trailing: selected ? Icon(Icons.check_rounded, color: kMisonGold) : null,
         onTap: () {
           Navigator.pop(context);
           session.setAudioRoute(route);

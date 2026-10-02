@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/component/unread_badge.dart';
+import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'dart:async';
 
 import 'package:booking_system_flutter/component/mison_account_sheets.dart';
@@ -46,6 +48,12 @@ class ArtisanDashboardScreen extends StatefulWidget {
 class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
   int _currentIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    ChatUnreadStore.start(); // pastilles « messages non lus »
+  }
+
   final List<Widget> _tabs = [
     const ArtisanHomeFragment(),
     const ArtisanOrdersFragment(),
@@ -93,13 +101,26 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
                 label: 'Accueil',
               ),
               NavigationDestination(
-                icon: ic_ticket.iconImage(color: appTextSecondaryColor),
-                selectedIcon: ic_ticket.iconImage(color: _brandGold),
+                // Messages non lus des clients (chats de commande)
+                icon: UnreadBadge(
+                  count: ChatUnreadStore.ordersTotal,
+                  child: ic_ticket.iconImage(color: appTextSecondaryColor),
+                ),
+                selectedIcon: UnreadBadge(
+                  count: ChatUnreadStore.ordersTotal,
+                  child: ic_ticket.iconImage(color: _brandGold),
+                ),
                 label: 'Commandes',
               ),
               NavigationDestination(
-                icon: ic_chat.iconImage(color: appTextSecondaryColor),
-                selectedIcon: ic_chat.iconImage(color: _brandGold),
+                icon: UnreadBadge(
+                  count: ChatUnreadStore.support,
+                  child: ic_chat.iconImage(color: appTextSecondaryColor),
+                ),
+                selectedIcon: UnreadBadge(
+                  count: ChatUnreadStore.support,
+                  child: ic_chat.iconImage(color: _brandGold),
+                ),
                 label: 'Support',
               ),
               NavigationDestination(

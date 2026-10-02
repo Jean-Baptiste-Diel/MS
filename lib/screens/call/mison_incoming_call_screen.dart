@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold;
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
@@ -197,12 +198,12 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.12),
+                  color: kMisonGold.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   'Appel audio',
-                  style: secondaryTextStyle(size: 14, color: primaryColor),
+                  style: secondaryTextStyle(size: 14, color: kMisonGold),
                 ),
               ),
 

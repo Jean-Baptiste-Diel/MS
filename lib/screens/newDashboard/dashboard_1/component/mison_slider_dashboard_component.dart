@@ -41,10 +41,55 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
     FocusScope.of(context).unfocus();
     MisonSearchServiceScreen(initialQuery: query).launch(context);
     _searchCont.clear();
+    setState(() => _suggestions = []);
   }
 
   List<MisonService> _services = [];
   bool _isLoading = true;
+
+  /// Suggestions affichées sous la barre pendant la saisie.
+  List<MisonService> _suggestions = [];
+
+  static String _normalize(String text) {
+    const from = 'àâäáãçéèêëíìîïñóòôöõúùûüÿ';
+    const to = 'aaaaaceeeeiiiinooooouuuuy';
+    final lower = text.toLowerCase().trim();
+    final out = StringBuffer();
+    for (final ch in lower.split('')) {
+      final i = from.indexOf(ch);
+      out.write(i >= 0 ? to[i] : ch);
+    }
+    return out.toString();
+  }
+
+  /// Services correspondant à la saisie : d'abord ceux dont un mot du nom
+  /// commence par le texte (« car » → Carreleur), puis ceux qui le contiennent
+  /// dans le nom, puis dans la description. Accents ignorés.
+  void _updateSuggestions(String value) {
+    final q = _normalize(value);
+    if (q.isEmpty) {
+      setState(() => _suggestions = []);
+      return;
+    }
+    int score(MisonService s) {
+      final name = _normalize(s.name ?? '');
+      if (name.startsWith(q)) return 0;
+      if (name.split(RegExp(r'[\s\-/]+')).any((w) => w.startsWith(q))) return 1;
+      if (name.contains(q)) return 2;
+      if (_normalize(s.description ?? '').contains(q)) return 3;
+      return 99;
+    }
+    final matches = _services.where((s) => score(s) < 99).toList()
+      ..sort((a, b) => score(a).compareTo(score(b)));
+    setState(() => _suggestions = matches.take(5).toList());
+  }
+
+  void _openService(MisonService service) {
+    FocusScope.of(context).unfocus();
+    _searchCont.clear();
+    setState(() => _suggestions = []);
+    MisonBookingFormScreen(service: service).launch(context);
+  }
 
   @override
   void initState() {
@@ -202,6 +247,7 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
           child: TextField(
             controller: _searchCont,
             textInputAction: TextInputAction.search,
+            onChanged: _updateSuggestions,
             onSubmitted: (_) => _openSearch(),
             decoration: InputDecoration(
               hintText: 'Rechercher un service...',
@@ -224,6 +270,47 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
             ),
           ),
         ),
+        // Propositions pendant la saisie : un appui ouvre la commande du service.
+        if (_suggestions.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Container(
+              decoration: BoxDecoration(
+                color: context.cardColor,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Column(
+                children: [
+                  for (final service in _suggestions)
+                    ListTile(
+                      dense: true,
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CachedImageWidget(url: service.imageUrl ?? '', height: 36, width: 36, fit: BoxFit.cover),
+                      ),
+                      title: Text(service.name ?? '', style: primaryTextStyle(size: 15, weight: FontWeight.w600)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: kMisonGold),
+                      onTap: () => _openService(service),
+                    ),
+                  const Divider(height: 1),
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.search, color: kMisonGold),
+                    title: Text(
+                      'Voir tous les résultats pour « ${_searchCont.text.trim()} »',
+                      style: secondaryTextStyle(size: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: _openSearch,
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }

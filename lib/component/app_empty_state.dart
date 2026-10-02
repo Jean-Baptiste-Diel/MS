@@ -1,4 +1,4 @@
-import 'package:booking_system_flutter/utils/colors.dart';
+import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold;
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
@@ -50,7 +50,7 @@ class AppEmptyState extends StatelessWidget {
   }
 
   Color get _accentColor =>
-      type == AppEmptyStateType.error ? Colors.redAccent : primaryColor;
+      type == AppEmptyStateType.error ? Colors.redAccent : kMisonGold;
 
   @override
   Widget build(BuildContext context) {
@@ -92,18 +92,18 @@ class AppEmptyState extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                   decoration: BoxDecoration(
-                    color: primaryColor,
+                    color: kMisonGold,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.3),
+                          color: kMisonGold.withValues(alpha: 0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 5)),
                     ],
                   ),
                   child: Text(
                     retryLabel ?? 'Réessayer',
-                    style: boldTextStyle(color: Colors.black, size: 14),
+                    style: boldTextStyle(color: Colors.white, size: 14),
                   ),
                 ),
               ),

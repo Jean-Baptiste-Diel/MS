@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/component/unread_badge.dart';
+import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/image_border_component.dart';
@@ -41,6 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    ChatUnreadStore.start(); // pastilles « messages non lus »
     if (widget.redirectToBooking.validate(value: false)) {
       currentIndex = 1;
     }
@@ -197,9 +200,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 if (appConfigurationStore.isEnableChat)
                   NavigationDestination(
-                    icon: ic_chat.iconImage(color: appTextSecondaryColor),
-                    selectedIcon:
-                        ic_chat.iconImage(color: kMisonGold),
+                    icon: UnreadBadge(
+                      count: ChatUnreadStore.ordersTotal,
+                      child: ic_chat.iconImage(color: appTextSecondaryColor),
+                    ),
+                    selectedIcon: UnreadBadge(
+                      count: ChatUnreadStore.ordersTotal,
+                      child: ic_chat.iconImage(color: kMisonGold),
+                    ),
                     label: language.lblChat,
                   ),
                 Observer(

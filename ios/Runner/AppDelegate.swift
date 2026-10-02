@@ -154,7 +154,7 @@ import flutter_callkit_incoming
     // iOS exige de signaler l'appel a CallKit immediatement, sinon le systeme
     // tue l'application.
     let callData = Data(id: orderId, nameCaller: callerName, handle: orderId, type: 0)
-    callData.appName = "Mison"
+    callData.appName = "MISON"
     callData.duration = 30000
     callData.configureAudioSession = true
     callData.iconName = ""
@@ -185,7 +185,7 @@ import flutter_callkit_incoming
       if outgoingId != orderId, let plugin = SwiftFlutterCallkitIncomingPlugin.sharedInstance {
         DispatchQueue.main.async {
           let callData = Data(id: orderId, nameCaller: callerName, handle: orderId, type: 0)
-          callData.appName = "Mison"
+          callData.appName = "MISON"
           callData.duration = 30000
           callData.configureAudioSession = true
           callData.iconName = ""

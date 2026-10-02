@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/component/unread_badge.dart';
+import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'package:booking_system_flutter/component/app_empty_state.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
@@ -29,7 +31,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
     _load();
   }
 
-  void _load() => _future = getMisonOrders();
+  void _load() {
+    _future = getMisonOrders();
+    ChatUnreadStore.refresh();
+  }
 
   /// Nom de l'interlocuteur : l'ouvrier pour un client, le client pour un ouvrier.
   String _peerName(MisonOrder o) {
@@ -98,11 +103,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                     itemCount: chats.length,
                     separatorBuilder: (_, __) => 10.height,
-                    itemBuilder: (_, i) => _ChatTile(
-                      order: chats[i],
-                      peerName: _peerName(chats[i]),
-                      peerPhoto: _isProvider ? null : chats[i].artisan?.profilePictureUrl,
-                      onTap: () => _openChat(chats[i]),
+                    // Pastille du nombre de messages non lus, comme WhatsApp.
+                    itemBuilder: (_, i) => ValueListenableBuilder<Map<String, int>>(
+                      valueListenable: ChatUnreadStore.byOrder,
+                      builder: (_, unread, __) => _ChatTile(
+                        order: chats[i],
+                        peerName: _peerName(chats[i]),
+                        peerPhoto: _isProvider ? null : chats[i].artisan?.profilePictureUrl,
+                        unread: unread[chats[i].id] ?? 0,
+                        onTap: () => _openChat(chats[i]),
+                      ),
                     ),
                   ),
           );
@@ -116,6 +126,7 @@ class _ChatTile extends StatelessWidget {
   final MisonOrder order;
   final String peerName;
   final String? peerPhoto;
+  final int unread;
   final VoidCallback onTap;
 
   const _ChatTile({
@@ -123,6 +134,7 @@ class _ChatTile extends StatelessWidget {
     required this.peerName,
     required this.peerPhoto,
     required this.onTap,
+    this.unread = 0,
   });
 
   String get _statusLabel {
@@ -181,7 +193,7 @@ class _ChatTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(peerName,
-                      style: boldTextStyle(size: 16, color: kMisonDark),
+                      style: boldTextStyle(size: unread > 0 ? 17 : 16, color: kMisonDark),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                   3.height,
@@ -198,16 +210,20 @@ class _ChatTile extends StatelessWidget {
               ),
             ),
             8.width,
-            Container(
-              width: 38,
-              height: 38,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: kMisonGold,
+            // Messages non lus : pastille avec le nombre ; sinon icône de chat.
+            if (unread > 0)
+              UnreadCountBubble(count: unread)
+            else
+              Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: kMisonGold,
+                ),
+                child: const Icon(Icons.chat_bubble_outline_rounded,
+                    color: Colors.white, size: 18),
               ),
-              child: const Icon(Icons.chat_bubble_outline_rounded,
-                  color: Colors.white, size: 18),
-            ),
           ],
         ),
       ),

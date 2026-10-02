@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/utils/log_redact.dart';
 import 'package:nb_utils/nb_utils.dart' as nb_log show log;
 import 'dart:async';
@@ -40,6 +41,7 @@ import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/model_keys.dart';
+import 'package:booking_system_flutter/utils/start_reminder.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -416,6 +418,7 @@ Future<void> saveUserData(UserData data,
 }
 
 Future<void> clearPreferences() async {
+  ChatUnreadStore.clear();
   cachedDashboardResponse = null;
   cachedBookingList = null;
   cachedCategoryList = null;
@@ -1835,6 +1838,10 @@ Future<int?> getServiceEarnPoints(
 MisonServicesResponse? _cachedServices;
 DateTime? _servicesCachedAt;
 
+/// Dernière liste reçue, gardée sur le téléphone : affichée hors connexion
+/// (les images suivent, via le cache disque de CachedNetworkImage).
+const _kServicesCacheKey = 'mison_services_cache';
+
 Future<MisonServicesResponse> getMisonServices({bool forceRefresh = false}) async {
   final now = DateTime.now();
   if (!forceRefresh &&
@@ -1845,11 +1852,21 @@ Future<MisonServicesResponse> getMisonServices({bool forceRefresh = false}) asyn
   }
   try {
     final response = await buildHttpResponse('services', method: HttpMethodType.GET);
-    _cachedServices = MisonServicesResponse.fromJson(await handleResponse(response));
+    final body = await handleResponse(response);
+    _cachedServices = MisonServicesResponse.fromJson(body);
     _servicesCachedAt = now;
+    if ((_cachedServices!.data ?? []).isNotEmpty) setValue(_kServicesCacheKey, jsonEncode(body));
     return _cachedServices!;
   } catch (e) {
     if (_cachedServices != null) return _cachedServices!;
+    // Hors connexion (ou serveur injoignable) : la liste enregistrée.
+    final saved = getStringAsync(_kServicesCacheKey);
+    if (saved.isNotEmpty) {
+      try {
+        _cachedServices = MisonServicesResponse.fromJson(jsonDecode(saved) as Map<String, dynamic>);
+        return _cachedServices!;
+      } catch (_) {}
+    }
     throw e;
   }
 }
@@ -1863,7 +1880,11 @@ Future<MisonOrderResponse> getMisonOrders({String? status}) async {
       endpoint += '?status=$status';
     }
     final response = await buildHttpResponse(endpoint, method: HttpMethodType.GET);
-    return MisonOrderResponse.fromJson(await handleResponse(response));
+    final result = MisonOrderResponse.fromJson(await handleResponse(response));
+    // Prestataire : rappel « Commencer » tant qu'il est arrivé sans commencer
+    // (liste complète seulement, pour retirer aussi les rappels périmés).
+    if (status == null || status.isEmpty) StartReminder.syncOrders(result.data ?? []);
+    return result;
   } catch (e) {
     throw e;
   }
@@ -1907,7 +1928,9 @@ Future<Map<String, dynamic>> getOrderNearbyArtisans(String orderId) async {
 Future<MisonOrderDetailResponse> getMisonOrderDetail(String orderId) async {
   try {
     final response = await buildHttpResponse('orders/$orderId', method: HttpMethodType.GET);
-    return MisonOrderDetailResponse.fromJson(await handleResponse(response));
+    final result = MisonOrderDetailResponse.fromJson(await handleResponse(response));
+    StartReminder.syncOrder(result.data);
+    return result;
   } catch (e) {
     throw e;
   }
@@ -2079,7 +2102,9 @@ Future<MisonActionResponse> artisanStartOrder(String orderId) async {
       'orders/$orderId/start',
       method: HttpMethodType.POST,
     );
-    return MisonActionResponse.fromJson(await handleResponse(response));
+    final result = MisonActionResponse.fromJson(await handleResponse(response));
+    StartReminder.cancel(orderId); // prestation commencée : plus de rappel
+    return result;
   } catch (e) {
     throw e;
   }

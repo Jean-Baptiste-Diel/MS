@@ -256,6 +256,9 @@ class SupportChatService {
         // Nouveau message en temps réel
         final message = SupportChatMessage.fromJson(json);
         if (!_newMessageController.isClosed) _newMessageController.add(message);
+        // Conversation à l'écran : le message de l'autre est lu tout de suite
+        // (sinon il resterait compté « non lu » dans les pastilles).
+        if (!message.isMe) _channel?.sink.add(jsonEncode({'type': 'read'}));
       } else if (type == 'error') {
         // Message refusé par le serveur : {"type": "error", "message": "..."}
         final error = json['message']?.toString() ?? 'Message non envoyé, réessayez.';
