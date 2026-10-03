@@ -57,7 +57,7 @@
 
             </intent-filter>
             <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_ic_notification" />
-            <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="notification"/>
+            <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="mison_notifications"/>
             <!-- Android App Links for HTTP/HTTPS -->
             <!--<intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />

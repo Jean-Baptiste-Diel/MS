@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:booking_system_flutter/utils/artisan_arrival_reporter.dart';
+import 'package:booking_system_flutter/utils/close_map_when_started.dart';
 import 'package:booking_system_flutter/utils/route_eta.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -53,7 +54,11 @@ class MisonArtisanNavigationScreen extends StatefulWidget {
 }
 
 class _MisonArtisanNavigationScreenState
-    extends State<MisonArtisanNavigationScreen> {
+    extends State<MisonArtisanNavigationScreen>
+    with WidgetsBindingObserver, CloseMapWhenOrderStarted {
+  @override
+  String get trackedOrderId => widget.orderId;
+
   GoogleMapController? _map;
   double _zoom = 16;
   BitmapDescriptor? _artisanIcon;
@@ -76,6 +81,7 @@ class _MisonArtisanNavigationScreenState
   @override
   void initState() {
     super.initState();
+    startWatchingOrderStart(); // ferme la carte dès que la prestation commence
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
@@ -510,6 +516,7 @@ class _MisonArtisanNavigationScreenState
 
   @override
   void dispose() {
+    stopWatchingOrderStart();
     _positionSub?.cancel();
     _tts.stop();
     _map?.dispose();

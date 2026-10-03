@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:booking_system_flutter/utils/artisan_eta_tracker.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
+import 'package:booking_system_flutter/utils/close_map_when_started.dart';
 import 'package:booking_system_flutter/utils/route_eta.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold;
@@ -33,7 +34,11 @@ class MisonTrackingScreen extends StatefulWidget {
   State<MisonTrackingScreen> createState() => _MisonTrackingScreenState();
 }
 
-class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
+class _MisonTrackingScreenState extends State<MisonTrackingScreen>
+    with WidgetsBindingObserver, CloseMapWhenOrderStarted {
+  @override
+  String get trackedOrderId => widget.orderId;
+
   GoogleMapController? _mapController;
 
   // Marker positions
@@ -74,6 +79,7 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
   @override
   void initState() {
     super.initState();
+    startWatchingOrderStart(); // ferme la carte dès que la prestation commence
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
@@ -94,6 +100,7 @@ class _MisonTrackingScreenState extends State<MisonTrackingScreen> {
 
   @override
   void dispose() {
+    stopWatchingOrderStart();
     _locationSub?.cancel();
     _animTimer?.cancel();
     _mapController?.dispose();

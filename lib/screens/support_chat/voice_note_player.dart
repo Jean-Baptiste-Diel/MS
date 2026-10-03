@@ -4,8 +4,10 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-/// Lecteur d'une note vocale dans une bulle de chat : lecture/pause,
-/// barre de progression (déplaçable), durée, et réécoute depuis le début.
+/// Lecteur d'une note vocale dans une bulle de chat : un seul bouton
+/// lecture / pause (comme WhatsApp), barre de progression déplaçable, durée.
+/// Une fois finie, la note revient au début : un appui sur lecture la
+/// réécoute, autant de fois qu'on veut.
 class VoiceNotePlayer extends StatefulWidget {
   final String url;
 
@@ -46,8 +48,14 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
       _player.onDurationChanged.listen((d) {
         if (mounted) setState(() => _duration = d);
       }),
+      // Fin de la note : retour au début, prête à être réécoutée (bouton lecture).
       _player.onPlayerComplete.listen((_) {
-        if (mounted) setState(() => _position = Duration.zero);
+        if (mounted) {
+          setState(() {
+            _position = Duration.zero;
+            _state = PlayerState.stopped;
+          });
+        }
       }),
     ]);
     // Garder le fichier chargé en fin de lecture : la réécoute repart tout de
@@ -74,6 +82,9 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
       // Réappliqué à chaque lecture : un enregistrement ou un appel entre-temps
       // a pu rebasculer la sortie audio vers l'écouteur.
       await _player.setAudioContext(_speakerContext);
+      // Note déjà écoutée jusqu'au bout : on repart du début.
+      final atEnd = _duration > Duration.zero && _position >= _duration - const Duration(milliseconds: 300);
+      if (atEnd || _state == PlayerState.completed) _position = Duration.zero;
       await _player.play(UrlSource(widget.url), position: _position);
     } catch (e) {
       log('VoiceNotePlayer play: $e');
@@ -89,16 +100,6 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
       await other._player.pause();
     }
     _playing = this;
-  }
-
-  /// Réécoute depuis le début.
-  Future<void> _replay() async {
-    setState(() => _position = Duration.zero);
-    if (_state == PlayerState.playing) {
-      await _player.seek(Duration.zero);
-    } else {
-      await _toggle();
-    }
   }
 
   /// Déplacement dans la note, lecture en cours ou non : la position affichée
@@ -128,8 +129,6 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
   @override
   Widget build(BuildContext context) {
     final isPlaying = _state == PlayerState.playing;
-    // « Réécouter » dès que la note a été entamée ou écoutée jusqu'au bout.
-    final canReplay = _position > Duration.zero || _state == PlayerState.completed;
     final total = _duration.inMilliseconds;
     final progress = total > 0 ? (_position.inMilliseconds / total).clamp(0.0, 1.0) : 0.0;
     // Pendant la lecture : temps écoulé ; sinon : durée totale.
@@ -154,9 +153,7 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
                           ? Icons.error_outline
                           : isPlaying
                               ? Icons.pause_rounded
-                              : _state == PlayerState.completed
-                                  ? Icons.replay_rounded // écoutée : rejouer
-                                  : Icons.play_arrow_rounded,
+                              : Icons.play_arrow_rounded,
                       color: Colors.white,
                       size: 30,
                     ),
@@ -181,17 +178,6 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
           ),
           6.width,
           Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
-          if (canReplay && _state != PlayerState.completed)
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                tooltip: 'Réécouter depuis le début',
-                icon: const Icon(Icons.replay_rounded, color: Colors.white70, size: 18),
-                onPressed: _replay,
-              ),
-            ),
         ],
       ),
     );

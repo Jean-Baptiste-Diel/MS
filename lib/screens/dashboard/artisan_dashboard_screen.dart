@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_start_prestation_sheet.dart';
 import 'package:booking_system_flutter/component/unread_badge.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'dart:async';
@@ -52,6 +53,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
   void initState() {
     super.initState();
     ChatUnreadStore.start(); // pastilles « messages non lus »
+    openColdStartAcceptedCall(); // iPhone : appel décroché app fermée
   }
 
   final List<Widget> _tabs = [
@@ -279,7 +281,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
   void _syncLocationBroadcast(List<MisonOrder> orders) {
     // Occupé (commande acceptée ou en cours) : il n'apparaît plus comme libre.
     final wasBusy = _hasActiveOrder;
-    _hasActiveOrder = orders.any((o) => o.artisan != null && (o.isActiveWithArtisan || o.isInProgress));
+    _hasActiveOrder = orders.any((o) => o.artisan != null && o.keepsArtisanBusy);
     if (wasBusy && !_hasActiveOrder) _sendPresence();
     MisonOrder? activeOrder;
     for (final o in orders) {
@@ -705,8 +707,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
     final annulees  = missions.where(isAnnulee).length;
     // Occupé avec un client (même règle que le serveur) : pas de nouvelle
     // commande tant que la prestation en cours n'est pas terminée.
-    final isBusy = missions.any((o) =>
-        o.isAssigned || o.isAccepted || o.isAwaitingTravelPayment || o.isInProgress);
+    final isBusy = missions.any((o) => o.keepsArtisanBusy);
 
     // Historique : filtré selon la carte touchée
     final List<MisonOrder> history;
@@ -1346,13 +1347,10 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
         // Seulement une fois arrivé chez le client (avant : « Aller chez le
         // client » depuis le détail de la commande).
         onStart: (order.hasArrived && !order.needsArtisanConfirmation)
-            ? () => _confirmAction(
-                  title: 'Commencer la prestation',
-                  subtitle: 'Confirmez-vous être sur place et prêt à commencer ?',
-                  action: () => artisanStartOrder(order.id!),
-                  icon: Icons.play_circle_outline_rounded,
-                  confirmLabel: 'Oui, je démarre',
-                )
+            ? () async {
+                // Même panneau que l'annulation : vérifications puis démarrage.
+                if (await showMisonStartPrestationSheet(context, orderId: order.id!)) _reload();
+              }
             : null,
         onRelease: order.canReleaseByArtisan
             ? () => _confirmAction(

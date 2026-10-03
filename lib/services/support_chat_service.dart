@@ -128,6 +128,12 @@ class SupportChatService {
   Stream<SupportChatMessage> get newMessageStream => _newMessageController.stream;
   Stream<bool> get connectionStream => _connectionController.stream;
   Stream<String> get errorStream => _errorController.stream;
+
+  /// false : conversation en lecture seule (prestation terminée, aucune
+  /// nouvelle commande en cours entre le client et le prestataire).
+  bool canSend = true;
+  final _closedController = StreamController<void>.broadcast();
+  Stream<void> get closedStream => _closedController.stream;
   bool get isReady => _isReady;
   String? get conversationId => _conversationId;
 
@@ -183,6 +189,8 @@ class SupportChatService {
       final body = jsonDecode(response.body);
       _conversationId = body['id']?.toString() ?? '';
       if (_conversationId!.isEmpty) throw 'Conversation ID introuvable dans la réponse';
+      // Prestation terminée : historique lisible, plus d'envoi ni d'appel.
+      canSend = body['can_send'] != false;
       return _conversationId!;
     }
 
@@ -262,6 +270,10 @@ class SupportChatService {
       } else if (type == 'error') {
         // Message refusé par le serveur : {"type": "error", "message": "..."}
         final error = json['message']?.toString() ?? 'Message non envoyé, réessayez.';
+        if (json['code'] == 'conversation_closed') {
+          canSend = false;
+          if (!_closedController.isClosed) _closedController.add(null);
+        }
         if (!_errorController.isClosed) _errorController.add(error);
       }
       // Les autres événements (ex: "typing") ne sont pas des messages : on les ignore.
@@ -362,6 +374,7 @@ class SupportChatService {
     _newMessageController.close();
     _connectionController.close();
     _errorController.close();
+    _closedController.close();
   }
 }
 

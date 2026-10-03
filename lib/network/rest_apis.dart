@@ -42,6 +42,7 @@ import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/model_keys.dart';
 import 'package:booking_system_flutter/utils/start_reminder.dart';
+import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -1904,6 +1905,7 @@ Future<bool> setArtisanAvailability(bool isAvailable) async {
     request: {'is_available': isAvailable},
     method: HttpMethodType.POST,
   ));
+  _orderChanged(); // commandes disponibles affichées / masquées
   return body['data']?['is_available'] != false;
 }
 
@@ -1924,6 +1926,12 @@ Future<Map<String, dynamic>> getOrderNearbyArtisans(String orderId) async {
   final body = await handleResponse(response);
   return (body is Map && body['data'] is Map) ? Map<String, dynamic>.from(body['data']) : <String, dynamic>{};
 }
+
+/// Action réussie sur une commande (bouton) : toutes les pages ouvertes
+/// (détail, « Mes commandes », pages et accueil du prestataire) se mettent à
+/// jour tout de suite, sans attendre la notification ni l'actualisation
+/// automatique. [orderId] null : toutes les commandes sont concernées.
+void _orderChanged([String? orderId]) => OrderEvents.emit(orderId);
 
 Future<MisonOrderDetailResponse> getMisonOrderDetail(String orderId) async {
   try {
@@ -1946,6 +1954,7 @@ Future<void> cancelMisonOrder(String orderId, {String? reason}) async {
       request: (reason != null && reason.isNotEmpty) ? {'reason': reason} : null,
     );
     await handleResponse(response);
+    _orderChanged(orderId);
   } catch (e) {
     throw e;
   }
@@ -1974,7 +1983,9 @@ Future<MisonOrderDetailResponse> createMisonOrder(MisonCreateOrderRequest reques
       request: request.toJson(),
       method: HttpMethodType.POST,
     );
-    return MisonOrderDetailResponse.fromJson(await handleResponse(response));
+    final created = MisonOrderDetailResponse.fromJson(await handleResponse(response));
+    _orderChanged(created.data?.id);
+    return created;
   } catch (e) {
     throw e;
   }
@@ -1987,7 +1998,9 @@ Future<MisonActionResponse> artisanAcceptOrder(String orderId) async {
       'orders/$orderId/accept',
       method: HttpMethodType.POST,
     );
-    return MisonActionResponse.fromJson(await handleResponse(response));
+    final result = MisonActionResponse.fromJson(await handleResponse(response));
+    _orderChanged(orderId);
+    return result;
   } catch (e) {
     throw e;
   }
@@ -2002,7 +2015,9 @@ Future<MisonActionResponse> artisanDecisionMisonOrder(String orderId, String dec
       request: request.toJson(),
       method: HttpMethodType.POST,
     );
-    return MisonActionResponse.fromJson(await handleResponse(response));
+    final result = MisonActionResponse.fromJson(await handleResponse(response));
+    _orderChanged(orderId);
+    return result;
   } catch (e) {
     throw e;
   }
@@ -2020,7 +2035,9 @@ Future<MisonActionResponse> rateMisonOrder(String orderId, int rating, String re
       request: request.toJson(),
       method: HttpMethodType.POST,
     );
-    return MisonActionResponse.fromJson(await handleResponse(response));
+    final result = MisonActionResponse.fromJson(await handleResponse(response));
+    _orderChanged(orderId);
+    return result;
   } catch (e) {
     throw e;
   }
@@ -2041,6 +2058,7 @@ Future<void> cancelWorkerRequest(String requestId) async {
   try {
     final response = await buildHttpResponse('worker-requests/$requestId/cancel', method: HttpMethodType.POST);
     await handleResponse(response);
+    _orderChanged();
   } catch (e) {
     throw e;
   }
@@ -2057,6 +2075,7 @@ Future<MisonOrderDetailResponse> createWorkerRequest(MisonWorkerRequestModel req
     _log('createWorkerRequest → ${request.toJson()}');
     final res = MisonOrderDetailResponse.fromJson(await handleResponse(response));
     _log('createWorkerRequest ← ${res.message}');
+    _orderChanged();
     return res;
   } catch (e) {
     throw e;
@@ -2086,13 +2105,17 @@ Future<void> logOrderCall(String orderId, {required String outcome, int duration
 /// POST /api/orders/{id}/depart - L'ouvrier part chez le client (mini-carte)
 Future<MisonActionResponse> artisanDepart(String orderId) async {
   final response = await buildHttpResponse('orders/$orderId/depart', method: HttpMethodType.POST);
-  return MisonActionResponse.fromJson(await handleResponse(response));
+  final result = MisonActionResponse.fromJson(await handleResponse(response));
+    _orderChanged(orderId);
+    return result;
 }
 
 /// POST /api/orders/{id}/arrive - L'ouvrier est arrivé chez le client
 Future<MisonActionResponse> artisanArrive(String orderId) async {
   final response = await buildHttpResponse('orders/$orderId/arrive', method: HttpMethodType.POST);
-  return MisonActionResponse.fromJson(await handleResponse(response));
+  final result = MisonActionResponse.fromJson(await handleResponse(response));
+    _orderChanged(orderId);
+    return result;
 }
 
 /// POST /api/orders/{id}/start - Artisan démarre une commande (ACCEPTED → IN_PROGRESS)
@@ -2104,6 +2127,7 @@ Future<MisonActionResponse> artisanStartOrder(String orderId) async {
     );
     final result = MisonActionResponse.fromJson(await handleResponse(response));
     StartReminder.cancel(orderId); // prestation commencée : plus de rappel
+    _orderChanged(orderId);
     return result;
   } catch (e) {
     throw e;
@@ -2117,7 +2141,9 @@ Future<MisonActionResponse> artisanCompleteOrder(String orderId) async {
       'orders/$orderId/complete',
       method: HttpMethodType.POST,
     );
-    return MisonActionResponse.fromJson(await handleResponse(response));
+    final result = MisonActionResponse.fromJson(await handleResponse(response));
+    _orderChanged(orderId);
+    return result;
   } catch (e) {
     throw e;
   }
@@ -2141,7 +2167,9 @@ Future<MisonActionResponse> setRealizationFee(String orderId, num amount) async 
       method: HttpMethodType.POST,
       request: {'realization_fee': amount},
     );
-    return MisonActionResponse.fromJson(await handleResponse(response));
+    final result = MisonActionResponse.fromJson(await handleResponse(response));
+    _orderChanged(orderId);
+    return result;
   } catch (e) {
     throw e;
   }

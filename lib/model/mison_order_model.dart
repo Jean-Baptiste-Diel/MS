@@ -275,6 +275,18 @@ class MisonOrder {
   /// Suivi en direct (mini-carte, position de l'ouvrier) : seulement pendant le
   /// trajet. Avant le départ et une fois arrivé, plus de carte des deux côtés.
   bool get canTrack => isEnRoute;
+
+  /// Le prestataire est occupé par cette commande (même règle que le serveur) :
+  /// en cours, en route, arrivé, ou prestation à moins d'1 h. Une prestation
+  /// programmée plus tard (ex. demain 10 h) le laisse disponible jusqu'à 9 h.
+  bool get keepsArtisanBusy {
+    if (isInProgress) return true;
+    if (!(isAssigned || isAccepted || isAwaitingTravelPayment)) return false;
+    if ((enRouteAt ?? '').isNotEmpty || (arrivedAt ?? '').isNotEmpty) return true;
+    final date = DateTime.tryParse(serviceDate ?? '');
+    if (date == null) return true;
+    return date.difference(DateTime.now()) <= const Duration(hours: 1);
+  }
 }
 
 class MisonClient {

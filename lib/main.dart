@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
+
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:booking_system_flutter/component/ongoing_call_banner.dart';
 import 'package:booking_system_flutter/services/mison_call_session.dart';
 import 'package:booking_system_flutter/utils/call_status.dart';
@@ -158,6 +160,27 @@ void _openCallScreen(String orderId, String channel) {
     // Navigator not ready yet — store and retry once the first frame is rendered.
     _pendingCallOrderId = orderId;
     _pendingCallChannel = channel;
+  }
+}
+
+/// iPhone, app fermée : décroché depuis l'écran d'appel, l'événement
+/// « accepté » est perdu (Flutter n'écoutait pas encore). Appelé une fois les
+/// tableaux de bord affichés : ouvre l'appel s'il vient d'être accepté.
+bool _coldStartCallChecked = false;
+
+Future<void> openColdStartAcceptedCall() async {
+  if (!Platform.isIOS || _coldStartCallChecked) return;
+  _coldStartCallChecked = true;
+  try {
+    final data = await const MethodChannel('mison/accepted_call').invokeMapMethod<String, dynamic>('getAcceptedCall');
+    final extra = (data?['extra'] as Map?)?.cast<String, dynamic>() ?? {};
+    final orderId = extra['order_id']?.toString() ?? '';
+    if (orderId.isEmpty) return;
+    // Déjà ouvert par l'événement (app seulement en arrière-plan) : rien à faire.
+    if (MisonCallSession.current.value?.orderId == orderId) return;
+    _openCallScreen(orderId, extra['channel']?.toString() ?? '');
+  } catch (e) {
+    log('openColdStartAcceptedCall: $e');
   }
 }
 

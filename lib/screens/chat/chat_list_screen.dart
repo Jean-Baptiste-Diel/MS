@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/auto_refresh_mixin.dart';
 import 'package:booking_system_flutter/component/unread_badge.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/utils/image_cache_key.dart';
@@ -20,7 +21,7 @@ class ChatListScreen extends StatefulWidget {
   _ChatListScreenState createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _ChatListScreenState extends State<ChatListScreen> with AutoRefreshMixin {
   late Future<MisonOrderResponse> _future;
 
   bool get _isProvider => appStore.userType == USER_TYPE_PROVIDER;
@@ -29,6 +30,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     _load();
+    startAutoRefresh(); // commande acceptée / terminée : la liste suit
+  }
+
+  @override
+  void dispose() {
+    stopAutoRefresh();
+    super.dispose();
+  }
+
+  @override
+  Future<void> onAutoRefresh() async {
+    final res = await getMisonOrders();
+    ChatUnreadStore.refresh();
+    if (mounted) setState(() => _future = Future.value(res));
   }
 
   void _load() {

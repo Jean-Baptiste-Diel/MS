@@ -1,9 +1,10 @@
+import 'package:booking_system_flutter/utils/order_events.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
-import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold;
+import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold, kMisonDark;
 import 'package:booking_system_flutter/component/mison_cancel_order_sheet.dart';
 import 'package:booking_system_flutter/component/mison_discreet_cancel_button.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
@@ -78,6 +79,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
   late final AnimationController _radar =
       AnimationController(vsync: this, duration: const Duration(milliseconds: 2600))..repeat();
   Timer? _poll;
+  StreamSubscription<String?>? _orderEventsSub;
   GoogleMapController? _map;
 
   MisonOrder? _order;
@@ -119,6 +121,18 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
   BitmapDescriptor? _artisanIcon;
   BitmapDescriptor? _clientIcon;
 
+  /// Le client a déplacé ou zoomé la carte : le radar (dessiné au centre de
+  /// l'écran) est masqué et un bouton permet de recentrer.
+  bool _userMoved = false;
+
+  /// Plan par défaut ; Satellite (avec noms de rues) au choix du client.
+  bool _satellite = false;
+
+  /// Prestataire qui a accepté, avant que sa position en direct n'arrive
+  /// (il n'est pas encore parti) : sa dernière position connue, sinon son
+  /// adresse d'enregistrement.
+  LatLng? _assignedPosition;
+
   bool get _searching => _order?.isPending ?? true;
 
   @override
@@ -131,6 +145,11 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
     if (_order != null && !_searching) _startTracking(_order!);
     _refresh();
     _poll = Timer.periodic(_pollEvery, (_) => _refresh());
+    // Notification de cette commande (acceptée, en route, arrivé, prestation
+    // démarrée…) : mise à jour immédiate, sans attendre le prochain tour.
+    _orderEventsSub = OrderEvents.stream.listen((orderId) {
+      if (orderId == null || orderId.isEmpty || orderId == widget.orderId) _refresh();
+    });
     if (widget.justConfirmed) _showNotice(_Notice.confirmed);
     if (widget.artisanReleased) _showNotice(_Notice.released);
     _tickClock();
@@ -140,6 +159,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
   @override
   void dispose() {
     _poll?.cancel();
+    _orderEventsSub?.cancel();
     _noticeHide?.cancel();
     _clock?.cancel();
     _elapsed.dispose();
@@ -186,11 +206,10 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
     if (_leaving) return;
     try {
       final wasSearching = _order == null ? null : _searching;
-      // Prestataires autour : seulement en recherche (sans effet après).
+      // En recherche : prestataires autour ; ensuite : celui qui a accepté.
       final results = await Future.wait([
         getMisonOrderDetail(widget.orderId),
-        if (wasSearching ?? true)
-          getOrderNearbyArtisans(widget.orderId).catchError((_) => <String, dynamic>{}),
+        getOrderNearbyArtisans(widget.orderId).catchError((_) => <String, dynamic>{}),
       ]);
       if (!mounted || _leaving) return;
       final order = (results[0] as MisonOrderDetailResponse).data;
@@ -199,7 +218,22 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
       if (!MisonOrderSearchingScreen.canFollow(order)) return _leave(order);
 
       if (!order.isPending) {
-        setState(() => _order = order);
+        final nearby = results.length > 1 ? results[1] as Map<String, dynamic> : <String, dynamic>{};
+        final assigned = ((nearby['artisans'] as List?) ?? [])
+            .whereType<Map>()
+            .where((a) => a['assigned'] == true)
+            .firstOrNull;
+        setState(() {
+          _order = order;
+          _assignedPosition = assigned == null
+              ? null
+              : LatLng((assigned['latitude'] as num).toDouble(), (assigned['longitude'] as num).toDouble());
+        });
+        // Prestataire visible avant sa position en direct : cadrage sur lui et le client.
+        if (_assignedPosition != null && !_fittedOnArtisan && wasSearching == false) {
+          _fittedOnArtisan = true;
+          _fitArtisanAndClient();
+        }
         if (wasSearching != false) _onArtisanFound(order, announce: wasSearching == true);
         return;
       }
@@ -270,7 +304,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
 
   /// Cadre le prestataire et l'adresse du client.
   void _fitArtisanAndClient() {
-    final a = _tracker?.artisanPosition;
+    final a = _tracker?.artisanPosition ?? _assignedPosition;
     final c = _center;
     if (_map == null || c == null) return;
     if (a == null) {
@@ -414,10 +448,10 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
           anchor: const Offset(0.5, 0.5),
         ));
       }
-    } else if (_tracker?.artisanPosition != null) {
+    } else if ((_tracker?.artisanPosition ?? _assignedPosition) != null) {
       markers.add(Marker(
         markerId: const MarkerId('my_artisan'),
-        position: _tracker!.artisanPosition!,
+        position: _tracker?.artisanPosition ?? _assignedPosition!,
         icon: _artisanIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
         anchor: const Offset(0.5, 0.5),
         zIndexInt: 3,
@@ -464,7 +498,13 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
                     child: const CircularProgressIndicator(color: kMisonGold),
                   )
                 else
-                  GoogleMap(
+                  Listener(
+                    // Un geste sur la carte en recherche : on masque le radar.
+                    onPointerDown: (_) {
+                      if (searching && !_userMoved) setState(() => _userMoved = true);
+                    },
+                    child: GoogleMap(
+                    mapType: _satellite ? MapType.hybrid : MapType.normal,
                     initialCameraPosition: CameraPosition(target: center, zoom: searching ? _zoomFor(_radiusKm) : 15),
                     onMapCreated: (c) {
                       _map = c;
@@ -483,19 +523,20 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
                           strokeWidth: 2,
                         ),
                     },
-                    // En recherche, carte fixe : le radar reste centré sur le
-                    // client. Pendant le suivi, carte libre.
-                    scrollGesturesEnabled: !searching,
+                    // Carte libre : déplacer, zoomer (aussi pendant la recherche).
+                    scrollGesturesEnabled: true,
                     rotateGesturesEnabled: false,
                     tiltGesturesEnabled: false,
-                    zoomGesturesEnabled: !searching,
+                    zoomGesturesEnabled: true,
                     zoomControlsEnabled: false,
                     myLocationButtonEnabled: false,
                     mapToolbarEnabled: false,
                     compassEnabled: false,
                   ),
-                // Radar : ondes qui partent du client.
-                if (searching)
+                  ),
+                // Radar : ondes qui partent du client (tant que la carte n'a
+                // pas été déplacée : il est dessiné au centre de l'écran).
+                if (searching && !_userMoved)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: AnimatedBuilder(
@@ -517,8 +558,9 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
                     ),
                   ),
                 ),
-                // Recentrer sur le prestataire et le client.
-                if (!searching && center != null)
+                // Recentrer : sur le client et le cercle (recherche), ou sur le
+                // prestataire et le client (suivi).
+                if (center != null && (!searching || _userMoved))
                   Positioned(
                     right: 16,
                     bottom: 16,
@@ -528,7 +570,42 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
                       elevation: 3,
                       child: IconButton(
                         icon: const Icon(Icons.center_focus_strong_rounded, color: kMisonGold),
-                        onPressed: _fitArtisanAndClient,
+                        onPressed: () {
+                          if (searching) {
+                            setState(() => _userMoved = false);
+                            _map?.animateCamera(CameraUpdate.newLatLngZoom(center, _zoomFor(_radiusKm)));
+                          } else {
+                            _fitArtisanAndClient();
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                // Plan / Satellite (en bas à gauche ; recentrer est à droite)
+                if (center != null)
+                  Positioned(
+                    left: 16,
+                    bottom: 16,
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      elevation: 3,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => setState(() => _satellite = !_satellite),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(_satellite ? Icons.map_outlined : Icons.satellite_alt_rounded,
+                                  color: kMisonGold, size: 20),
+                              6.width,
+                              Text(_satellite ? 'Plan' : 'Satellite',
+                                  style: boldTextStyle(size: 13, color: kMisonDark)),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),

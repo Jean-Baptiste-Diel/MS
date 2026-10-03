@@ -5,6 +5,9 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_service_list_component.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_slider_dashboard_component.dart';
+import 'dart:async';
+
+import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
@@ -24,6 +27,7 @@ class _DashboardFragmentState extends State<DashboardFragment> {
   // Bouton « Nouvelle commande » : réduit en « + » quand on descend, déplié
   // dès qu'on remonte (sans devoir revenir tout en haut).
   bool _newOrderExpanded = true;
+  StreamSubscription<String?>? _orderEventsSub;
 
   @override
   void initState() {
@@ -31,6 +35,12 @@ class _DashboardFragmentState extends State<DashboardFragment> {
     setStatusBarColorChange();
     // Compteur de la cloche : notifications non lues (historique serveur)
     if (appStore.isLoggedIn) getMisonNotifications().catchError((_) => const MisonNotificationResponse(unreadCount: 0, data: []));
+    // Commande modifiée (bouton, notification) : la cloche se met à jour.
+    _orderEventsSub = OrderEvents.stream.listen((_) {
+      if (appStore.isLoggedIn) {
+        getMisonNotifications().catchError((_) => const MisonNotificationResponse(unreadCount: 0, data: []));
+      }
+    });
     _scrollController.addListener(() {
       final collapsed =
           _scrollController.hasClients && _scrollController.offset > 4;
@@ -51,6 +61,7 @@ class _DashboardFragmentState extends State<DashboardFragment> {
 
   @override
   void dispose() {
+    _orderEventsSub?.cancel();
     _scrollController.dispose();
     super.dispose();
   }

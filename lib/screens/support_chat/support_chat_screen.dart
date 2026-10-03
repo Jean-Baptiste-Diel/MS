@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/configs.dart' show DOMAIN_URL;
+import 'package:booking_system_flutter/screens/support_chat/chat_image_viewer.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/utils/image_pick_sizes.dart';
 import 'package:booking_system_flutter/utils/image_cache_key.dart';
@@ -11,6 +13,7 @@ import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/services/support_chat_service.dart';
 import 'package:booking_system_flutter/utils/common.dart';
+import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -63,6 +66,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   StreamSubscription? _newMessageSub;
   StreamSubscription? _connectionSub;
   StreamSubscription? _errorSub;
+  StreamSubscription? _closedSub;
+  StreamSubscription<String?>? _orderEventsSub;
+  bool _left = false;
 
   bool _isConnecting = true;
   bool _wsConnected = false;
@@ -78,6 +84,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   void initState() {
     super.initState();
     _initChat();
+    // Commande terminée pendant la discussion : elle se ferme et disparaît.
+    if (widget.orderId != null) {
+      _orderEventsSub = OrderEvents.stream.listen((id) {
+        if (id == null || id == widget.orderId) _checkStillOpen();
+      });
+    }
   }
 
   Future<void> _initChat() async {
@@ -95,6 +107,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       final conversationId = widget.orderId != null
           ? await _service.createOrGetOrderConversation(widget.orderId!)
           : await _service.createOrGetConversation();
+      // Prestation terminée : la discussion n'existe plus pour eux.
+      if (widget.orderId != null && !_service.canSend) {
+        _leaveClosedChat();
+        return;
+      }
       await _service.connect(conversationId);
 
       _historySub = _service.historyStream.listen((history) {
@@ -124,6 +141,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       // Le serveur n'a pas pu traiter un message : les messages sont traités
       // dans l'ordre, c'est donc le plus ancien encore en attente qui a échoué.
       // Il passe en "échec" tout de suite (avec le bouton réessayer).
+      // La prestation s'est terminée pendant la discussion : lecture seule.
+      _closedSub?.cancel();
+      _closedSub = _service.closedStream.listen((_) => _leaveClosedChat());
+
       _errorSub?.cancel();
       _errorSub = _service.errorStream.listen((error) {
         if (!mounted) return;
@@ -149,9 +170,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       _reconnectAttempt = 0;
       setState(() => _wsConnected = true);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
-      setState(() => _isConnecting = false);
+      if (mounted) setState(() => _isConnecting = false);
     }
   }
 
@@ -265,6 +286,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     _newMessageSub?.cancel();
     _connectionSub?.cancel();
     _errorSub?.cancel();
+    _closedSub?.cancel();
+    _orderEventsSub?.cancel();
     _service.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -280,7 +303,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         appBar: MisonAppBar(
           title: widget.title,
           // Bouton d'appel en face du nom (chat d'une commande uniquement)
-          titleTrailing: (widget.orderId != null && widget.callPeerName != null)
+          titleTrailing: _canCall
               ? GestureDetector(
                   onTap: () => startMisonOrderCall(
                     context,
@@ -331,7 +354,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           child: Column(
             children: [
               Expanded(child: _buildBody()),
-              if (!_isConnecting && _error == null) _buildInputBar(),
+              if (!_isConnecting && _error == null)
+                _buildInputBar(),
             ],
           ),
         ),
@@ -406,7 +430,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             ? Icons.call_missed_rounded
             : Icons.south_west_rounded;
 
-    final canCallBack = widget.orderId != null && widget.callPeerName != null;
+    final canCallBack = _canCall;
     const radius16 = Radius.circular(16);
 
     return Align(
@@ -596,38 +620,70 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   }
 
   Widget _buildImageContent(SupportChatMessage msg) {
+    final heroTag = 'chat-image-${msg.id}';
     // Optimistic : affichage depuis les bytes en mémoire
     if ((msg.status == MessageStatus.pending || msg.status == MessageStatus.failed) && msg.localBytes != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.memory(
-          msg.localBytes!,
-          width: 200,
-          height: 200,
-          fit: BoxFit.cover,
+      return GestureDetector(
+        onTap: () => ChatImageViewer.open(context, bytes: msg.localBytes, heroTag: heroTag),
+        child: Hero(
+          tag: heroTag,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(msg.localBytes!, width: 200, height: 200, fit: BoxFit.cover),
+          ),
         ),
       );
     }
     // Message confirmé : imageUrl si dispo, sinon proxy HTTPS en fallback
     final url = (msg.imageUrl != null && msg.imageUrl!.isNotEmpty)
         ? msg.imageUrl!
-        : 'https://api.mison.app/media/minio/${msg.content}';
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: CachedNetworkImage(
-        imageUrl: url,
-        cacheKey: imageCacheKey(url),
-        width: 200,
-        height: 200,
-        fit: BoxFit.cover,
-        placeholder: (_, __) => const SizedBox(
-          width: 200,
-          height: 200,
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: kMisonGold)),
+        : '$DOMAIN_URL/media/minio/${msg.content}';
+    // Appui : l'image en grand (zoom, glisser vers le bas pour fermer).
+    return GestureDetector(
+      onTap: () => ChatImageViewer.open(context, url: url, heroTag: heroTag),
+      child: Hero(
+        tag: heroTag,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: CachedNetworkImage(
+            imageUrl: url,
+            cacheKey: imageCacheKey(url),
+            width: 200,
+            height: 200,
+            fit: BoxFit.cover,
+            placeholder: (_, __) => const SizedBox(
+              width: 200,
+              height: 200,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: kMisonGold)),
+            ),
+            errorWidget: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white),
+          ),
         ),
-        errorWidget: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white),
       ),
     );
+  }
+
+  /// Appel possible : chat d'une commande encore en cours.
+  bool get _canCall => widget.orderId != null && widget.callPeerName != null && _service.canSend;
+
+  Future<void> _checkStillOpen() async {
+    if (_left) return;
+    try {
+      await _service.createOrGetOrderConversation(widget.orderId!);
+      if (!_service.canSend) _leaveClosedChat();
+    } catch (_) {
+      // réseau : le serveur refusera de toute façon les envois
+    }
+  }
+
+  /// La prestation est terminée : la discussion se ferme (elle n'apparaît plus
+  /// dans « Discussions » jusqu'à une nouvelle commande ensemble).
+  void _leaveClosedChat() {
+    if (_left || !mounted) return;
+    _left = true;
+    TopToast.show(message: 'Prestation terminée : cette discussion est fermée.');
+    final route = ModalRoute.of(context);
+    if (route != null && route.isActive) Navigator.of(context).removeRoute(route);
   }
 
   Widget _buildInputBar() {
@@ -758,13 +814,9 @@ class _ChatInputState extends State<ChatInput> {
       return;
     }
 
+    // Annulée, ou trop courte (moins d'1 s, appui bref) : abandonnée sans message.
     if (!send || elapsed < _minRecordDuration) {
       await _recorder.cancel();
-      if (send && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Maintenez le micro pour enregistrer.')),
-        );
-      }
       return;
     }
 

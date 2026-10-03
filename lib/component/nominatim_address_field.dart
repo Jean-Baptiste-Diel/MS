@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold;
 import 'dart:async';
 import 'dart:convert';
 
@@ -143,6 +144,10 @@ class NominatimAddressField extends StatefulWidget {
   final String bbox;
   final void Function(NominatimSuggestion suggestion)? onSelected;
 
+  /// Si fourni : ligne « Choisir sur la carte » sous les suggestions, et seule
+  /// proposition quand la recherche ne trouve rien.
+  final VoidCallback? onPickOnMap;
+
   /// Widget optionnel affiché à droite du champ (ex: bouton "Ma position"),
   /// masqué pendant la recherche (le spinner de recherche prend sa place).
   final Widget? suffixButton;
@@ -155,6 +160,7 @@ class NominatimAddressField extends StatefulWidget {
     this.countryCodes = const ['sn'],
     this.bbox = kDakarRegionBbox,
     this.onSelected,
+    this.onPickOnMap,
     this.suffixButton,
   }) : super(key: key);
 
@@ -230,7 +236,8 @@ class _NominatimAddressFieldState extends State<NominatimAddressField> {
             .take(6)
             .toList();
 
-        if (_suggestions.isNotEmpty) {
+        // Rien trouvé : avec « Choisir sur la carte », la liste reste ouverte.
+        if (_suggestions.isNotEmpty || widget.onPickOnMap != null) {
           _showOverlay();
         } else {
           _removeOverlay();
@@ -295,15 +302,32 @@ class _NominatimAddressFieldState extends State<NominatimAddressField> {
               child: ListView.separated(
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,
-                itemCount: _suggestions.length,
+                itemCount: _suggestions.length + (widget.onPickOnMap != null ? 1 : 0),
                 separatorBuilder: (_, __) =>
                     Divider(height: 1, color: borderColor),
                 itemBuilder: (_, i) {
-                  final s = _suggestions[i];
+                  // « Choisir sur la carte » en tête de liste, puis les suggestions.
+                  final hasMap = widget.onPickOnMap != null;
+                  if (hasMap && i == 0) {
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(Icons.map_outlined, color: kMisonGold, size: 20),
+                      title: Text(
+                        _suggestions.isEmpty ? 'Lieu introuvable ? Choisir sur la carte' : 'Choisir sur la carte',
+                        style: boldTextStyle(size: 13, color: kMisonGold),
+                      ),
+                      onTap: () {
+                        _removeOverlay();
+                        FocusScope.of(context).unfocus();
+                        widget.onPickOnMap!();
+                      },
+                    );
+                  }
+                  final s = _suggestions[hasMap ? i - 1 : i];
                   return ListTile(
                     dense: true,
                     leading: Icon(Icons.location_on_outlined,
-                        color: primaryColor, size: 20),
+                        color: kMisonGold, size: 20),
                     title: Text(
                       s.mainText,
                       style: primaryTextStyle(size: 13),
@@ -341,7 +365,7 @@ class _NominatimAddressFieldState extends State<NominatimAddressField> {
               hintText: widget.hintText,
               hintStyle: secondaryTextStyle(),
               prefixIcon: Icon(Icons.location_on_outlined,
-                  color: primaryColor, size: 20),
+                  color: kMisonGold, size: 20),
               suffixIcon: _isSearching
                   ? const Padding(
                       padding: EdgeInsets.all(12),

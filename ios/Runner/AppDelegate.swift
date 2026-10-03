@@ -22,6 +22,7 @@ import flutter_callkit_incoming
     }
     GeneratedPluginRegistrant.register(with: self)
     registerAudioRouteChannel()
+    registerAcceptedCallChannel()
     GMSServices.provideAPIKey("AIzaSyBtos9vMzqgH_Z9USy6eYMBtftzvhDYZhI")
 
     // PushKit : seul canal qui reveille une app iOS terminee pour un appel.
@@ -107,6 +108,23 @@ import flutter_callkit_incoming
       if let mic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
         try session.setPreferredInput(mic)
       }
+    }
+  }
+
+  // MARK: - Appel décroché alors que l'app était fermée
+
+  /// App fermée : l'iPhone la relance quand on décroche depuis l'écran
+  /// d'appel, mais l'événement « appel accepté » part avant que Flutter
+  /// l'écoute. L'app le redemande ici au démarrage pour ouvrir l'appel.
+  private func registerAcceptedCallChannel() {
+    guard let registrar = self.registrar(forPlugin: "MisonAcceptedCall") else { return }
+    let channel = FlutterMethodChannel(name: "mison/accepted_call", binaryMessenger: registrar.messenger())
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "getAcceptedCall" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      result(SwiftFlutterCallkitIncomingPlugin.sharedInstance?.getAcceptedCall()?.toJSON())
     }
   }
 

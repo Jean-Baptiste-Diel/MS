@@ -1,3 +1,6 @@
+import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
+import 'package:booking_system_flutter/screens/map/mison_location_picker_screen.dart';
+import 'package:booking_system_flutter/utils/address_resolver.dart';
 import 'package:booking_system_flutter/component/mison_service_image_header.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
@@ -46,6 +49,9 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   String? _locateStep;
   /// Précision (m) de la position trouvée, affichée une fois l'adresse remplie.
   double? _locatedAccuracy;
+  /// Texte de la zone correspondant à zoneLat/zoneLon. Si le client modifie ou
+  /// colle autre chose, la position n'est plus valable : elle est revérifiée.
+  String? _resolvedText;
 
   /// « Ma position » : remplit la zone d'intervention avec l'adresse actuelle.
   ///
@@ -54,6 +60,137 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   ///    sinon le GPS est interrogé, 12 s au plus (repli : dernière position).
   /// 3. L'adresse est retrouvée à partir de la position ; si elle ne l'est pas,
   ///    la position est quand même gardée (« Ma position actuelle »).
+  @override
+  void initState() {
+    super.initState();
+    zoneCont.addListener(_onZoneTextChanged);
+  }
+
+  void _onZoneTextChanged() {
+    if (zoneLat == null || zoneCont.text == _resolvedText) return;
+    setState(() {
+      zoneLat = null;
+      zoneLon = null;
+      _locatedAccuracy = null;
+    });
+  }
+
+  /// Point de référence pour départager les lieux : la dernière position
+  /// connue du téléphone (sans rien demander), sinon le centre de Dakar.
+  Future<Position?> _referencePosition() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return null;
+      return await Geolocator.getLastKnownPosition();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Adresse tapée ou collée (autre app, lien Google Maps…) sans choisir de
+  /// suggestion : on la retrouve sur la carte avant de continuer. Introuvable
+  /// → on bloque ; plusieurs lieux → le client choisit, du plus proche au plus loin.
+  Future<bool> _ensureZoneLocated() async {
+    if (zoneLat != null && zoneLon != null) return true;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isLocatingZone = true;
+      _locateStep = 'Vérification de l\'adresse…';
+    });
+    List<ResolvedAddress> found = [];
+    try {
+      final ref = await _referencePosition();
+      found = await resolveAddress(zoneCont.text, refLat: ref?.latitude, refLon: ref?.longitude);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLocatingZone = false;
+          _locateStep = null;
+        });
+      }
+    }
+    if (!mounted) return false;
+
+    if (found.isEmpty) {
+      TopToast.show(message: 'Adresse introuvable : placez votre lieu sur la carte.', type: TopToastType.error);
+      await _pickOnMap();
+      return zoneLat != null && zoneLon != null;
+    }
+    final chosen = found.length == 1 ? found.first : await _chooseAmong(found);
+    if (chosen == null || !mounted) return false;
+    var text = chosen.detail.isEmpty ? chosen.label : '${chosen.label}, ${chosen.detail}';
+    if (chosen.label == 'Position partagée') {
+      // Lien ou coordonnées collés : on affiche l'adresse plutôt que le lien.
+      try {
+        text = await buildFullAddressFromLatLong(chosen.lat, chosen.lon).timeout(const Duration(seconds: 8));
+      } catch (_) {
+        text = 'Position partagée';
+      }
+      if (!mounted) return false;
+    }
+    setState(() {
+      _resolvedText = text;
+      zoneCont.text = text;
+      zoneLat = chosen.lat;
+      zoneLon = chosen.lon;
+      _locatedAccuracy = null;
+    });
+    return true;
+  }
+
+  /// Plusieurs lieux correspondent : le client choisit (les plus proches d'abord).
+  Future<ResolvedAddress?> _chooseAmong(List<ResolvedAddress> options) {
+    return showModalBottomSheet<ResolvedAddress>(
+      context: context,
+      backgroundColor: context.scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+              child: Text('Quelle adresse ?', style: boldTextStyle(size: 17)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('Plusieurs lieux correspondent, du plus proche au plus éloigné.',
+                  style: secondaryTextStyle(size: 13)),
+            ),
+            for (final o in options)
+              ListTile(
+                leading: const Icon(Icons.location_on_rounded, color: kMisonGold),
+                title: Text(o.label, style: primaryTextStyle(size: 15, weight: FontWeight.w600)),
+                subtitle: Text(
+                  [if (o.detail.isNotEmpty) o.detail, _formatKm(o.distanceKm)].join(' · '),
+                  style: secondaryTextStyle(size: 12),
+                ),
+                onTap: () => Navigator.pop(sheet, o),
+              ),
+            8.height,
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// « Choisir sur la carte » : lieu absent des recherches.
+  Future<void> _pickOnMap() async {
+    final initial = (zoneLat != null && zoneLon != null) ? LatLng(zoneLat!, zoneLon!) : null;
+    final picked = await MisonLocationPickerScreen.open(context, initial: initial);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _resolvedText = picked.address;
+      zoneCont.text = picked.address;
+      zoneLat = picked.lat;
+      zoneLon = picked.lon;
+      _locatedAccuracy = null;
+    });
+  }
+
+  String _formatKm(double km) => km < 1 ? 'à ${(km * 1000).round()} m' : 'à ${km.toStringAsFixed(1)} km';
+
   Future<void> _fillZoneWithCurrentLocation() async {
     if (_isLocatingZone) return;
     FocusScope.of(context).unfocus();
@@ -114,6 +251,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
       if (!mounted) return;
 
       setState(() {
+        _resolvedText = address;
         zoneCont.text = address;
         zoneLat = position!.latitude;
         zoneLon = position.longitude;
@@ -135,6 +273,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   @override
   void dispose() {
     descriptionCont.dispose();
+    zoneCont.removeListener(_onZoneTextChanged);
     zoneCont.dispose();
     super.dispose();
   }
@@ -206,17 +345,20 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
     return DateTime.now().toIso8601String();
   }
 
-  void _continueToConfirmation() {
+  Future<void> _continueToConfirmation() async {
+    if (_isLocatingZone) return;
     if (_formKey.currentState!.validate()) {
       if (!isImmediateService && (selectedDate == null || selectedTime == null)) {
         TopToast.show(message: 'Veuillez sélectionner une date et une heure');
         return;
       }
       
-      if (zoneCont.text.isEmpty) {
+      if (zoneCont.text.trim().isEmpty) {
         TopToast.show(message: 'Veuillez sélectionner une zone d\'intervention');
         return;
       }
+      // Adresse introuvable sur la carte : pas d'étape suivante.
+      if (!await _ensureZoneLocated() || !mounted) return;
 
       // Navigate to confirmation screen
       MisonConfirmBookingScreen(
@@ -525,7 +667,9 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
             // Commandes : suggestions limitées à la région de Dakar (Sénégal).
             countryCodes: const ['sn'],
             bbox: kDakarRegionBbox,
+            onPickOnMap: _pickOnMap,
             onSelected: (s) => setState(() {
+              _resolvedText = zoneCont.text;
               zoneLat = s.lat;
               zoneLon = s.lon;
               _locatedAccuracy = null; // adresse choisie dans les suggestions
@@ -632,6 +776,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         children: [
           Text('Notre promesse client', style: boldTextStyle(size: 16)),
           12.height,
+          _PromiseItem(icon: Icons.person_search_rounded, text: 'Trouvez un ouvrier pour seulement 100 FCFA'),
           _PromiseItem(icon: Icons.check_circle, text: 'Annulation possible à tout moment avant le rendez-vous'),
           _PromiseItem(icon: Icons.access_time, text: 'Disponible 24h/24'),
           _PromiseItem(icon: Icons.security, text: 'Garanti par Mison Service et payer en toute sécurité'),

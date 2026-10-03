@@ -12,6 +12,7 @@
 		5D11B8C32C243BAE0006695A /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D11B8C22C243BAE0006695A /* NotificationService.swift */; };
 		5D11B8C72C243BAE0006695A /* ImageNotification.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5D11B8C02C243BAE0006695A /* ImageNotification.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5DA2E8F62B4D1ABF00F6DD9F /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5DA2E8F52B4D1ABF00F6DD9F /* GoogleService-Info.plist */; };
+		A1B2C3D4E5F60718293A4B5D /* mison_notification.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* mison_notification.wav */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
@@ -65,6 +66,7 @@
 		5D11B8C22C243BAE0006695A /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		5D11B8C42C243BAE0006695A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5DA2E8F52B4D1ABF00F6DD9F /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* mison_notification.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = mison_notification.wav; sourceTree = "<group>"; };
 		61F78511C3911743A1ED6E22 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 			isa = PBXGroup;
 			children = (
 				5DA2E8F52B4D1ABF00F6DD9F /* GoogleService-Info.plist */,
+				A1B2C3D4E5F60718293A4B5C /* mison_notification.wav */,
 				FF6BB75D2718400C00DEACBD /* Runner.entitlements */,
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
@@ -283,6 +286,7 @@
 				97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */,
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				5DA2E8F62B4D1ABF00F6DD9F /* GoogleService-Info.plist in Resources */,
+				A1B2C3D4E5F60718293A4B5D /* mison_notification.wav in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 			);

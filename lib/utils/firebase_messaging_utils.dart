@@ -29,8 +29,13 @@ import '../screens/wallet/user_wallet_balance_screen.dart';
 import 'constant.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 
-const _kChannelId = 'notification';
-const _kChannelName = 'Notifications';
+// Canal au son MISON. Android ne permet pas de changer le son d'un canal
+// existant : nouvel identifiant (l'ancien « notification » est supprimé).
+const _kChannelId = 'mison_notifications';
+const _kChannelName = 'Notifications MISON';
+const _kOldChannelId = 'notification';
+const _kSound = RawResourceAndroidNotificationSound('mison_notification');
+const _kIosSound = 'mison_notification.wav';
 const _kCallChannelId = 'incoming_calls';
 const _kCallChannelName = 'Appels entrants';
 const _kCallNotifId = 9999;
@@ -125,10 +130,11 @@ Future<void> showSimpleLocalNotification({
         importance: Importance.high,
         priority: Priority.high,
         playSound: true,
+        sound: _kSound,
         icon: '@drawable/ic_stat_ic_notification',
         autoCancel: true,
       ),
-      iOS: DarwinNotificationDetails(),
+      iOS: DarwinNotificationDetails(sound: _kIosSound),
       macOS: DarwinNotificationDetails(),
     );
     await plugin.show(id, title, body, details);
@@ -139,6 +145,11 @@ Future<void> showSimpleLocalNotification({
 Future<void> createNotificationChannel() async {
   if (!Platform.isAndroid) return;
   final plugin = FlutterLocalNotificationsPlugin();
+  // Ancien canal (son par défaut) : retiré des réglages du téléphone.
+  await plugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.deleteNotificationChannel(_kOldChannelId)
+      .catchError((_) {});
   await plugin
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(const AndroidNotificationChannel(
@@ -147,6 +158,7 @@ Future<void> createNotificationChannel() async {
         importance: Importance.max,
         enableLights: true,
         playSound: true,
+        sound: _kSound,
         showBadge: true,
       ));
 }
@@ -463,6 +475,7 @@ void showNotification(int id, String title, String message, RemoteMessage remote
         importance: Importance.max,
         enableLights: true,
         playSound: true,
+        sound: _kSound,
         showBadge: true,
       ));
 
@@ -491,13 +504,14 @@ void showNotification(int id, String title, String message, RemoteMessage remote
     visibility: NotificationVisibility.public,
     autoCancel: true,
     playSound: true,
+    sound: _kSound,
     priority: Priority.high,
     icon: '@drawable/ic_stat_ic_notification',
     largeIcon: remoteMessage.data.containsKey("image_url") ? FilePathAndroidBitmap(await _downloadAndSaveFile(remoteMessage.data["image_url"], 'largeIcon')) : null,
     styleInformation: remoteMessage.data.containsKey("image_url") ? bigPictureStyleInformation : null,
   );
 
-  var darwinPlatformChannelSpecifics = const DarwinNotificationDetails();
+  var darwinPlatformChannelSpecifics = const DarwinNotificationDetails(sound: _kIosSound);
 
   var platformChannelSpecifics = NotificationDetails(
     android: androidPlatformChannelSpecifics,

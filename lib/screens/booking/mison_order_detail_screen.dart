@@ -1,3 +1,6 @@
+import 'package:booking_system_flutter/component/mison_rate_sheet.dart';
+import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
+import 'package:booking_system_flutter/component/mison_start_prestation_sheet.dart';
 import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'package:booking_system_flutter/component/mison_receipt_sheet.dart';
 import 'package:booking_system_flutter/screens/booking/mison_order_searching_screen.dart';
@@ -50,6 +53,19 @@ class MisonOrderDetailScreen extends StatefulWidget {
   final double? distanceKm;
   const MisonOrderDetailScreen({Key? key, required this.orderId, this.distanceKm}) : super(key: key);
 
+  /// Commandes dont la page est ouverte (pour ne pas en rouvrir une seconde
+  /// au retour de Wave / Orange Money).
+  static final Map<String, int> _open = {};
+  static bool isOpen(String orderId) => (_open[orderId] ?? 0) > 0;
+
+  static final StreamController<(String, bool)> _paymentReturns = StreamController<(String, bool)>.broadcast();
+
+  /// Retour dans l'app après un paiement : la page ouverte vérifie le statut
+  /// jusqu'à ce que le paiement soit confirmé ; paiement annulé : le bouton
+  /// « Payer » redevient utilisable tout de suite.
+  static void notifyPaymentReturn(String orderId, {required bool success}) =>
+      _paymentReturns.add((orderId, success));
+
   @override
   State<MisonOrderDetailScreen> createState() => _MisonOrderDetailScreenState();
 }
@@ -59,6 +75,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   Timer? _locationTimer;
   Position? _artisanPosition;
   StreamSubscription<String?>? _orderEventsSub;
+  StreamSubscription<(String, bool)>? _paymentReturnSub;
   Timer? _paymentPollTimer;
   bool _paymentLaunched = false;
   bool _paymentRequestInFlight = false;
@@ -70,17 +87,29 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   @override
   void initState() {
     super.initState();
+    MisonOrderDetailScreen._open.update(widget.orderId, (n) => n + 1, ifAbsent: () => 1);
     WidgetsBinding.instance.addObserver(this);
     init();
+    _paymentReturnSub = MisonOrderDetailScreen._paymentReturns.stream.listen((event) {
+      final (id, success) = event;
+      if (id != widget.orderId) return;
+      _paymentLaunched = false;
+      if (success) {
+        _startPaymentPolling();
+      } else {
+        _stopPaymentPolling();
+        _reloadSilently();
+      }
+    });
     if (appStore.userType == USER_TYPE_PROVIDER) _fetchArtisanPosition();
     // Statut de commande changé côté serveur (paiement confirmé, prestation
     // terminée par l'ouvrier…). orderId null = event sans id, on rafraîchit.
     startAutoRefresh();
     _orderEventsSub = OrderEvents.stream.listen((orderId) {
       if (orderId == null || orderId.isEmpty || orderId == widget.orderId) {
-        _stopPaymentPolling();
-        init();
-        if (mounted) setState(() {});
+        // Pas de rechargement « à blanc » ni d'arrêt de la vérification du
+        // paiement : la page est mise à jour dès que les données arrivent.
+        _reloadSilently();
       }
     });
   }
@@ -91,6 +120,13 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     _locationTimer?.cancel();
     _paymentPollTimer?.cancel();
     _orderEventsSub?.cancel();
+    _paymentReturnSub?.cancel();
+    final n = (MisonOrderDetailScreen._open[widget.orderId] ?? 1) - 1;
+    if (n <= 0) {
+      MisonOrderDetailScreen._open.remove(widget.orderId);
+    } else {
+      MisonOrderDetailScreen._open[widget.orderId] = n;
+    }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -100,8 +136,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     // Le client revient dans l'app après avoir payé via Wave/Orange Money
     // (app externe) : on rafraîchit le statut de la commande.
     if (state == AppLifecycleState.resumed) {
-      init();
-      if (mounted) setState(() {});
+      _reloadSilently();
       if (_paymentLaunched) {
         _paymentLaunched = false;
         _startPaymentPolling();
@@ -111,6 +146,10 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
 
   void init() => future = getMisonOrderDetail(widget.orderId);
 
+  // Changements de commande gérés par l'écoute OrderEvents de initState.
+  @override
+  bool get refreshOnOrderEvents => false;
+
   /// Actualisation silencieuse du statut (acceptée, en route, arrivée…).
   @override
   Future<void> onAutoRefresh() async {
@@ -118,20 +157,35 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     if (mounted) setState(() => future = Future.value(res));
   }
 
+  Future<void> _reloadSilently() async {
+    try {
+      final res = await getMisonOrderDetail(widget.orderId);
+      if (!mounted) return;
+      setState(() => future = Future.value(res));
+      if (res.data != null && !res.data!.isAwaitingAnyPayment) _stopPaymentPolling();
+    } catch (e) {
+      log('[OrderDetail] $e');
+    }
+  }
+
   /// Le webhook Wave/Orange Money peut arriver au serveur quelques secondes
   /// après le retour dans l'app : on interroge le statut jusqu'à ce que le
-  /// paiement soit pris en compte (max ~30 s).
+  /// paiement soit pris en compte (max ~1 min 30). La page est mise à jour à
+  /// chaque vérification.
   void _startPaymentPolling() {
-    _stopPaymentPolling();
+    if (_paymentPollTimer != null) return; // déjà en cours
     int ticks = 0;
     _paymentPollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (++ticks > 10 || !mounted) return _stopPaymentPolling();
+      if (++ticks > 30 || !mounted) return _stopPaymentPolling();
       try {
         final res = await getMisonOrderDetail(widget.orderId);
         if (!mounted || _paymentPollTimer == null) return;
+        setState(() => future = Future.value(res));
         if (res.data != null && !res.data!.isAwaitingAnyPayment) {
           _stopPaymentPolling();
-          setState(() => future = Future.value(res));
+          if (res.data!.isCompleted) {
+            TopToast.show(message: 'Paiement confirmé !', type: TopToastType.success);
+          }
         }
       } catch (e) {
         log('[PaymentPolling] $e');
@@ -373,16 +427,6 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     finally { appStore.setLoading(false); }
   }
 
-  Future<void> _startOrder(String id) async {
-    appStore.setLoading(true);
-    try {
-      final res = await artisanStartOrder(id);
-      TopToast.show(message: res.message ?? 'Prestation démarrée', type: TopToastType.success);
-      init(); setState(() {});
-    } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
-    finally { appStore.setLoading(false); }
-  }
-
   Future<void> _openChat(MisonOrder order) async {
     final peerName = appStore.userType == USER_TYPE_PROVIDER
         ? (order.client?.fullName.isNotEmpty == true ? order.client!.fullName : 'Client')
@@ -533,9 +577,41 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
 
   // ── Build ─────────────────────────────────────────────────────────────────────
 
+  /// Prestation terminée : le retour (bouton du bas ou flèche) ramène à
+  /// l'accueil, pas aux écrans de suivi ou de paiement ouverts avant.
+  bool _completed = false;
+
+  /// Commandes pour lesquelles le panneau « Noter » s'est déjà ouvert tout seul
+  /// (une fois par commande et par session : « Plus tard » ne le rouvre pas).
+  static final Set<String> _ratePrompted = {};
+
+  /// Prestation terminée, pas encore notée : le panneau s'ouvre tout seul.
+  void _maybePromptRating(MisonOrder order) {
+    final isClient = appStore.userType != USER_TYPE_PROVIDER;
+    if (!isClient || !order.canRate || order.id == null || !_ratePrompted.add(order.id!)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? false)) {
+        _ratePrompted.remove(order.id!); // réessayé au prochain affichage
+        return;
+      }
+      final rated = await showMisonRateSheet(context, orderId: order.id!, artisanName: order.artisan?.fullName);
+      if (rated && mounted) {
+        init();
+        setState(() {});
+      }
+    });
+  }
+
+  void _goHome() => DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: !_completed,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goHome();
+      },
+      child: Scaffold(
       backgroundColor: Colors.transparent,
       body: DotGridBackground(
         child: Stack(
@@ -561,6 +637,13 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                   ),
             onSuccess: (response) {
               final order = response.data;
+              final completed = order?.isCompleted ?? false;
+              if (order != null) _maybePromptRating(order);
+              if (completed != _completed) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _completed = completed);
+                });
+              }
               if (order == null) {
                 return const AppEmptyState(
                   type: AppEmptyStateType.empty,
@@ -584,11 +667,14 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 statusLabel: _statusLabel,
                 statusIcon: _statusIcon,
                 onAccept: () => _confirm(title: 'Accepter la commande', subtitle: 'Confirmez-vous l\'acceptation ?', onConfirm: () => _acceptOrder(order.id!)),
-                onStart: () => _confirm(
-                  title: 'Commencer la prestation',
-                  subtitle: 'Vous êtes chez le client : confirmez le début de la prestation.',
-                  onConfirm: () => _startOrder(order.id!),
-                ),
+                // Même panneau que l'annulation : vérifications puis démarrage.
+                onStart: () async {
+                  final started = await showMisonStartPrestationSheet(context, orderId: order.id!);
+                  if (started && mounted) {
+                    init();
+                    setState(() {});
+                  }
+                },
                 onChat: () => _openChat(order),
                 onSetRealizationFee: () => _showSetFeeModal(
                   title: 'Frais de prestation',
@@ -635,6 +721,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         ],
         ),
       ),
+    ),
     );
   }
 }
@@ -787,7 +874,8 @@ class _OrderDetailBody extends StatelessWidget {
           centerTitle: true,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: kMisonDark),
-            onPressed: () => Navigator.pop(context),
+            // maybePop : passe par le retour de l'écran (accueil si terminée).
+            onPressed: () => Navigator.maybePop(context),
           ),
           title: Padding(
             padding: const EdgeInsets.only(top: 12),

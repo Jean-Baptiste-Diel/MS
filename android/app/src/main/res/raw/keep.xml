@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Son des notifications : utilisé seulement par nom (serveur, canal), à ne
+     pas supprimer lors de la réduction des ressources de la version publiée. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/mison_notification" />

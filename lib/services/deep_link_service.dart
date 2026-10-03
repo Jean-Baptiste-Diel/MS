@@ -145,7 +145,11 @@ class DeepLinkService {
 
   void _handlePaymentCallback({required bool success, required String orderId}) {
     log('[DeepLink] _handlePaymentCallback success=$success orderId=$orderId');
-    TopToast.show(message: success ? 'Paiement confirmé !' : 'Paiement annulé', type: TopToastType.success);
+    // « Confirmé » s'affiche quand le serveur l'a validé (page de la commande).
+    TopToast.show(
+      message: success ? 'Vérification du paiement…' : 'Paiement annulé',
+      type: success ? TopToastType.success : TopToastType.error,
+    );
 
     if (orderId.isNotEmpty) {
       // Rafraîchit le détail commande déjà ouvert
@@ -155,10 +159,21 @@ class DeepLinkService {
       LiveStream().emit(LIVESTREAM_ORDERS_LIST_REFRESH, true);
     }
 
+    // Page de la commande déjà ouverte : elle vérifie le paiement et se met à
+    // jour (pas de seconde page par-dessus).
+    if (orderId.isNotEmpty && MisonOrderDetailScreen.isOpen(orderId)) {
+      MisonOrderDetailScreen.notifyPaymentReturn(orderId, success: success);
+      return;
+    }
+
     // Navigue vers le détail commande avec un délai pour laisser le navigator se stabiliser
     Future.delayed(const Duration(milliseconds: 600), () {
       log('[DeepLink] Navigating to order $orderId — navigatorKey=${navigatorKey.currentState}');
       if (orderId.isNotEmpty) {
+        if (success) {
+          Future.delayed(const Duration(milliseconds: 800),
+              () => MisonOrderDetailScreen.notifyPaymentReturn(orderId, success: true));
+        }
         navigatorKey.currentState?.push(MaterialPageRoute(
           builder: (_) => MisonOrderDetailScreen(orderId: orderId),
         ));

@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/service_search.dart';
 import 'dart:async';
 
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
@@ -50,38 +51,10 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
   /// Suggestions affichées sous la barre pendant la saisie.
   List<MisonService> _suggestions = [];
 
-  static String _normalize(String text) {
-    const from = 'àâäáãçéèêëíìîïñóòôöõúùûüÿ';
-    const to = 'aaaaaceeeeiiiinooooouuuuy';
-    final lower = text.toLowerCase().trim();
-    final out = StringBuffer();
-    for (final ch in lower.split('')) {
-      final i = from.indexOf(ch);
-      out.write(i >= 0 ? to[i] : ch);
-    }
-    return out.toString();
-  }
-
-  /// Services correspondant à la saisie : d'abord ceux dont un mot du nom
-  /// commence par le texte (« car » → Carreleur), puis ceux qui le contiennent
-  /// dans le nom, puis dans la description. Accents ignorés.
+  /// Services correspondant à la saisie (classement partagé avec l'onglet Service).
   void _updateSuggestions(String value) {
-    final q = _normalize(value);
-    if (q.isEmpty) {
-      setState(() => _suggestions = []);
-      return;
-    }
-    int score(MisonService s) {
-      final name = _normalize(s.name ?? '');
-      if (name.startsWith(q)) return 0;
-      if (name.split(RegExp(r'[\s\-/]+')).any((w) => w.startsWith(q))) return 1;
-      if (name.contains(q)) return 2;
-      if (_normalize(s.description ?? '').contains(q)) return 3;
-      return 99;
-    }
-    final matches = _services.where((s) => score(s) < 99).toList()
-      ..sort((a, b) => score(a).compareTo(score(b)));
-    setState(() => _suggestions = matches.take(5).toList());
+    setState(() => _suggestions =
+        value.trim().isEmpty ? [] : searchServices(_services, value).take(5).toList());
   }
 
   void _openService(MisonService service) {
