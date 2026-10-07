@@ -17,15 +17,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
 import '../network/rest_apis.dart';
-import '../screens/booking/booking_detail_screen.dart';
 import '../screens/booking/mison_order_detail_screen.dart';
 import '../screens/booking/mison_order_searching_screen.dart';
 import '../screens/call/mison_call_screen.dart';
 import '../screens/call/mison_incoming_call_screen.dart';
 import '../screens/chat/mison_order_chat_screen.dart';
-import '../screens/jobRequest/my_post_detail_screen.dart';
-import '../screens/service/service_detail_screen.dart';
-import '../screens/wallet/user_wallet_balance_screen.dart';
 import 'constant.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 
@@ -429,29 +425,6 @@ void handleNotificationClick(RemoteMessage message) {
 
   if (message.data.containsKey('is_chat')) {
     LiveStream().emit(LIVESTREAM_FIREBASE, 3);
-  } else if (message.data.containsKey('additional_data')) {
-    Map<String, dynamic> additionalData = jsonDecode(message.data["additional_data"]) ?? {};
-    int? id;
-    if (additionalData.containsKey('id') && additionalData['id'] != null) {
-      id = additionalData['id'];
-      if (additionalData.containsKey('notification-type') && additionalData['notification-type'] == 'provider_send_bid') {
-        navigatorKey.currentState!.push(
-          MaterialPageRoute(
-            builder: (context) => MyPostDetailScreen(
-              postRequestId: id.validate(),
-              callback: () {},
-            ),
-          ),
-        );
-      } else if (additionalData.containsKey('check_booking_type') && additionalData['check_booking_type'] == 'booking') {
-        navigatorKey.currentState!.push(MaterialPageRoute(builder: (context) => BookingDetailScreen(bookingId: additionalData['id'].toInt())));
-      } else if (additionalData.containsKey('type') && additionalData['type'] == 'update_wallet') {
-        navigatorKey.currentState!.push(MaterialPageRoute(builder: (context) => UserWalletBalanceScreen()));
-      }
-    }
-    if (additionalData.containsKey('service_id') && additionalData["service_id"] != null) {
-      navigatorKey.currentState!.push(MaterialPageRoute(builder: (context) => ServiceDetailScreen(serviceId: additionalData["service_id"].toInt())));
-    }
   }
 }
 

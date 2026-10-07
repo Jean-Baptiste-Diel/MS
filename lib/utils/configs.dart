@@ -5,7 +5,7 @@ const APP_NAME = 'MISON';
 const APP_NAME_TAG_LINE = 'On-Demand Home Services App';
 var defaultPrimaryColor = Color(0xFFF4BB16);
 
-const DOMAIN_URL = 'https://api.mison.app';
+const DOMAIN_URL = 'https://dev-api.mison.app';
 const BASE_URL = '$DOMAIN_URL/api/';
 
 
@@ -16,51 +16,22 @@ const DEFAULT_LANGUAGE = 'fr';
 // "client_id" in same object has be pasted here
 const FIREBASE_SERVER_CLIENT_ID = 'YOUR_FIREBASE_SERVER_CLIENT_ID';
 
-/// You can change this to your Provider App package name
-/// This will be used in Registered As Partner in Sign In Screen where your users can redirect to the Play/App Store for Provider App
-/// You can specify in Admin Panel, These will be used if you don't specify in Admin Panel
-const PROVIDER_PACKAGE_NAME = 'com.iqonic.provider';
-const IOS_LINK_FOR_PARTNER = "https://apps.apple.com/in/app/handyman-provider-app/id1596025324";
-
-const IOS_LINK_FOR_USER = 'https://apps.apple.com/us/app/handyman-service-user/id1591427211';
+/// Fiche de MISON sur l'App Store (bouton « Mettre à jour » sur iPhone).
+/// Identifiant Apple de l'app : 6777843890 (actif une fois l'app publiée).
+const IOS_LINK_FOR_USER = 'https://apps.apple.com/app/id6777843890';
 
 const DASHBOARD_AUTO_SLIDER_SECOND = 5;
 const OTP_TEXT_FIELD_LENGTH = 6;
 
-const TERMS_CONDITION_URL = 'https://iqonic.design/terms-of-use/';
-const PRIVACY_POLICY_URL = 'https://iqonic.design/privacy-policy/';
-const HELP_AND_SUPPORT_URL = 'https://iqonic.design/privacy-policy/';
-const REFUND_POLICY_URL = 'https://iqonic.design/licensing-terms-more/#refund-policy';
-const INQUIRY_SUPPORT_EMAIL = 'hello@iqonic.design';
+// Pages légales et contact du site Mison.
+const TERMS_CONDITION_URL = 'https://mison-services.com/cgu/';
+const PRIVACY_POLICY_URL = 'https://mison-services.com/confidentialite/';
+const HELP_AND_SUPPORT_URL = 'https://mison-services.com/contact/';
+const REFUND_POLICY_URL = 'https://mison-services.com/cgv/';
+const INQUIRY_SUPPORT_EMAIL = 'contact@mison-services.com';
 
-/// You can add help line number here for contact. It's demo number
-const HELP_LINE_NUMBER = '+221777839359';
-
-//Airtel Money Payments
-///It Supports ["UGX", "NGN", "TZS", "KES", "RWF", "ZMW", "CFA", "XOF", "XAF", "CDF", "USD", "XAF", "SCR", "MGA", "MWK"]
-const AIRTEL_CURRENCY_CODE = "MWK";
-const AIRTEL_COUNTRY_CODE = "MW";
-const AIRTEL_TEST_BASE_URL = 'https://openapiuat.airtel.africa/'; //Test Url
-const AIRTEL_LIVE_BASE_URL = 'https://openapi.airtel.africa/'; // Live Url
-
-/// PAYSTACK PAYMENT DETAIL\
-const PAYSTACK_CURRENCY_CODE = 'NGN';
-
-/// Nigeria Currency
-
-/// STRIPE PAYMENT DETAIL
-const STRIPE_MERCHANT_COUNTRY_CODE = 'IN';
-const STRIPE_CURRENCY_CODE = 'INR';
-
-/// RAZORPAY PAYMENT DETAIL
-const RAZORPAY_CURRENCY_CODE = 'INR';
-
-/// PAYPAL PAYMENT DETAIL
-const PAYPAL_CURRENCY_CODE = 'USD';
-
-/// SADAD PAYMENT DETAIL
-const SADAD_API_URL = 'https://api-s.sadad.qa';
-const SADAD_PAY_URL = "https://d.sadad.qa";
+/// Numéro d'aide (celui du site mison-services.com).
+const HELP_LINE_NUMBER = '+221761846030';
 
 DateTime todayDate = DateTime(2022, 8, 24);
 

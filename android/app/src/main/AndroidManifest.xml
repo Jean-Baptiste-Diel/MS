@@ -67,14 +67,6 @@
                 <data android:scheme="https" android:host="laratest.iqonic.design" android:pathPrefix="/handymanservice/referral" />
             </intent-filter>
 -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="apps.iqonic.design" />
-                <data android:scheme="https" />
-            </intent-filter>
-
             <!-- App Links — callback paiement Wave (HTTPS) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />

@@ -14,7 +14,6 @@ import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/http.dart';
 import 'package:nb_utils/nb_utils.dart';
-import 'package:dio/dio.dart' as dio_package;
 
 const kPendingApprovalError = 'PENDING_APPROVAL';
 
@@ -277,21 +276,6 @@ Future handleResponse(Response response, {HttpResponseType httpResponseType = Ht
   }
 }
 
-Future<Map<String, dynamic>> handleSadadResponse(Response res) async {
-  if (res.body.isJson()) {
-    var body = jsonDecode(res.body);
-
-    if (res.statusCode.isSuccessful()) {
-      return body;
-    } else {
-      throw parseHtmlString(body['error']['message']);
-    }
-  } else {
-    throw errorSomethingWentWrong;
-  }
-}
-
-
 Future<MultipartRequest> getMultiPartRequest(String endPoint, {String? baseUrl}) async {
   String url = '${baseUrl ?? buildBaseUrl(endPoint).toString()}';
   return MultipartRequest('POST', Uri.parse(url));
@@ -356,43 +340,6 @@ void apiPrint({
   _log("└───────────────────────────────────────────────────────────────────────────────────────────────────────");
 }
 
-Map<String, String> buildHeaderForStripe(String stripeKeyPayment) {
-  Map<String, String> header = defaultHeaders();
-
-  header.putIfAbsent(HttpHeaders.contentTypeHeader, () => 'application/x-www-form-urlencoded');
-  header.putIfAbsent(HttpHeaders.authorizationHeader, () => 'Bearer $stripeKeyPayment');
-
-  return header;
-}
-
-Map<String, String> buildHeaderForSadad({String? sadadToken}) {
-  Map<String, String> header = defaultHeaders();
-
-  header.putIfAbsent(HttpHeaders.contentTypeHeader, () => 'application/json');
-  if (sadadToken != null) header.putIfAbsent(HttpHeaders.authorizationHeader, () => sadadToken);
-
-  return header;
-}
-
-Map<String, String> buildHeaderForFlutterWave(String flutterWaveSecretKey) {
-  Map<String, String> header = defaultHeaders();
-
-  header.putIfAbsent(HttpHeaders.authorizationHeader, () => "Bearer $flutterWaveSecretKey");
-
-  return header;
-}
-
-Map<String, String> buildHeaderForAirtelMoney(String accessToken, String XCountry, String XCurrency) {
-  Map<String, String> header = defaultHeaders();
-
-  header.putIfAbsent(HttpHeaders.contentTypeHeader, () => 'application/json');
-  header.putIfAbsent(HttpHeaders.authorizationHeader, () => 'Bearer $accessToken');
-  header.putIfAbsent('X-Country', () => '$XCountry');
-  header.putIfAbsent('X-Currency', () => '$XCurrency');
-
-  return header;
-}
-
 Map<String, String> buildHeaderForAppConfiguration() {
   Map<String, String> header = defaultHeaders();
 
@@ -414,28 +361,6 @@ Map<String, String> defaultHeaders() {
   return header;
 }
 
-
-Future<dynamic> getRemoteDataFromUrl({
-  required String url,
-  Map<String, String>? header,
-  Map<String, dynamic>? request,
-  bool isDownload = false,
-}) async {
-
-  try {
-    dio_package.Response response;
-    final dio_package.Dio dio = dio_package.Dio();
-    if (request != null) {
-      response = await dio.post(url.toString(), data: request, options: dio_package.Options(headers: header));
-    } else {
-      response = await dio.get(url.toString(), options: dio_package.Options(headers: header));
-    }
-
-    return response.data;
-  } catch (e) {
-    return null;
-  }
-}
 
 /// Journaux de ce fichier : données sensibles toujours masquées (jetons,
 /// codes, noms, numéros), voir log_redact.dart.

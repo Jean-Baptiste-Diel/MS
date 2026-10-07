@@ -21,10 +21,6 @@ import 'package:nb_utils/nb_utils.dart';
 
 import '../../component/voice_search_component.dart';
 import '../../utils/app_configuration.dart';
-import '../newDashboard/dashboard_1/dashboard_fragment_1.dart';
-import '../newDashboard/dashboard_2/dashboard_fragment_2.dart';
-import '../newDashboard/dashboard_3/dashboard_fragment_3.dart';
-import '../newDashboard/dashboard_4/dashboard_fragment_4.dart';
 import 'artisan_dashboard_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -135,24 +131,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             opacity: 1,
             duration: const Duration(milliseconds: 500),
             child: [
-            Observer(
-              builder: (context) {
-                if (appConfigurationStore.userDashboardType == DASHBOARD_1) {
-                  return DashboardFragment1();
-                } else if (appConfigurationStore.userDashboardType ==
-                    DASHBOARD_2) {
-                  return DashboardFragment2();
-                } else if (appConfigurationStore.userDashboardType ==
-                    DASHBOARD_3) {
-                  return DashboardFragment3();
-                } else if (appConfigurationStore.userDashboardType ==
-                    DASHBOARD_4) {
-                  return DashboardFragment4();
-                } else {
-                  return DashboardFragment();
-                }
-              },
-            ),
+            // Accueil Mison (les 4 accueils alternatifs du modèle ont été retirés).
+            DashboardFragment(),
             Observer(
                 builder: (context) => appStore.isLoggedIn
                     ? const MisonBookingFragment()

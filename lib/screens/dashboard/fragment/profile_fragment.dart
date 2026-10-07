@@ -138,23 +138,17 @@ class ProfileFragmentState extends State<ProfileFragment> {
         child: Row(
           children: [
             if (icon != null) ...[
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: itemAccent.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Image.asset(
-                    icon,
-                    width: 18,
-                    height: 18,
-                    color: itemAccent,
-                  ),
+              // Icône seule, sans rond derrière (même largeur pour aligner les titres).
+              SizedBox(
+                width: 24,
+                child: Image.asset(
+                  icon,
+                  width: 20,
+                  height: 20,
+                  color: itemAccent,
                 ),
               ),
-              12.width,
+              14.width,
             ],
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,

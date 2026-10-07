@@ -1,8 +1,5 @@
 import 'package:nb_utils/nb_utils.dart';
 
-/// DO NOT CHANGE THIS PACKAGE NAME
-var appPackageName = isAndroid ? 'com.iqonic.servicebooking' : 'com.iqonic.user';
-
 //region Custom Headers
 class CustomHeader {
   static const LanguageCode = 'language-code';
@@ -210,33 +207,6 @@ const VISIT_OPTION_ON_SHOP = 'on_shop';
 
 //region PAYMENT METHOD
 const PAYMENT_METHOD_COD = 'cash';
-const PAYMENT_METHOD_FROM_WALLET = 'wallet';
-const PAYMENT_METHOD_STRIPE = 'stripe';
-const PAYMENT_METHOD_RAZOR = 'razorPay';
-const PAYMENT_METHOD_FLUTTER_WAVE = 'flutterwave';
-const PAYMENT_METHOD_CINETPAY = 'cinet';
-const PAYMENT_METHOD_SADAD_PAYMENT = 'sadad';
-const PAYMENT_METHOD_PAYPAL = 'paypal';
-const PAYMENT_METHOD_PAYSTACK = 'paystack';
-const PAYMENT_METHOD_AIRTEL = 'airtel';
-const PAYMENT_METHOD_PHONEPE = 'phonepe';
-const PAYMENT_METHOD_PIX = 'PIX';
-const PAYMENT_METHOD_MIDTRANS = 'midtrans';
-const PAYMENT_METHOD_BANK = 'bank';
-
-const List<String> onlinePaymentGateways = [
-  PAYMENT_METHOD_STRIPE,
-  PAYMENT_METHOD_RAZOR,
-  PAYMENT_METHOD_FLUTTER_WAVE,
-  PAYMENT_METHOD_CINETPAY,
-  PAYMENT_METHOD_SADAD_PAYMENT,
-  PAYMENT_METHOD_PAYPAL,
-  PAYMENT_METHOD_PAYSTACK,
-  PAYMENT_METHOD_AIRTEL,
-  PAYMENT_METHOD_PHONEPE,
-  PAYMENT_METHOD_PIX,
-  PAYMENT_METHOD_MIDTRANS,
-];
 //endregion
 
 //region SERVICE PAYMENT STATUS

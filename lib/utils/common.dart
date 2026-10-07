@@ -31,8 +31,6 @@ import 'app_configuration.dart';
 import 'constant.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 
-Future<bool> get isIqonicProduct async => await getPackageName() == appPackageName;
-
 bool get isUserTypeHandyman => appStore.userType == USER_TYPE_HANDYMAN;
 
 bool get isUserTypeProvider => appStore.userType == USER_TYPE_PROVIDER;
