@@ -1,7 +1,6 @@
 // ignore_for_file: must_be_immutable
 
 import 'package:booking_system_flutter/component/price_widget.dart';
-import 'package:booking_system_flutter/services/flutter_wave_service_new.dart';
 import 'package:booking_system_flutter/utils/extensions/num_extenstions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,15 +13,6 @@ import '../../component/empty_error_state_widget.dart';
 import '../../main.dart';
 import '../../model/payment_gateway_response.dart';
 import '../../network/rest_apis.dart';
-import '../../services/airtel_money/airtel_money_service.dart';
-import '../../services/cinet_pay_services_new.dart';
-import '../../services/midtrans_service.dart';
-import '../../services/paypal_service.dart';
-import '../../services/paystack_service.dart';
-import '../../services/phone_pe/phone_pe_service.dart';
-import '../../services/razorpay_service_new.dart';
-import '../../services/sadad_services_new.dart';
-import '../../services/stripe_service_new.dart';
 import '../../utils/app_configuration.dart';
 import '../../utils/colors.dart';
 import '../../utils/configs.dart';
@@ -66,193 +56,8 @@ class _UserWalletBalanceScreenState extends State<UserWalletBalanceScreen> {
       return TopToast.show(message: language.theAmountShouldBeEntered.validate());
     }
 
-    if (currentPaymentMethod!.type == PAYMENT_METHOD_STRIPE) {
-      StripeServiceNew stripeServiceNew = StripeServiceNew(
-        paymentSetting: currentPaymentMethod!,
-        totalAmount: walletAmountCont.text.toDouble(),
-        onComplete: (p0) {
-          Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_STRIPE, "transaction_id": p0['transaction_id']};
-
-          walletTopUpApi(request: req);
-        },
-      );
-
-      stripeServiceNew.stripePay().catchError((e) {
-        appStore.setLoading(false);
-        TopToast.show(message: e.toString(), type: TopToastType.error);
-      });
-    } else if (currentPaymentMethod!.type == PAYMENT_METHOD_RAZOR) {
-      RazorPayServiceNew razorPayServiceNew = RazorPayServiceNew(
-        paymentSetting: currentPaymentMethod!,
-        totalAmount: walletAmountCont.text.toDouble(),
-        onComplete: (p0) {
-          log(p0);
-          Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_RAZOR, "transaction_id": p0['orderId']};
-
-          walletTopUpApi(request: req);
-        },
-      );
-      razorPayServiceNew.razorPayCheckout().catchError((e) {
-        appStore.setLoading(false);
-        TopToast.show(message: e.toString(), type: TopToastType.error);
-      });
-    } else if (currentPaymentMethod!.type == PAYMENT_METHOD_FLUTTER_WAVE) {
-      FlutterWaveServiceNew flutterWaveServiceNew = FlutterWaveServiceNew();
-
-      flutterWaveServiceNew.checkout(
-        paymentSetting: currentPaymentMethod!,
-        totalAmount: walletAmountCont.text.toDouble(),
-        onComplete: (p0) {
-          Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_FLUTTER_WAVE, "transaction_id": p0['transaction_id']};
-
-          walletTopUpApi(request: req);
-        },
-      );
-    } else if (currentPaymentMethod!.type == PAYMENT_METHOD_CINETPAY) {
-      List<String> supportedCurrencies = ["XOF", "XAF", "CDF", "GNF", "USD"];
-
-      if (!supportedCurrencies.contains(appConfigurationStore.currencyCode)) {
-        TopToast.show(message: language.cinetPayNotSupportedMessage.validate());
-        return;
-      } else if (walletAmountCont.text.toDouble() < 100) {
-        return TopToast.show(message: '${language.totalAmountShouldBeMoreThan} ${100.toPriceFormat()}');
-      } else if (walletAmountCont.text.toDouble() > 1500000) {
-        return TopToast.show(message: '${language.totalAmountShouldBeLessThan} ${1500000.toPriceFormat()}');
-      }
-
-      CinetPayServicesNew cinetPayServices = CinetPayServicesNew(
-        paymentSetting: currentPaymentMethod!,
-        totalAmount: walletAmountCont.text.toDouble(),
-        onComplete: (p0) {
-          Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_CINETPAY, "transaction_id": p0['transaction_id']};
-
-          walletTopUpApi(request: req);
-        },
-      );
-
-      cinetPayServices.payWithCinetPay(context: context).catchError((e) {
-        appStore.setLoading(false);
-        TopToast.show(message: e.toString(), type: TopToastType.error);
-      });
-    } else if (currentPaymentMethod!.type == PAYMENT_METHOD_SADAD_PAYMENT) {
-      SadadServicesNew sadadServices = SadadServicesNew(
-        paymentSetting: currentPaymentMethod!,
-        totalAmount: walletAmountCont.text.toDouble(),
-        remarks: language.topUpWallet,
-        onComplete: (p0) {
-          Map req = {
-            "amount": walletAmountCont.text.toDouble(),
-            "transaction_type": PAYMENT_METHOD_SADAD_PAYMENT,
-            "transaction_id": p0['transaction_id'],
-          };
-
-          walletTopUpApi(request: req);
-        },
-      );
-
-      sadadServices.payWithSadad(context).catchError((e) {
-        appStore.setLoading(false);
-        TopToast.show(message: e.toString(), type: TopToastType.error);
-      });
-    } else if (currentPaymentMethod!.type == PAYMENT_METHOD_PAYPAL) {
-      PayPalService.paypalCheckOut(
-        context: context,
-        paymentSetting: currentPaymentMethod!,
-        totalAmount: walletAmountCont.text.toDouble(),
-        onComplete: (p0) {
-          log('PayPalService onComplete: $p0');
-          Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_PAYPAL, "transaction_id": p0['transaction_id']};
-          walletTopUpApi(request: req);
-        },
-      );
-    } else if (currentPaymentMethod!.type == PAYMENT_METHOD_AIRTEL) {
-      showInDialog(
-        context,
-        contentPadding: EdgeInsets.zero,
-        barrierDismissible: false,
-        builder: (context) {
-          return AppCommonDialog(
-            title: language.airtelMoneyPayment,
-            child: AirtelMoneyDialog(
-              amount: walletAmountCont.text.toDouble(),
-              paymentSetting: currentPaymentMethod!,
-              reference: APP_NAME,
-              bookingId: appStore.userId.validate().toInt(),
-              onComplete: (res) {
-                log('RES: $res');
-                Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_AIRTEL, "transaction_id": res['transaction_id']};
-                walletTopUpApi(request: req);
-              },
-            ),
-          );
-        },
-      ).then((value) => appStore.setLoading(false));
-    } else if (currentPaymentMethod!.type == PAYMENT_METHOD_PAYSTACK) {
-      PayStackService paystackServices = PayStackService();
-      appStore.setLoading(true);
-      await paystackServices.init(
-        context: context,
-        currentPaymentMethod: currentPaymentMethod!,
-        loderOnOFF: (p0) {
-          appStore.setLoading(p0);
-        },
-        totalAmount: walletAmountCont.text.toDouble(),
-        bookingId: appStore.userId.validate().toInt(),
-        onComplete: (res) {
-          log('RES: $res');
-          Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_PAYSTACK, "transaction_id": res['transaction_id']};
-          walletTopUpApi(request: req);
-        },
-      );
-      await Future.delayed(const Duration(seconds: 1));
-      appStore.setLoading(false);
-      paystackServices.checkout().catchError((e) {
-        appStore.setLoading(false);
-        TopToast.show(message: e.toString(), type: TopToastType.error);
-      });
-    } else if (currentPaymentMethod!.type == PAYMENT_METHOD_MIDTRANS) {
-      MidtransService midtransService = MidtransService();
-      appStore.setLoading(true);
-      await midtransService.initialize(
-        currentPaymentMethod: currentPaymentMethod!,
-        totalAmount: walletAmountCont.text.toDouble(),
-        loaderOnOFF: (p0) {
-          appStore.setLoading(p0);
-        },
-        onComplete: (res) {
-          log('RES: $res');
-          Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_MIDTRANS, "transaction_id": res['transaction_id']};
-          walletTopUpApi(request: req);
-        },
-      );
-      await Future.delayed(const Duration(seconds: 1));
-      appStore.setLoading(false);
-      midtransService.midtransPaymentCheckout().catchError((e) {
-        appStore.setLoading(false);
-        TopToast.show(message: e.toString(), type: TopToastType.error);
-      });
-    } else if (currentPaymentMethod!.type == PAYMENT_METHOD_PHONEPE) {
-      PhonePeServices peServices = PhonePeServices(
-        paymentSetting: currentPaymentMethod!,
-        totalAmount: walletAmountCont.text.toDouble(),
-        onComplete: (res) {
-          if(res['status'] == "payment_error"){
-            TopToast.show(message: "Payment Failed");
-            return;
-          }
-          Map req = {"amount": walletAmountCont.text.toDouble(), "transaction_type": PAYMENT_METHOD_PHONEPE, "transaction_id": res['transactionId']};
-          walletTopUpApi(request: req);
-        },
-      );
-
-      bool isV2  = currentPaymentMethod?.isTest == 1 ? currentPaymentMethod?.testValue?.phonepeVersion == 'v2' ? true : false : currentPaymentMethod?.liveValue?.phonepeVersion == 'v2' ? true : false;
-
-
-      peServices.phonePeCheckout(context, isV2: isV2).catchError((e) {
-        appStore.setLoading(false);
-        TopToast.show(message: e.toString(), type: TopToastType.error);
-      });
-    }
+    // Moyens de paiement du modèle d'origine retirés (Mison : paiement Wave).
+    TopToast.show(message: 'Moyen de paiement non disponible.', type: TopToastType.error);
   }
 
   String getPaymentMethodIcon(String value) {

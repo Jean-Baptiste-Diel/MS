@@ -2,7 +2,7 @@ import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/base_scaffold_widget.dart';
 import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/component/mison_discreet_cancel_button.dart';
-import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
+import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
@@ -90,8 +90,9 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
       appStore.setLoading(false);
 
       TopToast.show(message: message, type: TopToastType.success);
+      // Page de connexion, comme après une déconnexion.
       push(
-        DashboardScreen(),
+        SignInScreen(),
         isNewTask: true,
         pageRouteAnimation: PageRouteAnimation.Fade,
       );

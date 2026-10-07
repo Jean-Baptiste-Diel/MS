@@ -177,6 +177,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
   Timer? _presenceTimer;
   bool _hasActiveOrder = false;
   bool _presenceInFlight = false;
+  AppLifecycleListener? _presenceLifecycle;
 
   static const double _expandedHeight = 208.0;
   static const double _toolbarHeight = 72.0;
@@ -197,7 +198,10 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
       if (mounted) setState(() => _load());
     });
     startAutoRefresh();
+    // Position envoyée tout de suite (ouverture, retour dans l'app), puis
+    // toutes les 20 s : la recherche part de là où il se trouve vraiment.
     _presenceTimer = Timer.periodic(_presenceInterval, (_) => _sendPresence());
+    _presenceLifecycle = AppLifecycleListener(onResume: _sendPresence);
   }
 
   // ── Bouton « Disponible / Indisponible » : enregistré sur le serveur ─────
@@ -207,6 +211,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
     try {
       final available = await getArtisanAvailability();
       if (mounted) setState(() => _isAvailable = available);
+      _sendPresence();
     } catch (e) {
       log('[Availability] $e');
     }
@@ -223,6 +228,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
       final saved = await setArtisanAvailability(value);
       if (!mounted) return;
       setState(() => _isAvailable = saved);
+      if (saved) _sendPresence(); // de nouveau disponible : position à jour tout de suite
       TopToast.show(
         message: saved
             ? 'Vous êtes disponible : les nouvelles commandes vous sont proposées.'
@@ -248,7 +254,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
       final perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 15)),
       );
       await postArtisanLocation(pos.latitude, pos.longitude);
     } catch (e) {
@@ -272,6 +278,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
     LiveStream().dispose(LIVESTREAM_ARTISAN_HOME_REFRESH);
     _bgLocationTimer?.cancel();
     _presenceTimer?.cancel();
+    _presenceLifecycle?.dispose();
     super.dispose();
   }
 

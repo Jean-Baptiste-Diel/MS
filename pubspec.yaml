@@ -2,7 +2,7 @@ name: booking_system_flutter
 description: A new Flutter project.
 
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-version: 1.0.2+0
+version: 1.0.1+11
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -62,33 +62,6 @@ dependencies:
   # SOCIAL LOGIN
   google_sign_in: ^7.2.0
   the_apple_sign_in: ^1.1.1
-
-  # PAYMENT GATEWAYS
-  midpay:
-    git:
-      url: https://github.com/iqonic-design/midpay.git
-      ref: main
-  qr_flutter: ^4.1.0 #required for in pix_flutter
-  pix_flutter: ^2.2.0
-  razorpay_flutter: ^1.4.0
-  flutterwave_standard:
-    git:
-      url: https://github.com/iqonic-design/flutterwave_standard.git
-      ref: main
-  flutter_stripe: ^12.1.1
-  cinetpay:
-    git:
-      url: https://github.com/iqonic-design/cinetpay.git
-      ref: main
-  flutter_paypal_checkout:
-    git:
-      url: https://github.com/iqonic-design/flutter_paypal_checkout.git
-      ref: main
-
-  flutter_paystack:
-    git:
-      url: https://github.com/iqonic-design/flutter_paystack.git
-      ref: 1.5.0
 
   # MAP
   google_maps_flutter: ^2.14.0
