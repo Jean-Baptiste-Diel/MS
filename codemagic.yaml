@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       groups:
-        - firebase_config
+        - fire
       vars:
         BUNDLE_ID: "com.mison.serviceuser"
       flutter: stable
