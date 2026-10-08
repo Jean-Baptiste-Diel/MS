@@ -571,7 +571,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                     ? VoiceNotePlayer(
                         url: (msg.audioUrl != null && msg.audioUrl!.isNotEmpty)
                             ? msg.audioUrl!
-                            : 'https://api.mison.app/media/minio/${msg.content}',
+                            : '$DOMAIN_URL/media/minio/${msg.content}',
                       )
                     : Text(msg.content, style: primaryTextStyle(color: Colors.white)),
           ),
