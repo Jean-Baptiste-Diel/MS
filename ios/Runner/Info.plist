@@ -66,6 +66,8 @@
 	<string>MISON utilise votre position pour indiquer l'adresse de la prestation, trouver les prestataires proches et suivre l'arrivée du prestataire.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>MISON utilise le microphone pour vos appels audio et vos notes vocales avec l&apos;artisan, le client ou le support.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>MISON n'utilise pas la reconnaissance vocale. Cette autorisation ne vous sera jamais demandée.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>MISON accède à vos photos pour votre photo de profil, vos pièces justificatives et les images envoyées dans les discussions.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
