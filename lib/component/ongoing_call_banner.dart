@@ -1,34 +1,63 @@
 import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
 import 'package:booking_system_flutter/services/mison_call_session.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:nb_utils/nb_utils.dart' show navigatorKey;
 
 /// Barre « Appel en cours » au-dessus de toute l'app quand l'écran d'appel a
 /// été réduit : l'appel continue, un appui y ramène (comme WhatsApp).
-class OngoingCallBanner extends StatelessWidget {
+class OngoingCallBanner extends StatefulWidget {
   final Widget child;
 
   const OngoingCallBanner({Key? key, required this.child}) : super(key: key);
 
   @override
+  State<OngoingCallBanner> createState() => _OngoingCallBannerState();
+}
+
+class _OngoingCallBannerState extends State<OngoingCallBanner> {
+  bool _refreshScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    MisonCallSession.current.addListener(_scheduleRefresh);
+    MisonCallScreen.visibleCount.addListener(_scheduleRefresh);
+  }
+
+  @override
+  void dispose() {
+    MisonCallSession.current.removeListener(_scheduleRefresh);
+    MisonCallScreen.visibleCount.removeListener(_scheduleRefresh);
+    super.dispose();
+  }
+
+  /// L'écran d'appel change ces valeurs pendant qu'il se construit ou se
+  /// ferme : Flutter refuse alors de redessiner la barre, qui restait figée
+  /// (rien ne s'affichait en réduisant l'appel). On redessine après l'image en cours.
+  void _scheduleRefresh() {
+    if (_refreshScheduled) return;
+    _refreshScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _refreshScheduled = false;
+      if (mounted) setState(() {});
+    });
+    SchedulerBinding.instance.ensureVisualUpdate();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<MisonCallSession?>(
-      valueListenable: MisonCallSession.current,
-      builder: (context, session, _) => ValueListenableBuilder<int>(
-        valueListenable: MisonCallScreen.visibleCount,
-        builder: (context, visibleScreens, _) {
-          if (session == null || visibleScreens > 0) return child;
-          return Column(
-            children: [
-              _Bar(session: session),
-              Expanded(
-                // La barre occupe déjà la zone de la barre d'état.
-                child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
-              ),
-            ],
-          );
-        },
-      ),
+    final session = MisonCallSession.current.value;
+    final showBar = session != null && !session.ended && MisonCallScreen.visibleCount.value <= 0;
+    // Structure toujours identique : l'app (Navigator) n'est jamais reconstruite.
+    return Column(
+      children: [
+        if (showBar) _Bar(session: session),
+        Expanded(
+          // La barre occupe déjà la zone de la barre d'état.
+          child: MediaQuery.removePadding(context: context, removeTop: showBar, child: widget.child),
+        ),
+      ],
     );
   }
 }

@@ -10,6 +10,11 @@ import 'package:nb_utils/nb_utils.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 
 const _kOutgoingCallKey = 'outgoing_call_order_id';
+/// Heure (ms) de l'appel sortant, lue aussi par le handler en arrière-plan.
+const kOutgoingCallAtKey = 'outgoing_call_at';
+/// Durée pendant laquelle ce téléphone ignore l'« appel entrant » de son
+/// propre appel sortant (la sonnerie de l'appelé part dans les secondes qui suivent).
+const kOutgoingCallValidity = Duration(minutes: 2);
 
 class MisonCallScreen extends StatefulWidget {
   final String orderId;
@@ -36,10 +41,13 @@ class MisonCallScreen extends StatefulWidget {
 
   // Orders for which the current user is the CALLER (not the callee).
   // Used by FCM handler to skip INCOMING_CALL notifications on the caller's device.
-  static final Set<String> _outgoingOrderIds = {};
+  // Valable [kOutgoingCallValidity] seulement : un appel qui s'est mal terminé
+  // (app fermée en plein appel…) ne doit pas empêcher ce téléphone de sonner
+  // ensuite pour la même commande.
+  static final Map<String, DateTime> _outgoingOrderIds = {};
 
   static Future<void> markOutgoing(String orderId) async {
-    _outgoingOrderIds.add(orderId);
+    _outgoingOrderIds[orderId] = DateTime.now();
     await _saveOutgoing(orderId);
   }
 
@@ -52,17 +60,24 @@ class MisonCallScreen extends StatefulWidget {
     try {
       final p = await SharedPreferences.getInstance();
       await p.setString(_kOutgoingCallKey, orderId);
+      await p.setInt(kOutgoingCallAtKey, DateTime.now().millisecondsSinceEpoch);
     } catch (_) {}
   }
 
   static Future<void> _clearSavedOutgoing(String orderId) async {
     try {
       final p = await SharedPreferences.getInstance();
-      if (p.getString(_kOutgoingCallKey) == orderId) await p.remove(_kOutgoingCallKey);
+      if (p.getString(_kOutgoingCallKey) == orderId) {
+        await p.remove(_kOutgoingCallKey);
+        await p.remove(kOutgoingCallAtKey);
+      }
     } catch (_) {}
   }
 
-  static bool isOutgoing(String orderId) => _outgoingOrderIds.contains(orderId);
+  static bool isOutgoing(String orderId) {
+    final at = _outgoingOrderIds[orderId];
+    return at != null && DateTime.now().difference(at) < kOutgoingCallValidity;
+  }
 
   /// Nombre d'écrans d'appel affichés : la barre « Appel en cours » est masquée
   /// quand l'écran d'appel est déjà à l'écran.

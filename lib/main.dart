@@ -80,9 +80,14 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
     // Skip if this device initiated the call (background isolate can't access
     // the in-memory Set, so we check the SharedPreferences value instead).
+    // Le marqueur n'est valable que 2 min : un appel sortant mal terminé ne doit
+    // pas empêcher ce téléphone de sonner ensuite pour la même commande.
     try {
       final p = await SharedPreferences.getInstance();
-      if (p.getString('outgoing_call_order_id') == orderId) return;
+      await p.reload(); // valeur écrite par l'app au premier plan
+      final at = p.getInt(kOutgoingCallAtKey) ?? 0;
+      final recent = DateTime.now().millisecondsSinceEpoch - at < kOutgoingCallValidity.inMilliseconds;
+      if (p.getString('outgoing_call_order_id') == orderId && recent) return;
     } catch (_) {}
 
     await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(

@@ -59,6 +59,24 @@ Future<void> endCallKitForOrder(String orderId) async {
   }
 }
 
+/// Fin d'un appel MISON (un seul appel à la fois) : ferme aussi tout appel
+/// encore marqué « en cours » dans le système (décroché ou sortant), pour
+/// qu'aucune notification « Appel en cours » ne reste affichée. Les appels qui
+/// sonnent encore (pas décrochés) ne sont pas touchés.
+Future<void> endLeftoverConnectedCalls() async {
+  try {
+    final calls = await FlutterCallkitIncoming.activeCalls();
+    if (calls is! List) return;
+    for (final call in calls) {
+      if (call is! Map) continue;
+      // iOS : « accepted » ; Android : « isAccepted » (appel décroché ou sortant).
+      if (call['accepted'] != true && call['isAccepted'] != true) continue;
+      final id = call['id']?.toString();
+      if (id != null && id.isNotEmpty) await FlutterCallkitIncoming.endCall(id).catchError((_) {});
+    }
+  } catch (_) {}
+}
+
 /// Indique au téléphone que l'appel de cette commande est connecté.
 Future<void> connectCallKitForOrder(String orderId) async {
   for (final id in await callKitIdsFor(orderId)) {
@@ -88,8 +106,17 @@ Future<void> markCallCancelled(String orderId) => _setStatus(orderId, kCallCance
 Future<void> resetCallStatus(String orderId) => _doc(orderId).delete().catchError((_) {});
 
 /// Statut courant de l'appel (null tant que personne n'a refusé ni annulé).
-Stream<String?> callStatusStream(String orderId) =>
-    _doc(orderId).snapshots().map((snap) => snap.data()?['status']?.toString());
+///
+/// Seules les valeurs confirmées par le serveur comptent : Firestore renvoie
+/// d'abord sa copie locale, qui peut contenir le « cancelled » / « missed » d'un
+/// appel précédent (le serveur, lui, a été remis à zéro avant ce nouvel appel).
+/// Sans ce filtre, l'appel était coupé aussitôt : Android ne sonnait pas,
+/// l'iPhone raccrochait juste après le décroché.
+Stream<String?> callStatusStream(String orderId) => _doc(orderId)
+    .snapshots(includeMetadataChanges: true)
+    .where((snap) => !snap.metadata.isFromCache)
+    .map((snap) => snap.data()?['status']?.toString())
+    .distinct();
 
 /// Suit un appel entrant pendant qu'il sonne, y compris app en arrière-plan ou
 /// fermée (appelé depuis le handler FCM, qui tourne sans l'interface) :

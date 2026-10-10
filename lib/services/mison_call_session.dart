@@ -51,8 +51,24 @@ class MisonCallSession extends ChangeNotifier {
     required this.isCaller,
   });
 
+  /// Tests : une session sans moteur d'appel (ni micro, ni Agora).
+  @visibleForTesting
+  static MisonCallSession forTest({String orderId = 'o1', String otherPartyName = 'Awa'}) =>
+      MisonCallSession._(
+        orderId: orderId,
+        otherPartyName: otherPartyName,
+        appId: '',
+        channel: '',
+        token: '',
+        uid: 1,
+        isCaller: true,
+      );
+
   RtcEngine? _engine;
   Timer? _timer;
+  /// Tonalité « ça sonne chez l'autre » jouée à l'appelant en attendant la réponse.
+  bool _ringbackOn = false;
+  static const _ringbackAsset = 'assets/sounds/ringback.wav';
   Timer? _noAnswerTimer;
 
   /// Appelant : sans réponse au bout de ce délai, l'appel se termine
@@ -159,8 +175,11 @@ class MisonCallSession extends ChangeNotifier {
         await setAudioRoute(bluetoothAvailable ? kRouteBluetooth : kRouteEarpiece);
         engineReady = true;
         notifyListeners();
+        // Appelant : tonalité d'attente jusqu'à la réponse (seulement chez lui).
+        await _startRingback();
       },
       onUserJoined: (connection, remoteUid, elapsed) {
+        _stopRingback();
         isConnected = true;
         _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
           seconds++;
@@ -239,6 +258,28 @@ class MisonCallSession extends ChangeNotifier {
   static void hangUpFromSystem(String orderId) {
     final session = current.value;
     if (session != null && session.orderId == orderId) session.hangUp();
+  }
+
+  Future<void> _startRingback() async {
+    final engine = _engine;
+    if (!isCaller || isConnected || ended || _ringbackOn || engine == null) return;
+    try {
+      final path = await engine.getAssetAbsolutePath(_ringbackAsset);
+      if (path == null || isConnected || ended) return;
+      // loopback : entendu uniquement par l'appelant, pas envoyé à l'appelé.
+      await engine.startAudioMixing(filePath: path, loopback: true, cycle: -1);
+      _ringbackOn = true;
+    } catch (e) {
+      log('MisonCallSession ringback: $e');
+    }
+  }
+
+  Future<void> _stopRingback() async {
+    if (!_ringbackOn) return;
+    _ringbackOn = false;
+    try {
+      await _engine?.stopAudioMixing();
+    } catch (_) {}
   }
 
   void _listenCallStatus() {
@@ -324,13 +365,15 @@ class MisonCallSession extends ChangeNotifier {
       );
     }
     _callStatusSub?.cancel();
+    await _stopRingback();
     notifyListeners();
     if (current.value == this) current.value = null;
     if (isCaller) MisonCallScreen.clearOutgoing(orderId);
 
     // Clôture la session CallKit / le service Android : sinon elle garde le
-    // focus audio et l'appel suivant reste muet.
-    endCallKitForOrder(orderId);
+    // focus audio et l'appel suivant reste muet. Puis tout appel encore
+    // « en cours » dans le système (plus de notification « Appel en cours »).
+    endCallKitForOrder(orderId).then((_) => endLeftoverConnectedCalls());
     if (isCaller && !isConnected && !rejected) {
       // Raccroché avant la réponse : la sonnerie doit s'arrêter chez l'appelé
       // (dans l'app comme dans la notification / CallKit).

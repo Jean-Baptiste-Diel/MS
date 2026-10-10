@@ -201,9 +201,14 @@ import flutter_callkit_incoming
 
       let channel = userInfo["channel"] as? String ?? ""
 
-      // Skip if this device initiated the call (SharedPreferences key on iOS)
+      // Skip if this device initiated the call (SharedPreferences key on iOS).
+      // Marqueur valable 2 min : un appel sortant mal termine ne doit pas
+      // empecher ce telephone de sonner ensuite pour la meme commande.
       let outgoingId = UserDefaults.standard.string(forKey: "flutter.outgoing_call_order_id")
-      if outgoingId != orderId, let plugin = SwiftFlutterCallkitIncomingPlugin.sharedInstance {
+      let outgoingAtMs = (UserDefaults.standard.object(forKey: "flutter.outgoing_call_at") as? NSNumber)?.doubleValue ?? 0
+      let isOwnRecentCall = outgoingId == orderId
+        && Date().timeIntervalSince1970 * 1000 - outgoingAtMs < 120_000
+      if !isOwnRecentCall, let plugin = SwiftFlutterCallkitIncomingPlugin.sharedInstance {
         DispatchQueue.main.async {
           let callData = Data(id: UUID().uuidString, nameCaller: callerName, handle: orderId, type: 0)
           callData.appName = "MISON"
