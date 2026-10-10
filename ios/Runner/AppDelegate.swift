@@ -171,7 +171,10 @@ import flutter_callkit_incoming
 
     // iOS exige de signaler l'appel a CallKit immediatement, sinon le systeme
     // tue l'application.
-    let callData = Data(id: orderId, nameCaller: callerName, handle: orderId, type: 0)
+    // Identifiant UNIQUE par appel : avec celui de la commande, un nouvel appel
+    // sur la meme commande etait refuse par iOS tant que le precedent n'etait
+    // pas libere (ca sonnait sans rien afficher). La commande est dans extra.
+    let callData = Data(id: UUID().uuidString, nameCaller: callerName, handle: orderId, type: 0)
     callData.appName = "MISON"
     callData.duration = 30000
     callData.configureAudioSession = true
@@ -202,7 +205,7 @@ import flutter_callkit_incoming
       let outgoingId = UserDefaults.standard.string(forKey: "flutter.outgoing_call_order_id")
       if outgoingId != orderId, let plugin = SwiftFlutterCallkitIncomingPlugin.sharedInstance {
         DispatchQueue.main.async {
-          let callData = Data(id: orderId, nameCaller: callerName, handle: orderId, type: 0)
+          let callData = Data(id: UUID().uuidString, nameCaller: callerName, handle: orderId, type: 0)
           callData.appName = "MISON"
           callData.duration = 30000
           callData.configureAudioSession = true

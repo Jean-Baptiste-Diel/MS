@@ -40,7 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     ChatUnreadStore.start(); // pastilles « messages non lus »
-    openColdStartAcceptedCall(); // iPhone : appel décroché app fermée
+    openColdStartAcceptedCall(); // appel décroché app fermée (iPhone et Android)
     if (widget.redirectToBooking.validate(value: false)) {
       currentIndex = 1;
     }

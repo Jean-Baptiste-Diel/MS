@@ -11,7 +11,6 @@ import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
@@ -75,7 +74,7 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
     if (status != kCallCancelled && status != kCallRejected && status != kCallMissed) return;
     FlutterRingtonePlayer().stop();
     cancelIncomingCallNotification();
-    FlutterCallkitIncoming.endCall(widget.orderId).catchError((_) {});
+    endCallKitForOrder(widget.orderId);
     if (status == kCallCancelled) {
       TopToast.show(message: 'Appel manqué de $_callerName');
     }
@@ -122,7 +121,7 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _isAccepting = false);
-      FlutterCallkitIncoming.endCall(widget.orderId).catchError((_) {});
+      endCallKitForOrder(widget.orderId);
       if (isNotFoundError(e)) {
         // Appel destiné à un autre compte (ex. ancien compte de ce téléphone) :
         // inutile de rester sur l'écran d'appel.
@@ -130,6 +129,9 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
         Navigator.pop(context);
       } else {
         TopToast.show(message: 'Impossible de rejoindre l\'appel');
+        // Déjà décroché depuis l'écran d'appel du téléphone : pas de boutons
+        // ici, on ne reste pas bloqué sur « Connexion… ».
+        if (widget.autoAccept) Navigator.pop(context);
       }
     }
   }
@@ -139,7 +141,7 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
     cancelIncomingCallNotification();
     _statusSub?.cancel(); // notre propre refus ne doit pas refermer l'écran une 2e fois
     // Libère la session système : sans cela l'appel suivant reste muet.
-    FlutterCallkitIncoming.endCall(widget.orderId).catchError((_) {});
+    endCallKitForOrder(widget.orderId);
     await markCallDeclined(widget.orderId);
     if (mounted) Navigator.pop(context);
   }
@@ -152,8 +154,55 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
     super.dispose();
   }
 
+  /// Décroché depuis l'écran d'appel du téléphone (CallKit / notification) :
+  /// pas de seconde sonnerie ni de boutons Refuser / Accepter, seulement
+  /// « Connexion à l'appel… » le temps de rejoindre, puis l'écran d'appel.
+  Widget _buildConnecting() {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFFFF),
+      body: DotGridBackground(
+        child: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green.withValues(alpha: 0.12),
+                  ),
+                  child: Icon(Icons.phone_in_talk_rounded, color: Colors.green.shade600, size: 52),
+                ),
+                28.height,
+                Text(_callerName,
+                    style: boldTextStyle(size: 26, color: appTextPrimaryColor), textAlign: TextAlign.center),
+                12.height,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green.shade600),
+                    ),
+                    10.width,
+                    Text("Connexion à l'appel…",
+                        style: secondaryTextStyle(size: 15, color: appTextSecondaryColor)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.autoAccept) return _buildConnecting();
     return Scaffold(
       backgroundColor: const Color(0xFFFFFFFF),
       body: DotGridBackground(

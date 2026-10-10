@@ -152,7 +152,7 @@ class MisonCallSession extends ChangeNotifier {
         // Indique au système (CallKit / notification Android) que l'appel est
         // établi : c'est ce qui libère le focus audio vers Agora.
         try {
-          await FlutterCallkitIncoming.setCallConnected(orderId);
+          await connectCallKitForOrder(orderId);
         } catch (_) {}
         // Casque Bluetooth connecté : l'appel part dessus, sinon sur l'écouteur.
         await refreshAudioRoutes();
@@ -200,7 +200,7 @@ class MisonCallSession extends ChangeNotifier {
     if (Platform.isIOS && !isCaller) return;
     try {
       await FlutterCallkitIncoming.startCall(CallKitParams(
-        id: orderId,
+        id: newCallKitId(),
         nameCaller: otherPartyName,
         appName: 'MISON',
         handle: otherPartyName,
@@ -330,7 +330,7 @@ class MisonCallSession extends ChangeNotifier {
 
     // Clôture la session CallKit / le service Android : sinon elle garde le
     // focus audio et l'appel suivant reste muet.
-    FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
+    endCallKitForOrder(orderId);
     if (isCaller && !isConnected && !rejected) {
       // Raccroché avant la réponse : la sonnerie doit s'arrêter chez l'appelé
       // (dans l'app comme dans la notification / CallKit).

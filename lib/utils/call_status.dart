@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
@@ -14,6 +15,56 @@ const kCallRejected = 'rejected';
 const kCallCancelled = 'cancelled';
 /// L'appel a sonné sans réponse chez l'appelé (délai dépassé).
 const kCallMissed = 'missed';
+
+// ── Identifiant de l'appel dans l'écran d'appel du téléphone (CallKit) ──────
+// Un identifiant UNIQUE par appel (recommandation Apple). Avant, c'était
+// l'identifiant de la commande : un nouvel appel sur la même commande, alors
+// que le précédent n'était pas encore libéré par iOS, était refusé — le
+// téléphone sonnait sans rien afficher et ne raccrochait plus. Le numéro de
+// commande voyage dans extra['order_id'] ; on retrouve les appels avec.
+
+/// Nouvel identifiant d'appel (UUID v4).
+String newCallKitId() {
+  final r = Random.secure();
+  final b = List<int>.generate(16, (_) => r.nextInt(256));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  final h = b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
+  return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
+}
+
+/// Identifiants CallKit des appels en cours d'une commande.
+Future<List<String>> callKitIdsFor(String orderId) async {
+  try {
+    final calls = await FlutterCallkitIncoming.activeCalls();
+    if (calls is! List) return [];
+    return [
+      for (final call in calls)
+        if (call is Map)
+          if (((call['extra'] as Map?)?['order_id']?.toString() ?? call['id']?.toString()) == orderId)
+            call['id'].toString(),
+    ];
+  } catch (_) {
+    return [];
+  }
+}
+
+/// Termine l'écran d'appel du téléphone pour cette commande (sonnerie ou appel).
+Future<void> endCallKitForOrder(String orderId) async {
+  final ids = await callKitIdsFor(orderId);
+  // Anciennes versions : l'identifiant était celui de la commande.
+  if (!ids.contains(orderId)) ids.add(orderId);
+  for (final id in ids) {
+    await FlutterCallkitIncoming.endCall(id).catchError((_) {});
+  }
+}
+
+/// Indique au téléphone que l'appel de cette commande est connecté.
+Future<void> connectCallKitForOrder(String orderId) async {
+  for (final id in await callKitIdsFor(orderId)) {
+    await FlutterCallkitIncoming.setCallConnected(id).catchError((_) {});
+  }
+}
 
 DocumentReference<Map<String, dynamic>> _doc(String orderId) =>
     FirebaseFirestore.instance.collection('call_status').doc(orderId);
@@ -45,7 +96,12 @@ Stream<String?> callStatusStream(String orderId) =>
 /// - « Refuser » dans la notification / CallKit → l'appelant est prévenu ;
 /// - l'appelant annule → la sonnerie s'arrête.
 /// S'arrête seul une fois l'appel accepté, refusé, terminé, ou après 60 s.
+/// Appels déjà suivis (un seul suivi par appel, même s'il est lancé de
+/// plusieurs endroits : notification FCM, écran d'appel natif, démarrage).
+final Set<String> _watchedCalls = {};
+
 void watchIncomingCall(String orderId) {
+  if (!_watchedCalls.add(orderId)) return;
   StreamSubscription? events;
   StreamSubscription? status;
   Timer? timeout;
@@ -54,6 +110,7 @@ void watchIncomingCall(String orderId) {
     events?.cancel();
     status?.cancel();
     timeout?.cancel();
+    _watchedCalls.remove(orderId);
   }
 
   events = FlutterCallkitIncoming.onEvent.listen((event) {
@@ -78,7 +135,7 @@ void watchIncomingCall(String orderId) {
 
   status = callStatusStream(orderId).listen((value) {
     if (value == kCallCancelled) {
-      FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
+      endCallKitForOrder(orderId);
       stop();
     }
   });

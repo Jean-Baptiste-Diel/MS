@@ -86,7 +86,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     } catch (_) {}
 
     await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
-      id: orderId,
+      id: newCallKitId(),
       nameCaller: caller,
       appName: 'MISON',
       type: 0, // audio
@@ -169,8 +169,9 @@ void _openCallScreen(String orderId, String channel) {
 bool _coldStartCallChecked = false;
 
 Future<void> openColdStartAcceptedCall() async {
-  if (!Platform.isIOS || _coldStartCallChecked) return;
+  if (_coldStartCallChecked) return;
   _coldStartCallChecked = true;
+  if (Platform.isAndroid) return _openAndroidAcceptedCall();
   try {
     final data = await const MethodChannel('mison/accepted_call').invokeMapMethod<String, dynamic>('getAcceptedCall');
     final extra = (data?['extra'] as Map?)?.cast<String, dynamic>() ?? {};
@@ -181,6 +182,47 @@ Future<void> openColdStartAcceptedCall() async {
     _openCallScreen(orderId, extra['channel']?.toString() ?? '');
   } catch (e) {
     log('openColdStartAcceptedCall: $e');
+  }
+}
+
+/// Android, app fermée : « Accepter » sur l'écran d'appel lance l'app, mais
+/// l'événement part avant que Flutter écoute. Le module garde l'appel accepté
+/// en mémoire (isAccepted) : on le retrouve ici et on rejoint l'appel
+/// directement, sans repasser par « Appel entrant ».
+Future<void> _openAndroidAcceptedCall() async {
+  try {
+    final calls = await FlutterCallkitIncoming.activeCalls();
+    if (calls is! List) return;
+    for (final call in calls) {
+      if (call is! Map || call['isAccepted'] != true) continue;
+      final extra = (call['extra'] as Map?)?.cast<String, dynamic>() ?? {};
+      final orderId = extra['order_id']?.toString() ?? '';
+      if (orderId.isEmpty) continue;
+      // Déjà ouvert par l'événement (app seulement en arrière-plan).
+      if (MisonCallSession.current.value?.orderId == orderId) return;
+      _openCallScreen(orderId, extra['channel']?.toString() ?? '');
+      return;
+    }
+  } catch (e) {
+    log('openAndroidAcceptedCall: $e');
+  }
+}
+
+/// Appels qui sonnent encore (pas encore décrochés) au démarrage de l'app.
+Future<void> _watchRingingCalls() async {
+  try {
+    final calls = await FlutterCallkitIncoming.activeCalls();
+    if (calls is! List) return;
+    for (final call in calls) {
+      if (call is! Map) continue;
+      // iOS : « accepted », Android : « isAccepted ».
+      if (call['accepted'] == true || call['isAccepted'] == true) continue;
+      final extra = (call['extra'] as Map?)?.cast<String, dynamic>() ?? {};
+      final orderId = extra['order_id']?.toString() ?? '';
+      if (orderId.isNotEmpty) watchIncomingCall(orderId);
+    }
+  } catch (e) {
+    log('watchRingingCalls: $e');
   }
 }
 
@@ -240,6 +282,10 @@ void _listenCallKitEvents() {
     if (orderId.isEmpty) return;
 
     switch (event.event) {
+      case Event.actionCallIncoming:
+        // L'écran d'appel du téléphone sonne (iPhone : notification VoIP) :
+        // si l'appelant raccroche, la sonnerie doit s'arrêter aussitôt.
+        watchIncomingCall(orderId);
       case Event.actionCallAccept:
         _openCallScreen(orderId, channel);
       case Event.actionCallDecline:
@@ -250,12 +296,12 @@ void _listenCallKitEvents() {
         } else {
           markCallDeclined(orderId);
         }
-        FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
+        endCallKitForOrder(orderId);
       case Event.actionCallEnded:
         // « Raccrocher » depuis la notification Android ou l'interface CallKit :
         // sans ça, seul l'affichage se fermait et l'appel continuait.
         MisonCallSession.hangUpFromSystem(orderId);
-        FlutterCallkitIncoming.endCall(orderId).catchError((_) {});
+        endCallKitForOrder(orderId);
       default:
         break;
     }
@@ -389,6 +435,10 @@ void main() async {
   registerForegroundMessageListener();
   // CallKit events (accepter/refuser depuis l'écran verrouillé) + token VoIP
   _listenCallKitEvents();
+  // App réveillée par un appel (iPhone : notification VoIP, app fermée) :
+  // l'événement « sonne » est parti avant ce listener. On suit quand même
+  // l'appel, pour arrêter la sonnerie si l'appelant raccroche.
+  _watchRingingCalls();
   // Android 14+ : sans cette autorisation, l'écran d'appel plein écran ne
   // s'affiche pas quand le téléphone est verrouillé.
   await _ensureFullScreenCallPermission();

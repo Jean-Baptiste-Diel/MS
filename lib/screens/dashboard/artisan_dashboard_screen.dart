@@ -53,7 +53,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
   void initState() {
     super.initState();
     ChatUnreadStore.start(); // pastilles « messages non lus »
-    openColdStartAcceptedCall(); // iPhone : appel décroché app fermée
+    openColdStartAcceptedCall(); // appel décroché app fermée (iPhone et Android)
   }
 
   final List<Widget> _tabs = [
