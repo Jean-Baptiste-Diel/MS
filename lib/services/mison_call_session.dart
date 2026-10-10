@@ -74,6 +74,9 @@ class MisonCallSession extends ChangeNotifier {
   /// Appelant : sans réponse au bout de ce délai, l'appel se termine
   /// (« n'a pas répondu ») et s'affiche comme appel manqué dans la conversation.
   static const _noAnswerTimeout = Duration(seconds: 45);
+
+  /// Appelé : délai pour retrouver l'appelant dans l'appel après le décroché.
+  static const _calleeJoinTimeout = Duration(seconds: 25);
   StreamSubscription<String?>? _callStatusSub;
 
   bool engineReady = false;
@@ -108,7 +111,10 @@ class MisonCallSession extends ChangeNotifier {
   }) {
     final existing = current.value;
     if (existing != null && !existing.ended) {
-      if (existing.orderId == orderId) return existing;
+      // Même appel (retour via la barre « Appel en cours ») : même jeton.
+      // Un nouveau jeton = nouvel appel : l'ancienne session, restée ouverte
+      // sans personne en face, était réutilisée et l'appel ne se connectait pas.
+      if (existing.orderId == orderId && existing.token == token) return existing;
       existing.hangUp();
     }
     final session = MisonCallSession._(
@@ -143,10 +149,16 @@ class MisonCallSession extends ChangeNotifier {
     }
 
     await _keepAliveInBackground();
+    _listenCallStatus();
     if (isCaller) {
-      _listenCallStatus();
       _noAnswerTimer = Timer(_noAnswerTimeout, () {
         if (!isConnected) _end(message: "$otherPartyName n'a pas répondu", noAnswer: true);
+      });
+    } else {
+      // Appelé : l'appelant a pu raccrocher pendant qu'on décrochait. Sans
+      // personne en face, l'appel ne doit pas rester ouvert indéfiniment.
+      _noAnswerTimer = Timer(_calleeJoinTimeout, () {
+        if (!isConnected) _end(message: "$otherPartyName a raccroché");
       });
     }
 
@@ -260,6 +272,16 @@ class MisonCallSession extends ChangeNotifier {
     if (session != null && session.orderId == orderId) session.hangUp();
   }
 
+  /// Nouvel appel entrant pour cette commande : une session encore ouverte
+  /// pour elle est un reste de l'appel précédent (app suspendue en arrière-plan,
+  /// fin d'appel manquée). Agora la reconnectait au canal : l'appelant se
+  /// croyait en ligne pendant que ce téléphone sonnait encore, puis le
+  /// décroché réutilisait cette vieille session et rien ne se connectait.
+  static void dropStaleFor(String orderId) {
+    final session = current.value;
+    if (session != null && session.orderId == orderId && !session.ended) session.hangUp();
+  }
+
   Future<void> _startRingback() async {
     final engine = _engine;
     if (!isCaller || isConnected || ended || _ringbackOn || engine == null) return;
@@ -285,6 +307,11 @@ class MisonCallSession extends ChangeNotifier {
   void _listenCallStatus() {
     _callStatusSub = callStatusStream(orderId).listen((status) {
       if (isConnected) return;
+      if (!isCaller) {
+        // Appelé : l'appelant a raccroché avant que l'appel soit établi.
+        if (status == kCallCancelled) _end(message: "$otherPartyName a raccroché");
+        return;
+      }
       if (status == kCallRejected) {
         _end(message: "$otherPartyName a refusé l'appel", rejected: true);
       } else if (status == kCallMissed) {

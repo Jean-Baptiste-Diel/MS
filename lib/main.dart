@@ -290,6 +290,7 @@ void _listenCallKitEvents() {
       case Event.actionCallIncoming:
         // L'écran d'appel du téléphone sonne (iPhone : notification VoIP) :
         // si l'appelant raccroche, la sonnerie doit s'arrêter aussitôt.
+        if (!MisonCallScreen.isOutgoing(orderId)) MisonCallSession.dropStaleFor(orderId);
         watchIncomingCall(orderId);
       case Event.actionCallAccept:
         _openCallScreen(orderId, channel);

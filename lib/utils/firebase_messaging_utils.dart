@@ -21,6 +21,7 @@ import '../screens/booking/mison_order_detail_screen.dart';
 import '../screens/booking/mison_order_searching_screen.dart';
 import '../screens/call/mison_call_screen.dart';
 import '../screens/call/mison_incoming_call_screen.dart';
+import '../services/mison_call_session.dart';
 import '../screens/chat/mison_order_chat_screen.dart';
 import 'constant.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
@@ -244,7 +245,10 @@ void _handleForegroundMessage(RemoteMessage message) {
 
   if (message.data['type'] == 'INCOMING_CALL') {
     final orderId = message.data['order_id']?.toString() ?? '';
-    if (!MisonCallScreen.isOutgoing(orderId)) _openIncomingCall(message.data);
+    if (!MisonCallScreen.isOutgoing(orderId)) {
+      MisonCallSession.dropStaleFor(orderId); // reste d'un appel précédent
+      _openIncomingCall(message.data);
+    }
     return; // un appel entrant ne modifie pas les données de commande
   }
 
