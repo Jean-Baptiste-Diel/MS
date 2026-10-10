@@ -41,6 +41,9 @@ import 'package:booking_system_flutter/screens/call/mison_call_screen.dart';
 import 'package:booking_system_flutter/screens/call/mison_incoming_call_screen.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
+import 'package:booking_system_flutter/network/network_utils.dart' show isNotFoundError;
+import 'package:booking_system_flutter/model/mison_order_model.dart' show MisonCallTokenResponse;
+import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
@@ -144,58 +147,110 @@ void onNotificationTap(NotificationResponse details) {
   } catch (_) {}
 }
 
-// Pending CallKit accept when navigator wasn't ready yet (app waking from background).
-String? _pendingCallOrderId;
-String? _pendingCallChannel;
+// ── Appel décroché depuis l'écran d'appel du téléphone ──────────────────────
+// (CallKit sur iPhone, écran / notification d'appel sur Android)
+//
+// L'appel est rejoint TOUT DE SUITE, sans attendre l'interface : sur un iPhone
+// verrouillé ou une app lancée en arrière-plan par l'appel, Flutter ne dessine
+// rien, et l'ancien écran intermédiaire (« Connexion à l'appel… ») ne
+// s'ouvrait qu'au déverrouillage — l'appel ne se lançait pas. L'écran d'appel
+// s'affiche dès que l'app est visible (ou via la barre « Appel en cours »).
 
-void _openCallScreen(String orderId, String channel) {
-  // Safety net: this device initiated the call — don't open the callee screen.
+/// Appels du téléphone (identifiant CallKit) déjà rejoints : un même décroché
+/// peut arriver par l'événement ET par la vérification au démarrage.
+final Set<String> _joinedCallKitIds = {};
+
+/// Écran d'appel à ouvrir dès que la navigation est prête.
+MisonCallSession? _pendingCallScreen;
+
+Future<void> _joinAcceptedCall({
+  required String callKitId,
+  required String orderId,
+  required String channel,
+  String callerName = '',
+}) async {
+  if (orderId.isEmpty) return;
+  // Ce téléphone a lancé l'appel : ce n'est pas lui qui décroche.
   if (MisonCallScreen.isOutgoing(orderId)) return;
+  if (callKitId.isNotEmpty && !_joinedCallKitIds.add(callKitId)) return;
+  // Reste d'un appel précédent sur la même commande : on repart à neuf.
+  MisonCallSession.dropStaleFor(orderId);
 
+  // Réseau parfois lent au réveil du téléphone : quelques essais.
+  MisonCallTokenResponse? tokenData;
+  for (var attempt = 0; attempt < 3 && tokenData == null; attempt++) {
+    try {
+      // notify:false — on rejoint un appel déjà en cours, inutile de refaire
+      // sonner l'appelant.
+      tokenData = await getCallToken(orderId, notify: false);
+    } catch (e) {
+      log('joinAcceptedCall: $e');
+      if (isNotFoundError(e)) break; // appel destiné à un autre compte
+      await Future.delayed(Duration(seconds: attempt + 1));
+    }
+  }
+  if (tokenData == null || (tokenData.appId ?? '').isEmpty || (tokenData.token ?? '').isEmpty) {
+    endCallKitForOrder(orderId);
+    try {
+      TopToast.show(message: "Impossible de rejoindre l'appel", type: TopToastType.error);
+    } catch (_) {}
+    return;
+  }
+
+  final session = MisonCallSession.start(
+    orderId: orderId,
+    otherPartyName: callerName.isNotEmpty ? callerName : 'Appel MISON',
+    appId: tokenData.appId!,
+    channel: tokenData.channel ?? channel,
+    token: tokenData.token!,
+    uid: tokenData.uid ?? 2,
+    isCaller: false,
+  );
+  _showCallScreen(session);
+}
+
+void _showCallScreen(MisonCallSession session) {
+  if (session.ended || MisonCallScreen.visibleCount.value > 0) return;
   final nav = navigatorKey.currentState;
-  if (nav != null) {
-    nav.push(MaterialPageRoute(
-      builder: (_) => MisonIncomingCallScreen(
-        orderId: orderId,
-        channel: channel,
-        autoAccept: true,
-      ),
-    ));
-  } else {
-    // Navigator not ready yet — store and retry once the first frame is rendered.
-    _pendingCallOrderId = orderId;
-    _pendingCallChannel = channel;
+  if (nav == null) {
+    _pendingCallScreen = session; // ouvert au premier affichage de l'app
+    return;
   }
+  _pendingCallScreen = null;
+  nav.push(MaterialPageRoute(
+    builder: (_) => MisonCallScreen(
+      orderId: session.orderId,
+      otherPartyName: session.otherPartyName,
+      appId: session.appId,
+      channel: session.channel,
+      token: session.token,
+      uid: session.uid,
+      isCaller: session.isCaller,
+    ),
+  ));
 }
 
-/// iPhone, app fermée : décroché depuis l'écran d'appel, l'événement
-/// « accepté » est perdu (Flutter n'écoutait pas encore). Appelé une fois les
-/// tableaux de bord affichés : ouvre l'appel s'il vient d'être accepté.
-bool _coldStartCallChecked = false;
-
-Future<void> openColdStartAcceptedCall() async {
-  if (_coldStartCallChecked) return;
-  _coldStartCallChecked = true;
-  if (Platform.isAndroid) return _openAndroidAcceptedCall();
+/// Décroché pendant que l'app était fermée : l'événement « accepté » est parti
+/// avant que Flutter écoute. Le module d'appel garde l'appel accepté : on le
+/// retrouve et on le rejoint.
+Future<void> _joinColdStartAcceptedCall() async {
   try {
-    final data = await const MethodChannel('mison/accepted_call').invokeMapMethod<String, dynamic>('getAcceptedCall');
-    final extra = (data?['extra'] as Map?)?.cast<String, dynamic>() ?? {};
-    final orderId = extra['order_id']?.toString() ?? '';
-    if (orderId.isEmpty) return;
-    // Déjà ouvert par l'événement (app seulement en arrière-plan) : rien à faire.
-    if (MisonCallSession.current.value?.orderId == orderId) return;
-    _openCallScreen(orderId, extra['channel']?.toString() ?? '');
-  } catch (e) {
-    log('openColdStartAcceptedCall: $e');
-  }
-}
-
-/// Android, app fermée : « Accepter » sur l'écran d'appel lance l'app, mais
-/// l'événement part avant que Flutter écoute. Le module garde l'appel accepté
-/// en mémoire (isAccepted) : on le retrouve ici et on rejoint l'appel
-/// directement, sans repasser par « Appel entrant ».
-Future<void> _openAndroidAcceptedCall() async {
-  try {
+    if (Platform.isIOS) {
+      final data = await const MethodChannel('mison/accepted_call').invokeMapMethod<String, dynamic>('getAcceptedCall');
+      if (data == null) return;
+      final id = data['id']?.toString() ?? '';
+      // Appel déjà terminé depuis : rien à rejoindre.
+      final active = await FlutterCallkitIncoming.activeCalls();
+      if (active is List && !active.any((c) => c is Map && c['id']?.toString() == id)) return;
+      final extra = (data['extra'] as Map?)?.cast<String, dynamic>() ?? {};
+      await _joinAcceptedCall(
+        callKitId: id,
+        orderId: extra['order_id']?.toString() ?? '',
+        channel: extra['channel']?.toString() ?? '',
+        callerName: data['nameCaller']?.toString() ?? '',
+      );
+      return;
+    }
     final calls = await FlutterCallkitIncoming.activeCalls();
     if (calls is! List) return;
     for (final call in calls) {
@@ -203,14 +258,34 @@ Future<void> _openAndroidAcceptedCall() async {
       final extra = (call['extra'] as Map?)?.cast<String, dynamic>() ?? {};
       final orderId = extra['order_id']?.toString() ?? '';
       if (orderId.isEmpty) continue;
-      // Déjà ouvert par l'événement (app seulement en arrière-plan).
-      if (MisonCallSession.current.value?.orderId == orderId) return;
-      _openCallScreen(orderId, extra['channel']?.toString() ?? '');
+      await _joinAcceptedCall(
+        callKitId: call['id']?.toString() ?? '',
+        orderId: orderId,
+        channel: extra['channel']?.toString() ?? '',
+        callerName: call['nameCaller']?.toString() ?? '',
+      );
       return;
     }
   } catch (e) {
-    log('openAndroidAcceptedCall: $e');
+    log('joinColdStartAcceptedCall: $e');
   }
+}
+
+/// Appelé une fois les tableaux de bord affichés : affiche l'écran de l'appel
+/// décroché app fermée (déjà rejoint au démarrage), ou le rejoint si besoin.
+MisonCallSession? _dashboardShownSession;
+
+Future<void> openColdStartAcceptedCall() async {
+  final session = MisonCallSession.current.value;
+  if (session != null && !session.ended && !session.isCaller) {
+    // Une seule fois par appel : un appel réduit ne doit pas se rouvrir à
+    // chaque retour sur l'accueil.
+    if (session == _dashboardShownSession) return;
+    _dashboardShownSession = session;
+    _showCallScreen(session);
+    return;
+  }
+  await _joinColdStartAcceptedCall();
 }
 
 /// Appels qui sonnent encore (pas encore décrochés) au démarrage de l'app.
@@ -231,15 +306,12 @@ Future<void> _watchRingingCalls() async {
   }
 }
 
-/// Called from _MyAppState.initState() to flush any pending CallKit accept.
+/// Appelé au premier affichage de l'app : ouvre l'écran d'un appel décroché
+/// avant que la navigation soit prête.
 void flushPendingCall() {
-  final orderId = _pendingCallOrderId;
-  final channel = _pendingCallChannel;
-  if (orderId != null) {
-    _pendingCallOrderId = null;
-    _pendingCallChannel = null;
-    _openCallScreen(orderId, channel ?? '');
-  }
+  final session = _pendingCallScreen;
+  _pendingCallScreen = null;
+  if (session != null) _showCallScreen(session);
 }
 
 /// Android 14+ : demande l'autorisation d'afficher un appel en plein écran.
@@ -293,7 +365,12 @@ void _listenCallKitEvents() {
         if (!MisonCallScreen.isOutgoing(orderId)) MisonCallSession.dropStaleFor(orderId);
         watchIncomingCall(orderId);
       case Event.actionCallAccept:
-        _openCallScreen(orderId, channel);
+        _joinAcceptedCall(
+          callKitId: event.body['id']?.toString() ?? '',
+          orderId: orderId,
+          channel: channel,
+          callerName: event.body['nameCaller']?.toString() ?? '',
+        );
       case Event.actionCallDecline:
       case Event.actionCallTimeout:
         // Sonné sans réponse ≠ refusé : l'appelant voit « n'a pas répondu ».
@@ -445,6 +522,9 @@ void main() async {
   // l'événement « sonne » est parti avant ce listener. On suit quand même
   // l'appel, pour arrêter la sonnerie si l'appelant raccroche.
   _watchRingingCalls();
+  // Décroché pendant que l'app était fermée : on rejoint l'appel tout de
+  // suite, sans attendre l'interface (iPhone verrouillé : rien ne s'affiche).
+  _joinColdStartAcceptedCall();
   // Android 14+ : sans cette autorisation, l'écran d'appel plein écran ne
   // s'affiche pas quand le téléphone est verrouillé.
   await _ensureFullScreenCallPermission();

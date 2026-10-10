@@ -20,14 +20,11 @@ import '../../main.dart';
 class MisonIncomingCallScreen extends StatefulWidget {
   final String orderId;
   final String channel;
-  /// true when coming from a CallKit accept on iOS lock screen — skips ringing and auto-accepts.
-  final bool autoAccept;
 
   const MisonIncomingCallScreen({
     Key? key,
     required this.orderId,
     required this.channel,
-    this.autoAccept = false,
   }) : super(key: key);
 
   @override
@@ -57,12 +54,7 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
     _pulseAnim = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    if (widget.autoAccept) {
-      // User already accepted via CallKit lock screen — skip ringing, go straight to call.
-      WidgetsBinding.instance.addPostFrameCallback((_) => _accept());
-    } else {
-      FlutterRingtonePlayer().playRingtone(looping: true, volume: 1.0);
-    }
+    FlutterRingtonePlayer().playRingtone(looping: true, volume: 1.0);
     _loadCallerName();
     _statusSub = callStatusStream(widget.orderId).listen(_onCallStatus);
   }
@@ -129,9 +121,6 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
         Navigator.pop(context);
       } else {
         TopToast.show(message: 'Impossible de rejoindre l\'appel');
-        // Déjà décroché depuis l'écran d'appel du téléphone : pas de boutons
-        // ici, on ne reste pas bloqué sur « Connexion… ».
-        if (widget.autoAccept) Navigator.pop(context);
       }
     }
   }
@@ -154,55 +143,8 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
     super.dispose();
   }
 
-  /// Décroché depuis l'écran d'appel du téléphone (CallKit / notification) :
-  /// pas de seconde sonnerie ni de boutons Refuser / Accepter, seulement
-  /// « Connexion à l'appel… » le temps de rejoindre, puis l'écran d'appel.
-  Widget _buildConnecting() {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFFFFF),
-      body: DotGridBackground(
-        child: SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.green.withValues(alpha: 0.12),
-                  ),
-                  child: Icon(Icons.phone_in_talk_rounded, color: Colors.green.shade600, size: 52),
-                ),
-                28.height,
-                Text(_callerName,
-                    style: boldTextStyle(size: 26, color: appTextPrimaryColor), textAlign: TextAlign.center),
-                12.height,
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green.shade600),
-                    ),
-                    10.width,
-                    Text("Connexion à l'appel…",
-                        style: secondaryTextStyle(size: 15, color: appTextSecondaryColor)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (widget.autoAccept) return _buildConnecting();
     return Scaffold(
       backgroundColor: const Color(0xFFFFFFFF),
       body: DotGridBackground(
