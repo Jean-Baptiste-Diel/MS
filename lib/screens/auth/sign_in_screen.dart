@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/screens/auth/otp_verification_screen.dart';
+import 'package:booking_system_flutter/component/animated_dropdown.dart';
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/base_scaffold_body.dart';
 import 'package:booking_system_flutter/main.dart';
@@ -11,6 +12,7 @@ import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/phone_utils.dart';
 import 'package:booking_system_flutter/utils/pin_utils.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold;
+import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -113,8 +115,11 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  /// Indicatif du Sénégal, ajouté d'office aux numéros saisis.
-  static const String _senegalDialCode = '+221';
+  /// Indicatif ajouté aux numéros saisis : Sénégal (+221) par défaut,
+  /// modifiable en touchant l'indicatif affiché devant le numéro.
+  Country _phoneCountry = defaultCountry();
+
+  bool get _isSenegal => _phoneCountry.countryCode == 'SN';
 
   /// True si l'identifiant saisi est un numéro (et non un email).
   bool _isPhoneIdentifier(String raw) {
@@ -138,7 +143,8 @@ class _SignInScreenState extends State<SignInScreen> {
     if (trimmed.contains('@')) return trimmed;
     if (trimmed.startsWith('+')) return trimmed.replaceAll(RegExp(r'[\s\-\(\)]'), '');
     if (_isPhoneIdentifier(trimmed)) {
-      return '$_senegalDialCode${_localPhoneDigits(trimmed)}';
+      if (!_isSenegal) return buildInternationalPhone(trimmed, phoneCode: _phoneCountry.phoneCode);
+      return '+221${_localPhoneDigits(trimmed)}';
     }
     return trimmed;
   }
@@ -206,6 +212,7 @@ class _SignInScreenState extends State<SignInScreen> {
       email: isEmail ? identifier : null,
       phone: isEmail ? null : identifier,
       isFromSignUp: true,
+      password: passwordCont.text,
     ).launch(context);
   }
 
@@ -478,6 +485,64 @@ class _SignInScreenState extends State<SignInScreen> {
 
 //region Widgets
 
+  String? _validatePhone(String val) {
+    if (_isSenegal) return validateSenegalPhone(_localPhoneDigits(val));
+    final digits = val.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 6 || digits.length > 15) return 'Numéro de téléphone invalide';
+    return null;
+  }
+
+  /// Tous les pays, Sénégal en premier (liste des indicatifs, comme à l'inscription).
+  late final List<Country> _allCountries = () {
+    final list = CountryService().getAll();
+    final sn = list.where((c) => c.countryCode == 'SN').toList();
+    return [...sn, ...list.where((c) => c.countryCode != 'SN')];
+  }();
+
+  /// Champ identifiant + liste animée des indicatifs qui se déplie dessous
+  /// (même liste que les pages d'inscription).
+  Widget _withDialCodeList(Widget Function(bool isOpen, VoidCallback toggle) field) {
+    return AnimatedDropdown<String>(
+      hint: 'Indicatif',
+      value: _phoneCountry.countryCode,
+      options: _allCountries
+          .map((c) => DropdownOption(
+              c.countryCode, '${c.flagEmoji}  +${c.phoneCode}  ${c.getTranslatedName(context) ?? c.name}'))
+          .toList(),
+      accentColor: _brandGold,
+      searchable: true,
+      searchHint: 'Rechercher un pays ou un indicatif',
+      onChanged: (code) => setState(() {
+        _phoneCountry = CountryService().findByCode(code) ?? _phoneCountry;
+      }),
+      triggerBuilder: (context, _, isOpen, toggle) => field(isOpen, toggle),
+    );
+  }
+
+  /// Indicatif devant le numéro : un appui ouvre / ferme la liste des pays.
+  Widget _dialCodeButton(bool isOpen, VoidCallback toggle) {
+    return GestureDetector(
+      onTap: () {
+        hideKeyboard(context);
+        toggle();
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(left: 14, right: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${_phoneCountry.flagEmoji} +${_phoneCountry.phoneCode}', style: primaryTextStyle(size: 16)),
+            AnimatedRotation(
+              turns: isOpen ? 0.5 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: Icon(Icons.expand_more_rounded, size: 20, color: isOpen ? _brandGold : appTextSecondaryColor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   InputDecoration _fieldDecoration({required String label, String? hint}) {
     return InputDecoration(
       labelText: label,
@@ -657,7 +722,7 @@ class _SignInScreenState extends State<SignInScreen> {
       autovalidateMode: AutovalidateMode.disabled, // erreurs affichées seulement au clic sur le bouton
       child: Column(
         children: [
-          AppTextField(
+          _withDialCodeList((isOpen, toggle) => AppTextField(
             textFieldType: TextFieldType.NAME,
             controller: forgotEmailCont,
             errorThisFieldRequired: language.requiredText,
@@ -665,22 +730,17 @@ class _SignInScreenState extends State<SignInScreen> {
               label: 'Numéro ou email',
               hint: '77 123 45 67 ou exemple@email.com',
             ).copyWith(
-              // +221 affiché d'office dès qu'un numéro est saisi
-              prefixText: _isPhoneIdentifier(forgotEmailCont.text)
-                  ? '$_senegalDialCode '
-                  : null,
-              prefixStyle: primaryTextStyle(size: 16),
+              // Indicatif (+221 par défaut) affiché dès qu'un numéro est saisi
+              prefixIcon: _isPhoneIdentifier(forgotEmailCont.text) ? _dialCodeButton(isOpen, toggle) : null,
             ),
             onChanged: (_) => setState(() {}),
             isValidationRequired: true,
             validator: (val) {
               if (val == null || val.trim().isEmpty) return language.requiredText;
-              if (_isPhoneIdentifier(val)) {
-                return validateSenegalPhone(_localPhoneDigits(val));
-              }
+              if (_isPhoneIdentifier(val)) return _validatePhone(val);
               return null;
             },
-          ),
+          )),
           22.height,
           _forgotGradientButton(label: language.btnSendOtp, onTap: _sendForgotOtp),
           16.height,
@@ -1206,7 +1266,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     AutofillGroup(
                       child: Column(
                         children: [
-                          AppTextField(
+                          _withDialCodeList((isOpen, toggle) => AppTextField(
                             textFieldType: TextFieldType.NAME,
                             controller: emailCont,
                             focus: emailFocus,
@@ -1217,11 +1277,8 @@ class _SignInScreenState extends State<SignInScreen> {
                               label: 'Identifiant',
                               hint: 'Numéro ou email',
                             ).copyWith(
-                              // +221 affiché d'office dès qu'un numéro est saisi
-                              prefixText: _isPhoneIdentifier(emailCont.text)
-                                  ? '$_senegalDialCode '
-                                  : null,
-                              prefixStyle: primaryTextStyle(size: 16),
+                              // Indicatif (+221 par défaut) affiché dès qu'un numéro est saisi
+                              prefixIcon: _isPhoneIdentifier(emailCont.text) ? _dialCodeButton(isOpen, toggle) : null,
                             ),
                             onChanged: (_) => setState(() {}),
                             autoFillHints: [AutofillHints.username],
@@ -1230,12 +1287,10 @@ class _SignInScreenState extends State<SignInScreen> {
                               if (val == null || val.trim().isEmpty) {
                                 return language.requiredText;
                               }
-                              if (_isPhoneIdentifier(val)) {
-                                return validateSenegalPhone(_localPhoneDigits(val));
-                              }
+                              if (_isPhoneIdentifier(val)) return _validatePhone(val);
                               return null;
                             },
-                          ),
+                          )),
                           14.height,
                           AppTextField(
                             textFieldType: TextFieldType.PASSWORD,

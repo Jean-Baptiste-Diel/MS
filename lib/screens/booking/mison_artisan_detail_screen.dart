@@ -3,6 +3,7 @@ import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
+import 'package:booking_system_flutter/screens/booking/mison_artisan_reviews_screen.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -31,6 +32,14 @@ class MisonArtisanDetailScreen extends StatelessWidget {
     MisonBookingFormScreen(
       service: _service,
       artisanId: artisan.id,
+    ).launch(context);
+  }
+
+  void _openReviews(BuildContext context) {
+    if (artisan.id == null) return;
+    MisonArtisanReviewsScreen(
+      artisanId: artisan.id!,
+      artisanName: '${artisan.firstName ?? ''} ${artisan.lastName ?? ''}'.trim(),
     ).launch(context);
   }
 
@@ -120,16 +129,25 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                               ],
                               if (artisan.averageRating != null) ...[
                                 6.height,
-                                Row(children: [
-                                  Icon(Icons.star_rounded,
-                                      size: 15, color: ratingBarColor),
-                                  4.width,
-                                  Text(
-                                    '${artisan.rating.toStringAsFixed(1)} (${artisan.totalReviews ?? 0} avis)',
-                                    style: boldTextStyle(
+                                // Appui : liste des avis laissés par les clients.
+                                GestureDetector(
+                                  onTap: () => _openReviews(context),
+                                  child: Row(children: [
+                                    Icon(Icons.star_rounded,
                                         size: 15, color: ratingBarColor),
-                                  ),
-                                ]),
+                                    4.width,
+                                    Text(
+                                      '${artisan.rating.toStringAsFixed(1)} (${artisan.totalReviews ?? 0} avis)',
+                                      style: boldTextStyle(
+                                          size: 15, color: ratingBarColor),
+                                    ),
+                                    6.width,
+                                    Text('Voir les avis',
+                                        style: boldTextStyle(size: 13, color: kMisonGold,
+                                            decoration: TextDecoration.underline,
+                                            decorationColor: kMisonGold)),
+                                  ]),
+                                ),
                               ],
                             ],
                           ),

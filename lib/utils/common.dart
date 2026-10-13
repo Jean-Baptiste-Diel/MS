@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:booking_system_flutter/component/app_common_dialog.dart';
 import 'package:booking_system_flutter/component/html_widget.dart';
 import 'package:booking_system_flutter/component/location_service_dialog.dart';
-import 'package:booking_system_flutter/component/new_update_dialog.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
@@ -536,32 +535,6 @@ void doIfLoggedIn(BuildContext context, VoidCallback callback) {
 
 Widget get trailing {
   return ic_arrow_right.iconImage(size: 16);
-}
-
-void showNewUpdateDialog(BuildContext context, {required int currentAppVersionCode}) async {
-  showInDialog(
-    context,
-    contentPadding: EdgeInsets.zero,
-    barrierDismissible: currentAppVersionCode >= getIntAsync(USER_APP_MINIMUM_VERSION).toInt(),
-    builder: (_) {
-      return PopScope(
-        canPop: currentAppVersionCode >= getIntAsync(USER_APP_MINIMUM_VERSION).toInt(),
-        child: NewUpdateDialog(canClose: getBoolAsync(AUTO_UPDATE, defaultValue: true) ? true : currentAppVersionCode >= getIntAsync(USER_APP_MINIMUM_VERSION).toInt()),
-      );
-    },
-  );
-}
-
-Future<void> showForceUpdateDialog(BuildContext context) async {
-  if (getBoolAsync(UPDATE_NOTIFY, defaultValue: true)) {
-    getPackageInfo().then((value) {
-      if (isAndroid && getIntAsync(USER_APP_LATEST_VERSION).toInt() > value.versionCode.validate().toInt()) {
-        showNewUpdateDialog(context, currentAppVersionCode: value.versionCode.validate().toInt());
-      } else if (isIOS && getIntAsync(USER_APP_LATEST_VERSION).toInt() > value.versionCode.validate().toInt()) {
-        showNewUpdateDialog(context, currentAppVersionCode: value.versionCode.validate().toInt());
-      }
-    });
-  }
 }
 
 bool checkTimeDifference({required DateTime inputDateTime}) {

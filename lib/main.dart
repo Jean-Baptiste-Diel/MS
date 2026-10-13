@@ -101,6 +101,18 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       textAccept: 'Accepter',
       textDecline: 'Refuser',
       duration: 30000,
+      // Notification « appel en cours » après le décroché (sinon « Hang Up »).
+      callingNotification: const NotificationParams(
+        showNotification: true,
+        subtitle: 'Appel en cours…',
+        isShowCallback: true,
+        callbackText: 'Raccrocher',
+      ),
+      missedCallNotification: const NotificationParams(
+        showNotification: true,
+        subtitle: 'Appel manqué',
+        isShowCallback: false,
+      ),
       ios: const IOSParams(
         iconName: '',
         handleType: 'generic',
@@ -206,6 +218,7 @@ Future<void> _joinAcceptedCall({
     uid: tokenData.uid ?? 2,
     isCaller: false,
   );
+  if (callKitId.isNotEmpty) session.callKitId = callKitId;
   _showCallScreen(session);
 }
 
@@ -276,11 +289,17 @@ Future<void> _joinColdStartAcceptedCall() async {
 MisonCallSession? _dashboardShownSession;
 
 Future<void> openColdStartAcceptedCall() async {
+  // Laisse l'écran de démarrage se fermer : un écran d'appel ouvert par-dessus
+  // lui disparaît avec lui, mais compte encore comme affiché pendant la
+  // transition. Sans ce délai, l'appel décroché n'était jamais rouvert et on
+  // arrivait sur l'accueil (surtout chez le prestataire, dont l'accueil fait
+  // cette vérification deux fois).
+  await Future.delayed(const Duration(milliseconds: 800));
   final session = MisonCallSession.current.value;
   if (session != null && !session.ended && !session.isCaller) {
     // Une seule fois par appel : un appel réduit ne doit pas se rouvrir à
     // chaque retour sur l'accueil.
-    if (session == _dashboardShownSession) return;
+    if (session == _dashboardShownSession || MisonCallScreen.visibleCount.value > 0) return;
     _dashboardShownSession = session;
     _showCallScreen(session);
     return;
@@ -383,8 +402,9 @@ void _listenCallKitEvents() {
       case Event.actionCallEnded:
         // « Raccrocher » depuis la notification Android ou l'interface CallKit :
         // sans ça, seul l'affichage se fermait et l'appel continuait.
-        MisonCallSession.hangUpFromSystem(orderId);
-        endCallKitForOrder(orderId);
+        // Seul l'appel système terminé compte : avant, toute fin d'un ancien
+        // appel de la même commande raccrochait aussi l'appel en cours.
+        MisonCallSession.hangUpFromSystem(orderId, callKitId: event.body['id']?.toString() ?? '');
       default:
         break;
     }

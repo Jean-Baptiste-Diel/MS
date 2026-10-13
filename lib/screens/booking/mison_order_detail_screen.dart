@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/component/mison_rate_sheet.dart';
+import 'package:booking_system_flutter/screens/booking/mison_artisan_reviews_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/component/mison_start_prestation_sheet.dart';
 import 'package:booking_system_flutter/utils/image_cache_key.dart';
@@ -1458,14 +1459,29 @@ class _ArtisanHeroCard extends StatelessWidget {
                         ]),
                       if (artisan.averageRating != null) ...[
                         4.height,
-                        Row(children: [
-                          Icon(Icons.star_rounded, size: 14, color: ratingBarColor),
-                          4.width,
-                          Text(
-                            '${artisan.rating.toStringAsFixed(1)} (${artisan.totalReviews ?? 0} avis)',
-                            style: secondaryTextStyle(size: 14),
-                          ),
-                        ]),
+                        // Appui : liste des avis laissés par les clients.
+                        GestureDetector(
+                          onTap: () {
+                            if (artisan.id == null) return;
+                            MisonArtisanReviewsScreen(
+                              artisanId: artisan.id!,
+                              artisanName: '${artisan.firstName ?? ''} ${artisan.lastName ?? ''}'.trim(),
+                            ).launch(context);
+                          },
+                          child: Row(children: [
+                            Icon(Icons.star_rounded, size: 14, color: ratingBarColor),
+                            4.width,
+                            Text(
+                              '${artisan.rating.toStringAsFixed(1)} (${artisan.totalReviews ?? 0} avis)',
+                              style: secondaryTextStyle(size: 14),
+                            ),
+                            6.width,
+                            Text('Voir',
+                                style: boldTextStyle(size: 13, color: kMisonGold,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: kMisonGold)),
+                          ]),
+                        ),
                       ],
                     ],
                   ),

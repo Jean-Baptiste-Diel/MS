@@ -11,16 +11,15 @@ import 'package:booking_system_flutter/screens/dashboard/fragment/dashboard_frag
 import 'package:booking_system_flutter/screens/dashboard/fragment/mison_booking_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/profile_fragment.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
-import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:booking_system_flutter/utils/string_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:booking_system_flutter/utils/app_update.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../component/voice_search_component.dart';
-import '../../utils/app_configuration.dart';
 import 'artisan_dashboard_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -77,32 +76,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     init();
   }
 
-  /*Future<void> checkAndShowCustomForceUpdateDialog(BuildContext context) async {
-    final result = await PlayxVersionUpdate.checkVersion(
-      options:  PlayxUpdateOptions(
-        androidPackageName: PackageInfoData().packageName,
-        iosBundleId:PackageInfoData().packageName ,
-        minVersion: '11.14.4',
-      ),
-    );
-
-    result.when(
-      success: (info) {
-        showNewUpdateDialog(context, currentAppVersionCode: 99);
-      },
-      error: (e) {
-        log('Version check failed: ${e.message}');
-      },
-    );
-  }*/
-
   void init() async {
-    await 3.seconds.delay;
-    if (getIntAsync(FORCE_UPDATE_USER_APP).getBoolInt()) {
-      showForceUpdateDialog(context);
-    } /* else if (getBoolAsync(AUTO_UPDATE, defaultValue:false)) {
-      checkAndShowCustomForceUpdateDialog(context);
-    }*/
+    await 2.seconds.delay;
+    // Nouvelle version (facultative) ou version trop ancienne (bloquante).
+    if (mounted) checkAppUpdate(context);
   }
 
   @override

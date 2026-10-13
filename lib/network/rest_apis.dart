@@ -506,8 +506,11 @@ Future<BaseResponseModel> resetPassword(Map request) async {
 
 /// Verify account with OTP
 /// POST /api/auth/register/verify avec { email, otp_code }
-Future<BaseResponseModel> verifyAccountOtp(Map request) async {
-  return BaseResponseModel.fromJson(await handleResponse(
+/// Client : la réponse contient aussi les jetons de connexion (access,
+/// refresh, user), comme auth/login. Prestataire : message seul (compte en
+/// attente de validation).
+Future<LoginResponse> verifyAccountOtp(Map request) async {
+  return LoginResponse.fromJson(await handleResponse(
       await buildHttpResponse('auth/register/verify',
           request: request, method: HttpMethodType.POST)));
 }
@@ -802,6 +805,14 @@ Future<Map<String, dynamic>> getOrderNearbyArtisans(String orderId) async {
 /// jour tout de suite, sans attendre la notification ni l'actualisation
 /// automatique. [orderId] null : toutes les commandes sont concernées.
 void _orderChanged([String? orderId]) => OrderEvents.emit(orderId);
+
+/// Avis laissés par les clients sur un prestataire.
+/// GET /api/artisans/{id}/reviews → { average_rating, total_reviews, reviews: [...] }
+Future<Map<String, dynamic>> getArtisanReviews(String artisanId) async {
+  final res = await handleResponse(
+      await buildHttpResponse('artisans/$artisanId/reviews', method: HttpMethodType.GET));
+  return ((res as Map)['data'] as Map?)?.cast<String, dynamic>() ?? {};
+}
 
 Future<MisonOrderDetailResponse> getMisonOrderDetail(String orderId) async {
   try {

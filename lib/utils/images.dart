@@ -5,7 +5,6 @@ const appLogo = 'assets/ic_app_logo.png';
 //endregion
 
 //region Images
-const imgForceUpdate = 'assets/images/force_update.png';
 const mison_welcome_bg = 'assets/images/mison_welcome_bg.jpg';
 
 //endregion

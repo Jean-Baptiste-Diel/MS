@@ -15,6 +15,8 @@ const kCallRejected = 'rejected';
 const kCallCancelled = 'cancelled';
 /// L'appel a sonné sans réponse chez l'appelé (délai dépassé).
 const kCallMissed = 'missed';
+/// L'appelé a décroché et rejoint l'appel : l'appelant passe en « appel en cours ».
+const kCallAccepted = 'accepted';
 
 // ── Identifiant de l'appel dans l'écran d'appel du téléphone (CallKit) ──────
 // Un identifiant UNIQUE par appel (recommandation Apple). Avant, c'était
@@ -74,6 +76,12 @@ Future<void> endLeftoverConnectedCalls() async {
       final id = call['id']?.toString();
       if (id != null && id.isNotEmpty) await FlutterCallkitIncoming.endCall(id).catchError((_) {});
     }
+    // Filet de sécurité : plus aucun appel qui sonne → on ferme tout ce que le
+    // module d'appel garde encore (notification « Raccrocher » restée affichée).
+    final left = await FlutterCallkitIncoming.activeCalls();
+    final ringing = left is List &&
+        left.any((c) => c is Map && c['accepted'] != true && c['isAccepted'] != true);
+    if (!ringing) await FlutterCallkitIncoming.endAllCalls();
   } catch (_) {}
 }
 
@@ -97,6 +105,9 @@ Future<void> markCallDeclined(String orderId) => _setStatus(orderId, kCallReject
 
 /// L'appel a sonné sans réponse chez l'appelé.
 Future<void> markCallMissed(String orderId) => _setStatus(orderId, kCallMissed);
+
+/// L'appelé a décroché et il est dans l'appel.
+Future<void> markCallAccepted(String orderId) => _setStatus(orderId, kCallAccepted);
 
 /// L'appelant raccroche avant que l'appelé ait répondu.
 Future<void> markCallCancelled(String orderId) => _setStatus(orderId, kCallCancelled);

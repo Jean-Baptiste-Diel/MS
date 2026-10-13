@@ -6,6 +6,8 @@ import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart' as api;
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
+import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
+import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:flutter/material.dart';
@@ -20,11 +22,16 @@ class OTPVerificationScreen extends StatefulWidget {
   final String? phone;
   final bool isFromSignUp;
 
+  /// Code secret choisi à l'inscription : gardé comme après une connexion
+  /// (changement de code secret, « se souvenir de moi »).
+  final String? password;
+
   const OTPVerificationScreen({
     Key? key,
     this.email,
     this.phone,
     this.isFromSignUp = true,
+    this.password,
   })  : assert(email != null || phone != null,
             'email ou phone doit être fourni'),
         super(key: key);
@@ -93,10 +100,24 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       'otp_code': otpController.text.trim(),
     };
 
-    await api.verifyAccountOtp(request).then((response) {
+    await api.verifyAccountOtp(request).then((response) async {
+      // Client : connecté directement, on arrive sur l'accueil.
+      if (response.userData != null && (response.accessToken ?? '').isNotEmpty) {
+        await api.saveUserData(response.userData!, refreshToken: response.refreshToken);
+        if ((widget.password ?? '').isNotEmpty) await setValue(USER_PASSWORD, widget.password);
+        await appStore.setLoginType(LOGIN_TYPE_USER);
+        authService.verifyFirebaseUser();
+        appStore.setLoading(false);
+        TopToast.show(message: response.message ?? language.accountVerifiedSuccessfully, type: TopToastType.success);
+        if (!mounted) return;
+        DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
+        return;
+      }
+
+      // Prestataire : compte à valider par l'équipe MISON avant de se connecter.
       appStore.setLoading(false);
       TopToast.show(message: response.message ?? language.accountVerifiedSuccessfully, type: TopToastType.success);
-
+      if (!mounted) return;
       const SignInScreen(allowHomeNavigation: true).launch(
         context,
         isNewTask: true,

@@ -4,6 +4,7 @@ import Flutter
 import GoogleMaps
 import Firebase
 import PushKit
+import StoreKit
 import flutter_callkit_incoming
 
 @main
@@ -23,6 +24,7 @@ import flutter_callkit_incoming
     GeneratedPluginRegistrant.register(with: self)
     registerAudioRouteChannel()
     registerAcceptedCallChannel()
+    registerAppStoreChannel()
     GMSServices.provideAPIKey("AIzaSyBtos9vMzqgH_Z9USy6eYMBtftzvhDYZhI")
 
     // PushKit : seul canal qui reveille une app iOS terminee pour un appel.
@@ -107,6 +109,35 @@ import flutter_callkit_incoming
       try session.overrideOutputAudioPort(.none)
       if let mic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
         try session.setPreferredInput(mic)
+      }
+    }
+  }
+
+  // MARK: - Mise à jour : fiche App Store dans l'app
+
+  /// Apple ne permet pas d'installer une mise à jour depuis l'app : on ouvre
+  /// la fiche App Store de MISON par-dessus l'app (bouton « Mettre à jour »
+  /// d'Apple), sans la quitter.
+  private func registerAppStoreChannel() {
+    guard let registrar = self.registrar(forPlugin: "MisonAppStore") else { return }
+    let channel = FlutterMethodChannel(name: "mison/app_store", binaryMessenger: registrar.messenger())
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "open", let appId = call.arguments as? String,
+            let root = self?.window?.rootViewController else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      var top = root
+      while let presented = top.presentedViewController { top = presented }
+      let store = SKStoreProductViewController()
+      store.delegate = self
+      store.loadProduct(withParameters: [SKStoreProductParameterITunesItemIdentifier: appId]) { loaded, error in
+        if loaded {
+          top.present(store, animated: true)
+          result(nil)
+        } else {
+          result(FlutterError(code: "APP_STORE", message: error?.localizedDescription, details: nil))
+        }
       }
     }
   }
@@ -222,5 +253,11 @@ import flutter_callkit_incoming
     }
     // Always call super so Firebase can run the Dart background handler
     super.application(application, didReceiveRemoteNotification: userInfo, fetchCompletionHandler: completionHandler)
+  }
+}
+
+extension AppDelegate: SKStoreProductViewControllerDelegate {
+  func productViewControllerDidFinish(_ viewController: SKStoreProductViewController) {
+    viewController.dismiss(animated: true)
   }
 }

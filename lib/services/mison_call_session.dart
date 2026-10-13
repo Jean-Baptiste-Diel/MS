@@ -66,6 +66,10 @@ class MisonCallSession extends ChangeNotifier {
 
   RtcEngine? _engine;
   Timer? _timer;
+
+  /// Identifiant de l'appel dans l'écran d'appel du téléphone (CallKit /
+  /// notification) : appel sortant créé ici, ou appel entrant décroché.
+  String? callKitId;
   /// Tonalité « ça sonne chez l'autre » jouée à l'appelant en attendant la réponse.
   bool _ringbackOn = false;
   static const _ringbackAsset = 'assets/sounds/ringback.wav';
@@ -81,6 +85,16 @@ class MisonCallSession extends ChangeNotifier {
 
   bool engineReady = false;
   bool isConnected = false;
+
+  /// Participants présents dans l'appel (côté Agora).
+  final Set<int> _remoteUids = {};
+  Timer? _offlineTimer;
+
+  /// Appelant : l'appelé a décroché (signalé via call_status).
+  bool _calleeAccepted = false;
+
+  /// Moment où ce téléphone est entré dans l'appel (Agora).
+  DateTime? _joinedAt;
   bool isMuted = false;
   /// Sortie audio : 'earpiece', 'speaker', 'bluetooth' ou 'wired'.
   /// L'appel démarre sur l'écouteur (comme un appel téléphonique), ou sur le
@@ -115,7 +129,7 @@ class MisonCallSession extends ChangeNotifier {
       // Un nouveau jeton = nouvel appel : l'ancienne session, restée ouverte
       // sans personne en face, était réutilisée et l'appel ne se connectait pas.
       if (existing.orderId == orderId && existing.token == token) return existing;
-      existing.hangUp();
+      existing._discard();
     }
     final session = MisonCallSession._(
       orderId: orderId,
@@ -148,6 +162,7 @@ class MisonCallSession extends ChangeNotifier {
       return;
     }
 
+    if (ended) return;
     await _keepAliveInBackground();
     _listenCallStatus();
     if (isCaller) {
@@ -162,12 +177,17 @@ class MisonCallSession extends ChangeNotifier {
       });
     }
 
+    // Le moteur de l'appel précédent doit être libéré avant d'en recréer un.
+    await _releasing;
+    if (ended) return;
     final engine = createAgoraRtcEngine();
     _engine = engine;
     await engine.initialize(RtcEngineContext(
       appId: appId,
       channelProfile: ChannelProfileType.channelProfileCommunication,
     ));
+    // Terminé pendant l'initialisation : le moteur est déjà en cours de libération.
+    if (ended || _engine != engine) return;
 
     // iOS : CallKit possède la session audio. Sans ce paramètre, Agora la
     // reconfigure et le flux entrant devient inaudible.
@@ -177,6 +197,7 @@ class MisonCallSession extends ChangeNotifier {
 
     engine.registerEventHandler(RtcEngineEventHandler(
       onJoinChannelSuccess: (connection, elapsed) async {
+        _joinedAt = DateTime.now();
         // Indique au système (CallKit / notification Android) que l'appel est
         // établi : c'est ce qui libère le focus audio vers Agora.
         try {
@@ -187,19 +208,39 @@ class MisonCallSession extends ChangeNotifier {
         await setAudioRoute(bluetoothAvailable ? kRouteBluetooth : kRouteEarpiece);
         engineReady = true;
         notifyListeners();
+        // Appelé : il est dans l'appel parce qu'il a décroché → l'appelant
+        // peut passer en « appel en cours ».
+        if (!isCaller) markCallAccepted(orderId);
         // Appelant : tonalité d'attente jusqu'à la réponse (seulement chez lui).
         await _startRingback();
       },
       onUserJoined: (connection, remoteUid, elapsed) {
-        _stopRingback();
-        isConnected = true;
-        _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
-          seconds++;
-          notifyListeners();
-        });
-        notifyListeners();
+        _remoteUids.add(remoteUid);
+        _offlineTimer?.cancel();
+        // Appelant : quelqu'un qui arrive bien après nous dans l'appel, c'est
+        // l'appelé qui vient de décrocher (un reste d'appel précédent, lui,
+        // est déjà là quand on arrive). Ne dépend plus seulement du signal
+        // « accepted », qui pouvait ne jamais arriver : l'appel restait alors
+        // bloqué sur « ça sonne ».
+        final joinedAt = _joinedAt;
+        if (isCaller && joinedAt != null &&
+            DateTime.now().difference(joinedAt) > const Duration(seconds: 2)) {
+          _calleeAccepted = true;
+        }
+        _maybeConnected();
       },
-      onUserOffline: (connection, remoteUid, reason) => _end(message: 'Appel terminé'),
+      onUserOffline: (connection, remoteUid, reason) {
+        _remoteUids.remove(remoteUid);
+        // Appelant, avant le décroché : c'est un reste d'appel précédent qui
+        // quitte l'appel, pas l'appelé. On continue de sonner.
+        if (isCaller && !_calleeAccepted) return;
+        // Court délai : l'appelé qui rejoint avec le même identifiant fait
+        // d'abord sortir son ancienne connexion.
+        _offlineTimer?.cancel();
+        _offlineTimer = Timer(const Duration(seconds: 2), () {
+          if (_remoteUids.isEmpty) _end(message: 'Appel terminé');
+        });
+      },
       // La sortie audio peut changer seule (casque, Bluetooth) : on reflète l'état réel.
       onAudioRoutingChanged: (_) => refreshAudioRoutes(),
       onError: (err, msg) => log('Agora error: $err $msg'),
@@ -231,7 +272,7 @@ class MisonCallSession extends ChangeNotifier {
     if (Platform.isIOS && !isCaller) return;
     try {
       await FlutterCallkitIncoming.startCall(CallKitParams(
-        id: newCallKitId(),
+        id: callKitId = newCallKitId(),
         nameCaller: otherPartyName,
         appName: 'MISON',
         handle: otherPartyName,
@@ -267,9 +308,15 @@ class MisonCallSession extends ChangeNotifier {
   }
 
   /// « Raccrocher » depuis la notification Android ou l'interface CallKit iOS.
-  static void hangUpFromSystem(String orderId) {
+  /// [callKitId] : l'appel système qui s'est terminé. Un ancien appel de la
+  /// même commande qui se ferme (fin de l'appel précédent) ne doit pas
+  /// raccrocher l'appel en cours.
+  static void hangUpFromSystem(String orderId, {String callKitId = ''}) {
     final session = current.value;
-    if (session != null && session.orderId == orderId) session.hangUp();
+    if (session == null || session.orderId != orderId) return;
+    final own = session.callKitId;
+    if (own != null && callKitId.isNotEmpty && own.toLowerCase() != callKitId.toLowerCase()) return;
+    session.hangUp();
   }
 
   /// Nouvel appel entrant pour cette commande : une session encore ouverte
@@ -279,8 +326,19 @@ class MisonCallSession extends ChangeNotifier {
   /// décroché réutilisait cette vieille session et rien ne se connectait.
   static void dropStaleFor(String orderId) {
     final session = current.value;
-    if (session != null && session.orderId == orderId && !session.ended) session.hangUp();
+    if (session != null && session.orderId == orderId && !session.ended) session._discard();
   }
+
+  /// Moteur Agora d'une session terminée en cours de libération. Le moteur est
+  /// unique dans l'app : une nouvelle session qui démarre pendant que
+  /// l'ancienne le libère se faisait couper (décroché, mais rien ne passait).
+  static Future<void> _releasing = Future.value();
+
+  /// Ferme un reste d'appel précédent SANS toucher au nouvel appel : ni à
+  /// l'écran d'appel du téléphone (CallKit / notification, qui portent le même
+  /// numéro de commande), ni au statut partagé (un « cancelled » coupait
+  /// l'appel qui sonne), ni à la conversation.
+  void _discard() => _end(silent: true);
 
   Future<void> _startRingback() async {
     final engine = _engine;
@@ -304,8 +362,30 @@ class MisonCallSession extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Appel établi : l'autre partie est dans l'appel et, côté appelant, elle a
+  /// vraiment décroché. Avant, la seule présence de quelqu'un dans l'appel
+  /// suffisait : un reste de l'appel précédent (téléphone de l'appelé encore
+  /// connecté) faisait croire à l'appelant que l'appel avait commencé pendant
+  /// que l'autre téléphone sonnait encore.
+  void _maybeConnected() {
+    if (isConnected || ended || _remoteUids.isEmpty) return;
+    if (isCaller && !_calleeAccepted) return;
+    _stopRingback();
+    isConnected = true;
+    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      seconds++;
+      notifyListeners();
+    });
+    notifyListeners();
+  }
+
   void _listenCallStatus() {
     _callStatusSub = callStatusStream(orderId).listen((status) {
+      if (isCaller && status == kCallAccepted) {
+        _calleeAccepted = true;
+        _maybeConnected();
+        return;
+      }
       if (isConnected) return;
       if (!isCaller) {
         // Appelé : l'appelant a raccroché avant que l'appel soit établi.
@@ -375,12 +455,22 @@ class MisonCallSession extends ChangeNotifier {
 
   Future<void> hangUp() => _end();
 
-  Future<void> _end({String? message, bool rejected = false, bool noAnswer = false}) async {
+  Future<void> _end({String? message, bool rejected = false, bool noAnswer = false, bool silent = false}) async {
     if (ended) return;
     ended = true;
     endMessage = message;
     _timer?.cancel();
     _noAnswerTimer?.cancel();
+    _offlineTimer?.cancel();
+    if (silent) {
+      _callStatusSub?.cancel();
+      await _stopRingback();
+      notifyListeners();
+      if (current.value == this) current.value = null;
+      if (isCaller) MisonCallScreen.clearOutgoing(orderId);
+      await _releaseEngine();
+      return;
+    }
 
     // Appelant : l'appel s'affiche dans la conversation de la commande
     // (abouti avec sa durée, refusé, ou sans réponse / annulé).
@@ -410,16 +500,7 @@ class MisonCallSession extends ChangeNotifier {
       // toute façon remis à zéro avant chaque nouvel appel.)
       resetCallStatus(orderId);
     }
-    final engine = _engine;
-    _engine = null;
-    if (engine != null) {
-      try {
-        await engine.leaveChannel();
-        await engine.release();
-      } catch (e) {
-        log('MisonCallSession release: $e');
-      }
-    }
+    await _releaseEngine();
     if (rejected || noAnswer) {
       showSimpleLocalNotification(
         id: 9010,
@@ -427,5 +508,21 @@ class MisonCallSession extends ChangeNotifier {
         body: message ?? '',
       );
     }
+  }
+
+  /// Quitte l'appel et libère le moteur Agora, à la suite des libérations
+  /// précédentes ; la session suivante attend la fin avant de démarrer.
+  Future<void> _releaseEngine() {
+    final engine = _engine;
+    _engine = null;
+    if (engine == null) return _releasing;
+    return _releasing = _releasing.then((_) async {
+      try {
+        await engine.leaveChannel();
+        await engine.release();
+      } catch (e) {
+        log('MisonCallSession release: $e');
+      }
+    });
   }
 }

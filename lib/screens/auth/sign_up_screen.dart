@@ -270,6 +270,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       OTPVerificationScreen(
         phone: buildMobileNumber(),
         isFromSignUp: true,
+        password: passwordCont.text.trim(),
       ).launch(context);
     }).catchError((e) {
       appStore.setLoading(false);

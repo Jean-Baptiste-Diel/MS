@@ -28,6 +28,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:booking_system_flutter/utils/app_update.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../../component/app_empty_state.dart';
@@ -54,6 +55,10 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
     super.initState();
     ChatUnreadStore.start(); // pastilles « messages non lus »
     openColdStartAcceptedCall(); // appel décroché app fermée (iPhone et Android)
+    // Nouvelle version (facultative) ou version trop ancienne (bloquante).
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) checkAppUpdate(context);
+    });
   }
 
   final List<Widget> _tabs = [
