@@ -5,6 +5,7 @@ const APP_NAME = 'MISON';
 const APP_NAME_TAG_LINE = 'On-Demand Home Services App';
 var defaultPrimaryColor = Color(0xFFF4BB16);
 
+// ok
 const DOMAIN_URL = 'https://api.mison.app';
 const BASE_URL = '$DOMAIN_URL/api/';
 
