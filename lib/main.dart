@@ -363,6 +363,29 @@ Future<void> syncVoipToken() async {
 /// Écoute les actions CallKit (accepter / refuser depuis l'écran de verrouillage)
 /// et la mise à jour du token VoIP.
 void _listenCallKitEvents() {
+  // iPhone : décroché / refusé arrivent de l'AppDelegate avec l'appel exact.
+  // Les événements du module portent les infos du dernier appel affiché
+  // (souvent un appel précédent) : l'appel n'était alors pas rejoint.
+  if (Platform.isIOS) {
+    const MethodChannel('mison/accepted_call').setMethodCallHandler((call) async {
+      final data = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
+      final extra = (data['extra'] as Map?)?.cast<String, dynamic>() ?? {};
+      final orderId = extra['order_id']?.toString() ?? '';
+      if (orderId.isEmpty) return;
+      if (call.method == 'accepted') {
+        await _joinAcceptedCall(
+          callKitId: data['id']?.toString() ?? '',
+          orderId: orderId,
+          channel: extra['channel']?.toString() ?? '',
+          callerName: data['nameCaller']?.toString() ?? '',
+        );
+      } else if (call.method == 'declined') {
+        markCallDeclined(orderId);
+        endCallKitForOrder(orderId);
+      }
+    });
+  }
+
   FlutterCallkitIncoming.onEvent.listen((CallEvent? event) {
     if (event == null) return;
 
@@ -384,6 +407,7 @@ void _listenCallKitEvents() {
         if (!MisonCallScreen.isOutgoing(orderId)) MisonCallSession.dropStaleFor(orderId);
         watchIncomingCall(orderId);
       case Event.actionCallAccept:
+        if (Platform.isIOS) return; // voir mison/accepted_call ci-dessus
         _joinAcceptedCall(
           callKitId: event.body['id']?.toString() ?? '',
           orderId: orderId,
@@ -392,6 +416,7 @@ void _listenCallKitEvents() {
         );
       case Event.actionCallDecline:
       case Event.actionCallTimeout:
+        if (Platform.isIOS && event.event == Event.actionCallDecline) return;
         // Sonné sans réponse ≠ refusé : l'appelant voit « n'a pas répondu ».
         if (event.event == Event.actionCallTimeout) {
           markCallMissed(orderId);

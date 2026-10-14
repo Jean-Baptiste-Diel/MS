@@ -1,5 +1,6 @@
 import UIKit
 import AVFoundation
+import CallKit
 import Flutter
 import GoogleMaps
 import Firebase
@@ -12,6 +13,15 @@ import flutter_callkit_incoming
   /// Retenu par l'AppDelegate : un registry local serait desalloue et
   /// l'appareil ne recevrait jamais de push VoIP.
   private var voipRegistry: PKPushRegistry?
+
+  /// Canal « appel décroché / refusé » vers Flutter, et dernier appel décroché.
+  /// Le module d'appel envoie à Flutter les infos du DERNIER appel affiché par
+  /// PushKit, pas celles de l'appel décroché : après un appel précédent (ou un
+  /// appel reçu par FCM), l'app recevait l'identifiant d'un ancien appel, le
+  /// croyait déjà rejoint et ne rejoignait pas → décroché sans son, et l'appel
+  /// continuait quand l'autre raccrochait. Ici on a l'appel exact.
+  private var acceptedCallChannel: FlutterMethodChannel?
+  private var acceptedCall: [String: Any]?
 
   override func application(
     _ application: UIApplication,
@@ -150,13 +160,14 @@ import flutter_callkit_incoming
   private func registerAcceptedCallChannel() {
     guard let registrar = self.registrar(forPlugin: "MisonAcceptedCall") else { return }
     let channel = FlutterMethodChannel(name: "mison/accepted_call", binaryMessenger: registrar.messenger())
-    channel.setMethodCallHandler { call, result in
+    channel.setMethodCallHandler { [weak self] call, result in
       guard call.method == "getAcceptedCall" else {
         result(FlutterMethodNotImplemented)
         return
       }
-      result(SwiftFlutterCallkitIncomingPlugin.sharedInstance?.getAcceptedCall()?.toJSON())
+      result(self?.acceptedCall)
     }
+    acceptedCallChannel = channel
   }
 
   // MARK: - PushKit (VoIP)
@@ -260,4 +271,35 @@ extension AppDelegate: SKStoreProductViewControllerDelegate {
   func productViewControllerDidFinish(_ viewController: SKStoreProductViewController) {
     viewController.dismiss(animated: true)
   }
+}
+
+// MARK: - Actions CallKit sur l'appel exact
+
+extension AppDelegate: CallkitIncomingAppDelegate {
+  func onAccept(_ call: Call, _ action: CXAnswerCallAction) {
+    let json = call.data.toJSON()
+    acceptedCall = json
+    // App ouverte : Flutter rejoint tout de suite. App fermée : Flutter n'écoute
+    // pas encore, il redemande l'appel avec getAcceptedCall au démarrage.
+    acceptedCallChannel?.invokeMethod("accepted", arguments: json)
+    action.fulfill()
+  }
+
+  func onDecline(_ call: Call, _ action: CXEndCallAction) {
+    acceptedCallChannel?.invokeMethod("declined", arguments: call.data.toJSON())
+    action.fulfill()
+  }
+
+  func onEnd(_ call: Call, _ action: CXEndCallAction) {
+    if (acceptedCall?["id"] as? String)?.lowercased() == call.uuid.uuidString.lowercased() {
+      acceptedCall = nil
+    }
+    action.fulfill()
+  }
+
+  func onTimeOut(_ call: Call) {}
+
+  func didActivateAudioSession(_ audioSession: AVAudioSession) {}
+
+  func didDeactivateAudioSession(_ audioSession: AVAudioSession) {}
 }
