@@ -419,6 +419,8 @@ Future<void> clearPreferences() async {
   await removeKey('outgoing_call_order_id');
 
   await appStore.setLoggedIn(false);
+  // Déconnecté = visiteur : l'app ne doit plus se comporter en prestataire.
+  await appStore.setUserType('');
   await appStore.setFirstName('');
   await appStore.setLastName('');
   await appStore.setUserId(0);

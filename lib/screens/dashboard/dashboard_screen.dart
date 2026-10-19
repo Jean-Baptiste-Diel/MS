@@ -95,7 +95,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (appStore.userType == USER_TYPE_PROVIDER) {
+    // Accueil prestataire seulement avec une session ouverte : déconnecté, le
+    // téléphone garde le type du dernier compte, et l'accueil prestataire
+    // s'affichait sans jeton (« Authentication credentials were not provided »).
+    if (appStore.isLoggedIn && appStore.userType == USER_TYPE_PROVIDER) {
       return const ArtisanDashboardScreen();
     }
 
