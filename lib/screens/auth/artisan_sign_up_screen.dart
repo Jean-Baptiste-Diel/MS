@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/component/mison_terms_notice.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/auth/otp_verification_screen.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
@@ -1777,6 +1778,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           ),
         ),
         _fieldError('terms'),
+        8.height,
+        // Règle de tolérance zéro (App Store 1.2).
+        Text(kZeroToleranceRule, style: secondaryTextStyle(size: 13)),
       ],
     );
   }

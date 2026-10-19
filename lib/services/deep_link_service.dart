@@ -203,10 +203,8 @@ class DeepLinkService {
 
     if (appStore.isLoggedIn) {
       DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
-      TopToast.show(message: 'Referral code received: $referralCode');
     } else {
       SignInScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
-      TopToast.show(message: 'Referral code received: $referralCode. Use it during sign up!');
     }
   }
 

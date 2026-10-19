@@ -55,6 +55,8 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
     super.initState();
     ChatUnreadStore.start(); // pastilles « messages non lus »
     openColdStartAcceptedCall(); // appel décroché app fermée (iPhone et Android)
+    // App relancée alors qu'il est déjà chez le client : « Commencer la prestation ».
+    Future.delayed(const Duration(seconds: 1), ArtisanArrivalReporter.promptPendingStart);
     // Nouvelle version (facultative) ou version trop ancienne (bloquante).
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) checkAppUpdate(context);

@@ -2,6 +2,7 @@ import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/model/user_data_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/auth/change_password_screen.dart';
@@ -431,6 +432,26 @@ class ProfileFragmentState extends State<ProfileFragment> {
                           },
                         ).center();
                       },
+                    ),
+                    // Conditions générales et confidentialité, sous la version.
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        TextButton(
+                          onPressed: () => checkIfLink(context, appConfigurationStore.termConditions,
+                              title: language.termsCondition),
+                          child: Text("Conditions générales d'utilisation",
+                              style: secondaryTextStyle(size: 13, decoration: TextDecoration.underline)),
+                        ),
+                        Text('·', style: secondaryTextStyle()),
+                        TextButton(
+                          onPressed: () => checkIfLink(context, appConfigurationStore.privacyPolicy,
+                              title: language.privacyPolicy),
+                          child: Text('Confidentialité',
+                              style: secondaryTextStyle(size: 13, decoration: TextDecoration.underline)),
+                        ),
+                      ],
                     ),
                   ],
                 ),

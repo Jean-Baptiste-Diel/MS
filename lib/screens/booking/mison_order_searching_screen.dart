@@ -1,4 +1,6 @@
 import 'package:booking_system_flutter/utils/order_events.dart';
+import 'package:booking_system_flutter/screens/booking/mison_artisan_reviews_screen.dart';
+import 'package:booking_system_flutter/component/mison_price_agreement_card.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -54,11 +56,11 @@ class MisonOrderSearchingScreen extends StatefulWidget {
   /// commande ne rouvre pas l'écran par-dessus lui-même.
   static String? openOrderId;
 
-  /// Commande suivie sur la carte : en recherche, ou prestataire en approche,
-  /// sur place ou au travail. Sinon (terminée, annulée…), le détail.
+  /// Commande suivie sur la carte : en recherche, ou prestataire en approche
+  /// ou sur place. Dès que l'intervention commence (puis terminée, annulée…),
+  /// c'est le détail de la commande qui s'affiche.
   static bool canFollow(MisonOrder order) =>
-      (order.latitude ?? '').isNotEmpty &&
-      (order.isPending || order.isBeforeStart || (order.isInProgress && order.artisan != null));
+      (order.latitude ?? '').isNotEmpty && (order.isPending || order.isBeforeStart);
 
   /// Ouvre le suivi si la commande s'y prête, sinon son détail.
   static Widget screenFor(MisonOrder order) => canFollow(order)
@@ -116,7 +118,6 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
   // Suivi du prestataire (position + trajet), partagé avec le détail.
   ArtisanEtaTracker? _tracker;
   bool _fittedOnArtisan = false;
-  bool _detailsOpen = false;
 
   BitmapDescriptor? _artisanIcon;
   BitmapDescriptor? _clientIcon;
@@ -265,7 +266,6 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
     _glide?.cancel();
     setState(() {
       _shown.clear();
-      _detailsOpen = false;
     });
     if (announce) _showNotice(_Notice.found);
     _startTracking(order);
@@ -810,115 +810,99 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
     );
   }
 
-  /// « Détails » : déplie la photo, le nom, la note du prestataire et le service.
+  /// Le prestataire, toujours affiché : photo, nom, note et service. Un appui
+  /// ouvre les avis laissés par les clients.
   Widget _buildArtisanDetails(MisonOrder order) {
     final artisan = order.artisan;
     if (artisan == null) return const SizedBox.shrink();
     final reviews = artisan.totalReviews ?? 0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => setState(() => _detailsOpen = !_detailsOpen),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              children: [
-                const Icon(Icons.badge_outlined, color: kMisonGold, size: 20),
-                8.width,
-                Expanded(child: Text('Détails du prestataire', style: boldTextStyle(size: 15, color: kMisonGold))),
-                AnimatedRotation(
-                  turns: _detailsOpen ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 250),
-                  child: const Icon(Icons.keyboard_arrow_down_rounded, color: kMisonGold),
-                ),
-              ],
-            ),
-          ),
+    final canOpenReviews = (artisan.id ?? '').isNotEmpty;
+    return GestureDetector(
+      onTap: canOpenReviews
+          ? () => MisonArtisanReviewsScreen(artisanId: artisan.id!, artisanName: artisan.fullName).launch(context)
+          : null,
+      child: Container(
+        margin: const EdgeInsets.only(top: 4),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: context.cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kMisonGold.withValues(alpha: 0.25)),
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeInOut,
-          alignment: Alignment.topCenter,
-          child: !_detailsOpen
-              ? const SizedBox(width: double.infinity)
-              : Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: context.cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: kMisonGold.withValues(alpha: 0.25)),
+        child: Row(
+          children: [
+            CachedImageWidget(
+              url: artisan.profilePictureUrl ?? '',
+              height: 64,
+              width: 64,
+              fit: BoxFit.cover,
+              circle: true,
+            ),
+            14.width,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    artisan.fullName.isEmpty ? 'Prestataire Mison' : artisan.fullName,
+                    style: boldTextStyle(size: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  child: Row(
+                  6.height,
+                  Row(
                     children: [
-                      CachedImageWidget(
-                        url: artisan.profilePictureUrl ?? '',
-                        height: 64,
-                        width: 64,
-                        fit: BoxFit.cover,
-                        circle: true,
-                      ),
-                      14.width,
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              artisan.fullName.isEmpty ? 'Prestataire Mison' : artisan.fullName,
-                              style: boldTextStyle(size: 16),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            6.height,
-                            Row(
-                              children: [
-                                for (var i = 1; i <= 5; i++)
-                                  Icon(
-                                    artisan.rating >= i
-                                        ? Icons.star_rounded
-                                        : artisan.rating >= i - 0.5
-                                            ? Icons.star_half_rounded
-                                            : Icons.star_outline_rounded,
-                                    color: kMisonGold,
-                                    size: 18,
-                                  ),
-                                6.width,
-                                Flexible(
-                                  child: Text(
-                                    reviews == 0
-                                        ? 'Nouveau'
-                                        : '${artisan.rating.toStringAsFixed(1)} ($reviews avis)',
-                                    style: secondaryTextStyle(size: 12),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            8.height,
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.handyman_rounded, color: kMisonGold, size: 14),
-                                5.width,
-                                Flexible(
-                                  child: Text(
-                                    order.service?.name ?? '',
-                                    style: boldTextStyle(size: 12, color: kMisonGold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                      for (var i = 1; i <= 5; i++)
+                        Icon(
+                          artisan.rating >= i
+                              ? Icons.star_rounded
+                              : artisan.rating >= i - 0.5
+                                  ? Icons.star_half_rounded
+                                  : Icons.star_outline_rounded,
+                          color: kMisonGold,
+                          size: 18,
+                        ),
+                      6.width,
+                      Flexible(
+                        child: Text(
+                          reviews == 0 ? 'Nouveau' : '${artisan.rating.toStringAsFixed(1)} ($reviews avis)',
+                          style: secondaryTextStyle(size: 12),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-                ),
+                  if (canOpenReviews) ...[
+                    6.height,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Voir les avis', style: boldTextStyle(size: 13, color: kMisonGold)),
+                        const Icon(Icons.chevron_right_rounded, color: kMisonGold, size: 18),
+                      ],
+                    ),
+                  ],
+                  8.height,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.handyman_rounded, color: kMisonGold, size: 14),
+                      5.width,
+                      Flexible(
+                        child: Text(
+                          order.service?.name ?? '',
+                          style: boldTextStyle(size: 12, color: kMisonGold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -931,65 +915,80 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
       decoration: BoxDecoration(
         color: context.scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, -4))],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, -4))
+        ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (searching || order == null) ...[
-            _buildSearchTitle(),
-            // Recherche prise en charge par l'équipe : on explique au client.
-            if (_exhausted) ...[
-              6.height,
-              Text(
-                'Aucun prestataire disponible pour le moment. '
-                "Notre équipe s'en occupe et vous prévient dès qu'un prestataire est trouvé.",
-                style: secondaryTextStyle(size: 13),
-              ),
-            ],
-            if (order != null) ...[
-              16.height,
-              Row(children: [
-                const Icon(Icons.handyman_rounded, color: kMisonGold, size: 20),
-                10.width,
-                Expanded(child: Text(order.service?.name ?? '', style: primaryTextStyle(size: 14, weight: FontWeight.w600))),
-              ]),
-              if ((order.serviceAddress ?? '').isNotEmpty) ...[
-                8.height,
+      // Panneau plus haut avec la carte du prix : il défile au lieu de
+      // déborder sur les petits écrans.
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (searching || order == null) ...[
+              _buildSearchTitle(),
+              // Recherche prise en charge par l'équipe : on explique au client.
+              if (_exhausted) ...[
+                6.height,
+                Text(
+                  'Aucun prestataire disponible pour le moment. '
+                  "Notre équipe s'en occupe et vous prévient dès qu'un prestataire est trouvé.",
+                  style: secondaryTextStyle(size: 13),
+                ),
+              ],
+              if (order != null) ...[
+                16.height,
                 Row(children: [
-                  Icon(Icons.location_on_rounded, color: Colors.grey.shade600, size: 20),
+                  const Icon(Icons.handyman_rounded, color: kMisonGold, size: 20),
                   10.width,
                   Expanded(
-                    child: Text(order.serviceAddress!, style: secondaryTextStyle(size: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  ),
+                      child:
+                          Text(order.service?.name ?? '', style: primaryTextStyle(size: 14, weight: FontWeight.w600))),
                 ]),
+                if ((order.serviceAddress ?? '').isNotEmpty) ...[
+                  8.height,
+                  Row(children: [
+                    Icon(Icons.location_on_rounded, color: Colors.grey.shade600, size: 20),
+                    10.width,
+                    Expanded(
+                      child: Text(order.serviceAddress!,
+                          style: secondaryTextStyle(size: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ),
+                  ]),
+                ],
+              ],
+            ] else ...[
+              _buildTrackingTitle(order),
+              10.height,
+              _buildArtisanDetails(order),
+              // Prix à valider avant que le prestataire se mette en route.
+              if (order.needsPriceAgreement || (order.isPriceAgreed && order.isBeforeStart)) ...[
+                14.height,
+                MisonPriceAgreementCard(order: order, isArtisan: false, onChanged: _refresh),
               ],
             ],
-          ] else ...[
-            _buildTrackingTitle(order),
-            10.height,
-            _buildArtisanDetails(order),
-          ],
-          18.height,
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: OutlinedButton(
-              onPressed: _openDetail,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: kMisonGold,
-                side: const BorderSide(color: kMisonGold, width: 1.5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            18.height,
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton(
+                onPressed: _openDetail,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: kMisonGold,
+                  side: const BorderSide(color: kMisonGold, width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: Text('Voir ma commande', style: boldTextStyle(size: 15, color: kMisonGold)),
               ),
-              child: Text('Voir ma commande', style: boldTextStyle(size: 15, color: kMisonGold)),
             ),
-          ),
-          if (order == null || order.canCancelByClient) ...[
-            10.height,
-            MisonDiscreetCancelButton(label: 'Annuler la commande', onTap: _cancel, expanded: true),
+            if (order == null || order.canCancelByClient) ...[
+              10.height,
+              MisonDiscreetCancelButton(label: 'Annuler la commande', onTap: _cancel, expanded: true),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

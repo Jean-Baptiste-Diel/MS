@@ -10,6 +10,7 @@ import 'dart:ui' as ui;
 import 'dart:math' show sin, cos, sqrt, atan2;
 
 import 'package:booking_system_flutter/component/mison_account_sheets.dart';
+import 'package:booking_system_flutter/component/mison_price_agreement_card.dart';
 import 'package:booking_system_flutter/utils/artisan_eta_tracker.dart';
 import 'package:booking_system_flutter/component/app_empty_state.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
@@ -244,22 +245,6 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         1000;
   }
 
-  /// Téléchargement direct du reçu en image JPEG (.jpg) dans le téléphone.
-  Future<void> _downloadInvoice(MisonOrder order) async {
-    try {
-      final where = await downloadOrderInvoiceJpeg(context, order);
-      TopToast.show(
-        message: 'Reçu JPEG enregistré dans $where',
-        type: TopToastType.success,
-      );
-    } catch (e) {
-      TopToast.show(
-        message: 'Impossible de télécharger le reçu JPEG.',
-        type: TopToastType.error,
-      );
-    }
-  }
-
   /// Ouvre DIRECTEMENT le menu Share Sheet natif (WhatsApp, Mail, Save Image, Save to Files, etc.) avec le reçu en image.
   void _shareInvoice(MisonOrder order) {
     shareMisonReceiptDirectly(context, order);
@@ -466,6 +451,17 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         },
       ),
     );
+  }
+
+  /// Prestation terminée au prix convenu : le client est invité à payer.
+  Future<void> _finishWithAgreedPrice(MisonOrder order) async {
+    appStore.setLoading(true);
+    try {
+      final res = await setRealizationFee(order.id!, order.agreedPrice!);
+      TopToast.show(message: res.message ?? 'Succès', type: TopToastType.success);
+      init(); setState(() {});
+    } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
+    finally { appStore.setLoading(false); }
   }
 
   Future<void> _cancelOrder(String id) async {
@@ -677,10 +673,17 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                   }
                 },
                 onChat: () => _openChat(order),
-                onSetRealizationFee: () => _showSetFeeModal(
-                  title: 'Frais de prestation',
-                  apiCall: (amount) => setRealizationFee(order.id!, amount),
-                ),
+                onSetRealizationFee: order.isPriceAgreed
+                    ? () => _confirm(
+                          title: 'Terminer la prestation ?',
+                          subtitle: 'Le client va payer le prix convenu de ${formatFcfa(order.agreedPrice!)} avec Wave.',
+                          onConfirm: () => _finishWithAgreedPrice(order),
+                        )
+                    : () => _showSetFeeModal(
+                          title: 'Frais de prestation',
+                          apiCall: (amount) => setRealizationFee(order.id!, amount),
+                        ),
+                onPriceChanged: () { init(); setState(() {}); },
                 // Client : panneau d'annulation Mison (motif, chargement) ;
                 // ouvrier : confirmation de désistement inchangée
                 onCancel: appStore.userType == USER_TYPE_PROVIDER
@@ -700,7 +703,6 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 onPay: () => _showPaymentModal(order),
                 paymentVerifying: _paymentVerifying,
                 onRated: () { init(); setState(() {}); },
-                onDownloadInvoice: () => _downloadInvoice(order),
                 onShareInvoice: () => _shareInvoice(order),
                 onCall: () => _startCall(order),
                 onTrack: () => Navigator.push(context, MaterialPageRoute(
@@ -743,11 +745,11 @@ class _OrderDetailBody extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onChat;
   final VoidCallback onSetRealizationFee;
+  final VoidCallback onPriceChanged;
   final VoidCallback onCancel;
   final VoidCallback onPay;
   final bool paymentVerifying;
   final VoidCallback onRated;
-  final VoidCallback onDownloadInvoice;
   final VoidCallback onShareInvoice;
   final VoidCallback onCall;
   final VoidCallback onTrack;
@@ -767,11 +769,11 @@ class _OrderDetailBody extends StatelessWidget {
     required this.onStart,
     required this.onChat,
     required this.onSetRealizationFee,
+    required this.onPriceChanged,
     required this.onCancel,
     required this.onPay,
     this.paymentVerifying = false,
     required this.onRated,
-    required this.onDownloadInvoice,
     required this.onShareInvoice,
     required this.onCall,
     required this.onTrack,
@@ -825,6 +827,14 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionIcon = Icons.check_circle_outline_rounded;
       primaryActionColor = kMisonGold; // Accepter / Confirmer en doré
       primaryActionTap = onAccept;
+    } else if (showGoButton && order.needsPriceAgreement) {
+      // Pas de déplacement avant que le client ait validé le prix.
+      primaryActionLabel = 'Aller chez le client';
+      primaryActionIcon = Icons.lock_clock_rounded;
+      primaryActionColor = Colors.grey.shade400;
+      primaryActionTap = () => TopToast.show(
+            message: "Mettez-vous d'abord d'accord sur le prix : le client doit le valider avant votre déplacement.",
+          );
     } else if (showGoButton) {
       primaryActionLabel = 'Aller chez le client';
       primaryActionIcon = Icons.directions_car_rounded;
@@ -836,7 +846,7 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionColor = Colors.green;
       primaryActionTap = onStart;
     } else if (showSetFeeButton) {
-      primaryActionLabel = 'Définir les frais de prestation';
+      primaryActionLabel = order.isPriceAgreed ? 'Terminer la prestation' : 'Définir les frais de prestation';
       primaryActionIcon = Icons.receipt_long_rounded;
       primaryActionColor = completed;
       primaryActionTap = onSetRealizationFee;
@@ -1007,6 +1017,14 @@ class _OrderDetailBody extends StatelessWidget {
                   ],
                 ],
 
+                // ── Accord sur le prix avant le déplacement (client et ouvrier),
+                // puis rappel du prix convenu jusqu'à la fin de la prestation ──
+                if (order.needsPriceAgreement ||
+                    (order.isPriceAgreed && (order.isBeforeStart || order.isInProgress))) ...[
+                  MisonPriceAgreementCard(order: order, isArtisan: _isArtisan, onChanged: onPriceChanged),
+                  16.height,
+                ],
+
                 // ── Infos commande (le récapitulatif prestataire les contient déjà)
                 if (!_artisanSummary) _InfoCard(children: [
                   _InfoRow(icon: Icons.calendar_today_rounded, label: 'Date', value: fmtDate(order.serviceDate)),
@@ -1085,30 +1103,11 @@ class _OrderDetailBody extends StatelessWidget {
                   ]),
                 ],
 
-                // ── Prestation terminée : Télécharger & Partager la facture ────
+                // ── Prestation terminée : Partager la facture ──────────────────
                 if (order.isCompleted) ...[
                   16.height,
                   Row(
                     children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 50,
-                          child: OutlinedButton.icon(
-                            onPressed: onDownloadInvoice,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: kMisonGold,
-                              side: const BorderSide(color: kMisonGold, width: 1.5),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            ),
-                            icon: const Icon(Icons.download_rounded),
-                            label: Text(
-                              'Télécharger',
-                              style: boldTextStyle(size: 14, color: kMisonGold),
-                            ),
-                          ),
-                        ),
-                      ),
-                      12.width,
                       Expanded(
                         child: SizedBox(
                           height: 50,

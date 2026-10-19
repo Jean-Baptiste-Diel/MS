@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/component/mison_service_image_header.dart';
+import 'package:booking_system_flutter/component/mison_price_agreement_card.dart' show MisonWavePaymentNotice;
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
@@ -180,6 +181,10 @@ class _MisonConfirmBookingScreenState
                       ),
 
                       24.height,
+
+                      // ── Paiement : uniquement par Wave dans l'app ─────────
+                      const MisonWavePaymentNotice(),
+                      12.height,
 
                       // ── Note CGU ───────────────────────────────────────────
                       Container(

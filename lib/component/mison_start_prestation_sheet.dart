@@ -10,7 +10,21 @@ const Color _startGreen = Color(0xFF2E7D32);
 /// d'annulation) : un seul bouton, chargement pendant la requête. Il ne se ferme
 /// pas (ni geste, ni appui à côté, ni bouton retour) : il disparaît seulement
 /// quand le prestataire a appuyé sur « Oui, commencer » et que c'est enregistré. Retourne true si la prestation a démarré.
+/// Panneau déjà à l'écran (ouvert depuis le détail ou à l'arrivée) : un
+/// second ne s'ouvre pas par-dessus.
+bool misonStartSheetOpen = false;
+
 Future<bool> showMisonStartPrestationSheet(BuildContext context, {required String orderId}) async {
+  if (misonStartSheetOpen) return false;
+  misonStartSheetOpen = true;
+  try {
+    return await _showStartSheet(context, orderId: orderId);
+  } finally {
+    misonStartSheetOpen = false;
+  }
+}
+
+Future<bool> _showStartSheet(BuildContext context, {required String orderId}) async {
   final started = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,

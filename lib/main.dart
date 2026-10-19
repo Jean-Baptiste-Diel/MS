@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:booking_system_flutter/utils/artisan_arrival_reporter.dart';
 import 'dart:io' show Platform;
 
 import 'package:flutter/services.dart' show MethodChannel;
@@ -605,6 +606,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       emitOrderListRefresh(badge: false);
+      // Prestataire arrivé chez le client : le panneau « Commencer » revient.
+      ArtisanArrivalReporter.promptPendingStart();
     }
   }
 

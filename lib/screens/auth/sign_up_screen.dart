@@ -5,6 +5,7 @@ import 'package:booking_system_flutter/component/animated_dropdown.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/component/mison_terms_notice.dart';
 import 'package:booking_system_flutter/model/user_data_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/auth/otp_verification_screen.dart';
@@ -697,6 +698,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
+  /// Règle de tolérance zéro, sous la case des CGU (App Store 1.2).
+  Widget _buildZeroToleranceRule() {
+    return Text(kZeroToleranceRule, style: secondaryTextStyle(size: 13));
+  }
+
   Widget _buildSubmitButton() {
     return GestureDetector(
       onTapDown: (_) => setState(() => _submitPressed = true),
@@ -898,7 +904,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
             // ── T&C + Submit ──────────────────────────────────────────
             _buildTcAcceptWidget(),
-            4.height,
+            _buildZeroToleranceRule(),
+            20.height,
             _buildSubmitButton(),
             _buildFooterWidget(),
           ],

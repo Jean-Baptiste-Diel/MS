@@ -2,6 +2,7 @@ import 'package:booking_system_flutter/screens/auth/otp_verification_screen.dart
 import 'package:booking_system_flutter/component/animated_dropdown.dart';
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/base_scaffold_body.dart';
+import 'package:booking_system_flutter/component/mison_terms_notice.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/auth/otp_login_screen.dart';
 import 'package:booking_system_flutter/screens/auth/profile_selection_screen.dart';
@@ -360,7 +361,7 @@ class _SignInScreenState extends State<SignInScreen> {
   void onLoginSuccessRedirection() {
     afterBuildCreated(() {
       appStore.setLoading(false);
-      TopToast.show(message: "Your Account signed in successfully.", type: TopToastType.success);
+      TopToast.show(message: "Vous êtes connecté.", type: TopToastType.success);
       if (widget.isFromServiceBooking.validate() ||
           widget.isFromDashboard.validate() ||
           widget.returnExpected.validate()) {
@@ -1050,7 +1051,10 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
           ],
-        )
+        ),
+        12.height,
+        // Conditions acceptées en se connectant (App Store 1.2).
+        MisonTermsNotice(lead: 'En vous connectant', linkColor: _brandGold),
       ],
     );
   }

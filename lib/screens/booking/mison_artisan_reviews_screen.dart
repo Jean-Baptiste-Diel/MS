@@ -1,7 +1,11 @@
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
+import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
+import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
+import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
@@ -18,6 +22,35 @@ class MisonArtisanReviewsScreen extends StatefulWidget {
 
 class _MisonArtisanReviewsScreenState extends State<MisonArtisanReviewsScreen> {
   late Future<Map<String, dynamic>> _future;
+
+  /// Avis signalés : masqués tout de suite.
+  final Set<String> _reported = {};
+
+  Future<void> _report(String orderId) async {
+    // Visiteur sans compte : signaler demande d'être connecté.
+    if (!appStore.isLoggedIn) {
+      TopToast.show(message: 'Connectez-vous pour signaler un avis.');
+      await SignInScreen(returnExpected: true).launch(context);
+      if (!appStore.isLoggedIn || !mounted) return;
+    }
+    final reason = await showMisonReportSheet(
+      context,
+      title: 'Signaler cet avis',
+      subtitle: "Pourquoi signalez-vous cet avis ? L'équipe Mison le vérifiera sous 24 h.",
+    );
+    if (reason == null) return;
+    try {
+      await reportArtisanReview(widget.artisanId, orderId, reason: reason);
+      if (!mounted) return;
+      setState(() => _reported.add(orderId));
+      TopToast.show(
+        message: "Merci, votre signalement a été envoyé à l'équipe Mison. Il sera traité sous 24 h.",
+        type: TopToastType.success,
+      );
+    } catch (_) {
+      TopToast.show(message: 'Signalement non envoyé, réessayez.', type: TopToastType.error);
+    }
+  }
 
   @override
   void initState() {
@@ -73,7 +106,11 @@ class _MisonArtisanReviewsScreenState extends State<MisonArtisanReviewsScreen> {
               );
             }
             final data = snap.data ?? {};
-            final reviews = (data['reviews'] as List?)?.whereType<Map>().toList() ?? [];
+            final reviews = (data['reviews'] as List?)
+                    ?.whereType<Map>()
+                    .where((r) => !_reported.contains(r['id']?.toString()))
+                    .toList() ??
+                [];
             final average = double.tryParse('${data['average_rating']}') ?? 0;
             final total = int.tryParse('${data['total_reviews']}') ?? reviews.length;
 
@@ -127,6 +164,16 @@ class _MisonArtisanReviewsScreenState extends State<MisonArtisanReviewsScreen> {
                             child: Text((r['client_name'] ?? 'Client').toString(), style: boldTextStyle(size: 15)),
                           ),
                           Text(_date(r['rated_at']?.toString()), style: secondaryTextStyle(size: 13)),
+                          4.width,
+                          // Signaler un avis choquant ou injurieux.
+                          InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () => _report(r['id'].toString()),
+                            child: const Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Icon(Icons.flag_outlined, size: 18, color: Colors.grey),
+                            ),
+                          ),
                         ]),
                         6.height,
                         _stars(int.tryParse('${r['rating']}') ?? 0),

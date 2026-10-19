@@ -132,6 +132,16 @@ class SupportChatService {
   /// false : conversation en lecture seule (prestation terminée, aucune
   /// nouvelle commande en cours entre le client et le prestataire).
   bool canSend = true;
+
+  /// Blocage (chat de commande) : j'ai bloqué l'interlocuteur, ou il m'a bloqué.
+  bool blockedByMe = false;
+  bool blockedMe = false;
+  bool get isBlocked => blockedByMe || blockedMe;
+
+  final _blockedController = StreamController<void>.broadcast();
+  /// L'interlocuteur m'a bloqué pendant la discussion (envoi refusé).
+  Stream<void> get blockedStream => _blockedController.stream;
+
   final _closedController = StreamController<void>.broadcast();
   Stream<void> get closedStream => _closedController.stream;
   bool get isReady => _isReady;
@@ -191,6 +201,7 @@ class SupportChatService {
       if (_conversationId!.isEmpty) throw 'Conversation ID introuvable dans la réponse';
       // Prestation terminée : historique lisible, plus d'envoi ni d'appel.
       canSend = body['can_send'] != false;
+      _readBlocked(body);
       return _conversationId!;
     }
 
@@ -273,6 +284,10 @@ class SupportChatService {
         if (json['code'] == 'conversation_closed') {
           canSend = false;
           if (!_closedController.isClosed) _closedController.add(null);
+        } else if (json['code'] == 'blocked') {
+          canSend = false;
+          blockedMe = blockedMe || !blockedByMe;
+          if (!_blockedController.isClosed) _blockedController.add(null);
         }
         if (!_errorController.isClosed) _errorController.add(error);
       }
@@ -367,6 +382,59 @@ class SupportChatService {
     return true;
   }
 
+  // ── Modération (chat de commande) ─────────────────────────────────────────
+
+  void _readBlocked(Map body) {
+    blockedByMe = body['blocked_by_me'] == true;
+    blockedMe = body['blocked_me'] == true;
+  }
+
+  Future<http.Response> _postModeration(String action, Map<String, dynamic> body) {
+    return http.post(
+      Uri.parse('$_CONVERSATIONS_ENDPOINT/$_conversationId/$action'),
+      headers: {
+        HttpHeaders.authorizationHeader: 'Bearer ${appStore.token}',
+        HttpHeaders.contentTypeHeader: 'application/json',
+        HttpHeaders.acceptHeader: 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+  }
+
+  /// Signale un message de l'interlocuteur ([messageId]) ou l'interlocuteur
+  /// lui-même. Retourne true si le signalement est envoyé.
+  Future<bool> report({String? messageId, required String reason}) async {
+    if (_conversationId == null) return false;
+    try {
+      final response = await _postModeration('report', {
+        if (messageId != null) 'message_id': messageId,
+        'reason': reason,
+      });
+      _log('OrderChat report: ${response.statusCode}');
+      return response.statusCode == 201;
+    } catch (e) {
+      _log('OrderChat report error: $e');
+      return false;
+    }
+  }
+
+  /// Bloque (ou débloque) l'interlocuteur. Retourne true si c'est fait.
+  Future<bool> setBlocked(bool blocked, {String reason = 'other'}) async {
+    if (_conversationId == null) return false;
+    try {
+      final response = await _postModeration(blocked ? 'block' : 'unblock', {'reason': reason});
+      _log('OrderChat ${blocked ? 'block' : 'unblock'}: ${response.statusCode}');
+      if (response.statusCode != 200) return false;
+      final body = jsonDecode(response.body) as Map;
+      canSend = body['can_send'] != false;
+      _readBlocked(body);
+      return true;
+    } catch (e) {
+      _log('OrderChat block error: $e');
+      return false;
+    }
+  }
+
   void dispose() {
     _disposed = true;
     _channel?.sink.close();
@@ -375,6 +443,7 @@ class SupportChatService {
     _connectionController.close();
     _errorController.close();
     _closedController.close();
+    _blockedController.close();
   }
 }
 

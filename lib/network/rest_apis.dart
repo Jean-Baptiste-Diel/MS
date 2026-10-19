@@ -716,6 +716,13 @@ DateTime? _servicesCachedAt;
 /// (les images suivent, via le cache disque de CachedNetworkImage).
 const _kServicesCacheKey = 'mison_services_cache';
 
+/// GET /api/banners - Images du carrousel de l'accueil (réglées dans le
+/// back-office) : [{id, title, image_url, service_id}].
+Future<List<Map<String, dynamic>>> getHomeBanners() async {
+  final res = await handleResponse(await buildHttpResponse('banners', method: HttpMethodType.GET));
+  return ((res as Map)['data'] as List? ?? []).whereType<Map>().map((b) => b.cast<String, dynamic>()).toList();
+}
+
 Future<MisonServicesResponse> getMisonServices({bool forceRefresh = false}) async {
   final now = DateTime.now();
   if (!forceRefresh &&
@@ -812,6 +819,16 @@ Future<Map<String, dynamic>> getArtisanReviews(String artisanId) async {
   final res = await handleResponse(
       await buildHttpResponse('artisans/$artisanId/reviews', method: HttpMethodType.GET));
   return ((res as Map)['data'] as Map?)?.cast<String, dynamic>() ?? {};
+}
+
+/// Signale l'avis laissé sur la commande [orderId] : il disparaît pour moi et
+/// l'équipe Mison est prévenue.
+Future<void> reportArtisanReview(String artisanId, String orderId, {required String reason}) async {
+  await handleResponse(await buildHttpResponse(
+    'artisans/$artisanId/reviews/$orderId/report',
+    request: {'reason': reason},
+    method: HttpMethodType.POST,
+  ));
 }
 
 Future<MisonOrderDetailResponse> getMisonOrderDetail(String orderId) async {
@@ -981,6 +998,26 @@ Future<void> logOrderCall(String orderId, {required String outcome, int duration
   } catch (e) {
     _log('logOrderCall: $e');
   }
+}
+
+/// Accord sur le prix avant le déplacement : proposer (ou contre-proposer),
+/// accepter ou refuser le prix proposé par l'autre partie.
+Future<MisonActionResponse> proposeOrderPrice(String orderId, int price) =>
+    _priceAction(orderId, 'propose-price', {'price': price});
+
+Future<MisonActionResponse> acceptOrderPrice(String orderId) => _priceAction(orderId, 'accept-price');
+
+Future<MisonActionResponse> declineOrderPrice(String orderId) => _priceAction(orderId, 'decline-price');
+
+Future<MisonActionResponse> _priceAction(String orderId, String action, [Map<String, dynamic>? body]) async {
+  final response = await buildHttpResponse(
+    'orders/$orderId/$action',
+    method: HttpMethodType.POST,
+    request: body,
+  );
+  final result = MisonActionResponse.fromJson(await handleResponse(response));
+  _orderChanged(orderId);
+  return result;
 }
 
 /// POST /api/orders/{id}/depart - L'ouvrier part chez le client (mini-carte)

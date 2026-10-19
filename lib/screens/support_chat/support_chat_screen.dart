@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:booking_system_flutter/utils/mison_call_utils.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
+import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
@@ -67,6 +68,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   StreamSubscription? _connectionSub;
   StreamSubscription? _errorSub;
   StreamSubscription? _closedSub;
+  StreamSubscription? _blockedSub;
   StreamSubscription<String?>? _orderEventsSub;
   bool _left = false;
 
@@ -107,8 +109,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       final conversationId = widget.orderId != null
           ? await _service.createOrGetOrderConversation(widget.orderId!)
           : await _service.createOrGetConversation();
-      // Prestation terminée : la discussion n'existe plus pour eux.
-      if (widget.orderId != null && !_service.canSend) {
+      // Prestation terminée : la discussion n'existe plus pour eux. (Un
+      // blocage aussi empêche d'écrire, mais la discussion reste ouverte.)
+      if (widget.orderId != null && !_service.canSend && !_service.isBlocked) {
         _leaveClosedChat();
         return;
       }
@@ -144,6 +147,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       // La prestation s'est terminée pendant la discussion : lecture seule.
       _closedSub?.cancel();
       _closedSub = _service.closedStream.listen((_) => _leaveClosedChat());
+      // L'interlocuteur m'a bloqué : plus d'envoi possible.
+      _blockedSub?.cancel();
+      _blockedSub = _service.blockedStream.listen((_) {
+        if (mounted) setState(() {});
+      });
 
       _errorSub?.cancel();
       _errorSub = _service.errorStream.listen((error) {
@@ -287,6 +295,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     _connectionSub?.cancel();
     _errorSub?.cancel();
     _closedSub?.cancel();
+    _blockedSub?.cancel();
     _orderEventsSub?.cancel();
     _service.dispose();
     _scrollController.dispose();
@@ -349,13 +358,14 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             icon: const Icon(Icons.arrow_back, color: kMisonDark),
             onPressed: () => finish(context),
           ),
+          actions: _isOrderChat && !_isConnecting && _error == null ? [_buildModerationMenu()] : null,
         ),
         body: DotGridBackground(
           child: Column(
             children: [
               Expanded(child: _buildBody()),
               if (!_isConnecting && _error == null)
-                _buildInputBar(),
+                _isOrderChat && _service.isBlocked ? _buildBlockedBar() : _buildInputBar(),
             ],
           ),
         ),
@@ -536,10 +546,13 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     const Color bubbleOther = Color(0xFF1A1A1A);
     final isFailed = msg.status == MessageStatus.failed;
     final isPending = msg.status == MessageStatus.pending;
+    final canReport = _isOrderChat && !isMe && msg.id.isNotEmpty;
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Column(
+      child: GestureDetector(
+        onLongPress: canReport ? () => _reportMessage(msg) : null,
+        child: Column(
         crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           if (!isMe && msg.senderName.isNotEmpty)
@@ -615,6 +628,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -663,6 +677,137 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     );
   }
 
+  bool get _isOrderChat => widget.orderId != null;
+
+  String get _peerName => widget.callPeerName?.isNotEmpty == true ? widget.callPeerName! : 'cette personne';
+
+  // ── Signaler / bloquer (chat de commande) ──────────────────────────────────
+
+  Widget _buildModerationMenu() {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert_rounded, color: kMisonDark),
+      onSelected: (value) {
+        if (value == 'report') _reportUser();
+        if (value == 'block') _block();
+        if (value == 'unblock') _unblock();
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(
+          value: 'report',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.flag_outlined),
+            title: Text('Signaler'),
+          ),
+        ),
+        PopupMenuItem(
+          value: _service.blockedByMe ? 'unblock' : 'block',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              _service.blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded,
+              color: _service.blockedByMe ? null : const Color(0xFFE53935),
+            ),
+            title: Text(
+              _service.blockedByMe ? 'Débloquer' : 'Bloquer',
+              style: TextStyle(color: _service.blockedByMe ? null : const Color(0xFFE53935)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _sendReport({String? messageId, required String reason}) async {
+    final ok = await _service.report(messageId: messageId, reason: reason);
+    TopToast.show(
+      message: ok
+          ? "Merci, votre signalement a été envoyé à l'équipe Mison. Il sera traité sous 24 h."
+          : 'Signalement non envoyé, réessayez.',
+      type: ok ? TopToastType.success : TopToastType.error,
+    );
+  }
+
+  Future<void> _reportMessage(SupportChatMessage msg) async {
+    final reason = await showMisonReportSheet(
+      context,
+      title: 'Signaler ce message',
+      subtitle: "Pourquoi signalez-vous ce message ? L'équipe Mison le vérifiera sous 24 h.",
+    );
+    if (reason == null) return;
+    await _sendReport(messageId: msg.id, reason: reason);
+  }
+
+  Future<void> _reportUser() async {
+    final reason = await showMisonReportSheet(
+      context,
+      title: 'Signaler $_peerName',
+      subtitle: "Pourquoi signalez-vous cette personne ? L'équipe Mison vérifiera sous 24 h.",
+    );
+    if (reason == null) return;
+    await _sendReport(reason: reason);
+  }
+
+  Future<void> _block() async {
+    final reason = await showMisonReportSheet(
+      context,
+      icon: Icons.block_rounded,
+      title: 'Bloquer $_peerName ?',
+      subtitle: 'Vous ne verrez plus ses messages, et vous ne pourrez plus vous écrire ni vous appeler. '
+          "L'équipe Mison sera prévenue. Pourquoi bloquez-vous cette personne ?",
+    );
+    if (reason == null) return;
+    final ok = await _service.setBlocked(true, reason: reason);
+    if (!mounted) return;
+    if (!ok) {
+      TopToast.show(message: 'Blocage impossible, réessayez.', type: TopToastType.error);
+      return;
+    }
+    // Ses messages disparaissent tout de suite.
+    setState(() => _messages.removeWhere((m) => !m.isMe));
+    TopToast.show(message: "$_peerName est bloqué. L'équipe Mison a été prévenue.", type: TopToastType.success);
+  }
+
+  Future<void> _unblock() async {
+    final ok = await _service.setBlocked(false);
+    if (!mounted) return;
+    if (!ok) {
+      TopToast.show(message: 'Déblocage impossible, réessayez.', type: TopToastType.error);
+      return;
+    }
+    TopToast.show(message: '$_peerName est débloqué.', type: TopToastType.success);
+    _historySub?.cancel();
+    _newMessageSub?.cancel();
+    _initChat(); // ses messages réapparaissent
+  }
+
+  Widget _buildBlockedBar() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(16, 14, 16, MediaQuery.of(context).padding.bottom + 14),
+      color: context.cardColor,
+      child: Row(
+        children: [
+          const Icon(Icons.block_rounded, color: Colors.grey),
+          12.width,
+          Expanded(
+            child: Text(
+              _service.blockedByMe
+                  ? 'Vous avez bloqué $_peerName.'
+                  : 'Vous ne pouvez plus écrire à cette personne.',
+              style: secondaryTextStyle(size: 14),
+            ),
+          ),
+          if (_service.blockedByMe)
+            TextButton(
+              onPressed: _unblock,
+              child: Text('Débloquer', style: boldTextStyle(color: kMisonGold, size: 14)),
+            ),
+        ],
+      ),
+    );
+  }
+
   /// Appel possible : chat d'une commande encore en cours.
   bool get _canCall => widget.orderId != null && widget.callPeerName != null && _service.canSend;
 
@@ -670,7 +815,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     if (_left) return;
     try {
       await _service.createOrGetOrderConversation(widget.orderId!);
-      if (!_service.canSend) _leaveClosedChat();
+      if (!_service.canSend && !_service.isBlocked) _leaveClosedChat();
+      if (mounted) setState(() {});
     } catch (_) {
       // réseau : le serveur refusera de toute façon les envois
     }

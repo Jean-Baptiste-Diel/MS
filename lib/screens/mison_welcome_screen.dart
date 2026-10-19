@@ -1,5 +1,5 @@
 import 'dart:ui';
-import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
+import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/images.dart';
 import 'package:flutter/material.dart';
@@ -68,7 +68,9 @@ class _MisonWelcomeScreenState extends State<MisonWelcomeScreen>
 
   void _onCommencer() async {
     await setValue(IS_FIRST_TIME, false);
-    SignInScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
+    if (!mounted) return;
+    // Accueil accessible sans compte ; la connexion est proposée pour commander.
+    DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
   }
 
   @override

@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/constant.dart';
+import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/component/mison_start_prestation_sheet.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
@@ -55,13 +57,12 @@ class ArtisanArrivalReporter {
     }
   }
 
-  static final Set<String> _prompted = {};
-
-  /// Sur les lieux : le panneau « Commencer la prestation » s'ouvre tout seul
-  /// (une fois par commande), si l'app est à l'écran. Sinon, le rappel dans
-  /// la barre de notifications prend le relais.
+  /// Sur les lieux : le panneau « Commencer la prestation » s'ouvre tout seul,
+  /// si l'app est à l'écran. Sinon, le rappel dans la barre de notifications
+  /// prend le relais, et le panneau revient au retour dans l'app
+  /// ([promptPendingStart]).
   static Future<void> _promptStart(String orderId) async {
-    if (!_prompted.add(orderId)) return;
+    if (misonStartSheetOpen) return;
     if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) return;
     final context = navigatorKey.currentContext;
     if (context == null || !context.mounted) return;
@@ -70,6 +71,29 @@ class ArtisanArrivalReporter {
     if (started) {
       OrderEvents.emit(orderId); // détail et listes à jour
       getMisonOrderDetail(orderId).ignore(); // retire le rappel de la barre
+    }
+  }
+
+  static bool _checkingPending = false;
+
+  /// Prestataire déjà arrivé chez le client mais prestation pas commencée :
+  /// le panneau bloquant revient (retour dans l'app, app relancée). Avant, il
+  /// ne s'ouvrait qu'une fois, à l'arrivée, et disparaissait si l'app était
+  /// quittée.
+  static Future<void> promptPendingStart() async {
+    if (misonStartSheetOpen || _checkingPending) return;
+    if (!appStore.isLoggedIn || appStore.userType != USER_TYPE_PROVIDER) return;
+    _checkingPending = true;
+    try {
+      // Liste du prestataire : ses commandes + celles en attente (sans
+      // prestataire, donc jamais « arrivé »).
+      final orders = (await getMisonOrders()).data ?? [];
+      final arrived = orders.where((o) => o.hasArrived && !o.needsArtisanConfirmation);
+      if (arrived.isNotEmpty) await _promptStart(arrived.first.id!);
+    } catch (e) {
+      log('promptPendingStart: $e');
+    } finally {
+      _checkingPending = false;
     }
   }
 }

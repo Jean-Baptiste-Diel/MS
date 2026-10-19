@@ -19,8 +19,9 @@ import 'package:nb_utils/nb_utils.dart';
 import '../../../booking/mison_search_service_screen.dart';
 import '../../../notification/notification_screen.dart';
 
-/// Slider qui affiche les images des services Mison
-/// Design identique à SliderDashboardComponent1
+/// Carrousel de l'accueil : images réglées dans le back-office (« Images de
+/// l'accueil »), indépendantes des services. Sans image côté serveur, l'image
+/// Mison intégrée à l'app s'affiche.
 class MisonSliderDashboardComponent extends StatefulWidget {
   final VoidCallback? callback;
 
@@ -46,7 +47,15 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
   }
 
   List<MisonService> _services = [];
+
+  /// Images du carrousel : {image_url, service_id} (back-office).
+  List<Map<String, dynamic>> _banners = [];
   bool _isLoading = true;
+
+  /// Image de secours, intégrée à l'app.
+  static const _fallbackBanner = 'assets/images/home_banner_mison.jpg';
+
+  int get _slideCount => _banners.isEmpty ? 1 : _banners.length;
 
   /// Suggestions affichées sous la barre pendant la saisie.
   List<MisonService> _suggestions = [];
@@ -68,6 +77,31 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
   void initState() {
     super.initState();
     _fetchServices();
+    _fetchBanners();
+  }
+
+  Future<void> _fetchBanners() async {
+    try {
+      final banners = await getHomeBanners();
+      if (!mounted) return;
+      setState(() {
+        _banners = banners.where((b) => (b['image_url'] ?? '').toString().isNotEmpty).toList();
+        _isLoading = false;
+      });
+      _startAutoSlide();
+      _precacheSlides();
+    } catch (e) {
+      log('Error fetching home banners: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Image touchée : ouvre la commande du service lié, s'il y en a un.
+  void _openBanner(Map<String, dynamic> banner) {
+    final serviceId = banner['service_id']?.toString();
+    if (serviceId == null || serviceId.isEmpty) return;
+    final service = _services.where((s) => s.id == serviceId).firstOrNull;
+    if (service != null) MisonBookingFormScreen(service: service).launch(context);
   }
 
   Future<void> _fetchServices() async {
@@ -77,15 +111,10 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
       // autres composants de l'accueil, ce qui ralentissait le chargement des
       // images du slider (bande passante saturée par des requêtes en double).
       final servicesResponse = await getMisonServices();
-      setState(() {
-        _services = servicesResponse.data ?? [];
-        _isLoading = false;
-      });
-      _startAutoSlide();
-      _precacheSlides();
+      if (!mounted) return;
+      setState(() => _services = servicesResponse.data ?? []);
     } catch (e) {
-      log('Error fetching services for slider: $e');
-      setState(() => _isLoading = false);
+      log('Error fetching services for search: $e');
     }
   }
 
@@ -95,8 +124,8 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
   void _precacheSlides() {
     if (!mounted) return;
     final width = (context.width() * MediaQuery.of(context).devicePixelRatio).round();
-    for (final service in _services) {
-      final url = service.imageUrl;
+    for (final banner in _banners) {
+      final url = banner['image_url']?.toString();
       if (url == null || url.isEmpty) continue;
       precacheImage(
         CachedNetworkImageProvider(url, maxWidth: width),
@@ -106,9 +135,10 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
   }
 
   void _startAutoSlide() {
-    if (getBoolAsync(AUTO_SLIDER_STATUS, defaultValue: true) && _services.length >= 2) {
+    _timer?.cancel();
+    if (getBoolAsync(AUTO_SLIDER_STATUS, defaultValue: true) && _slideCount >= 2) {
       _timer = Timer.periodic(const Duration(seconds: DASHBOARD_AUTO_SLIDER_SECOND), (Timer timer) {
-        if (_currentPage < _services.length - 1) {
+        if (_currentPage < _slideCount - 1) {
           _currentPage++;
         } else {
           _currentPage = 0;
@@ -144,7 +174,7 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
     );
   }
 
-  /// Carrousel des services, arrondi, avec une marge.
+  /// Carrousel de l'accueil, arrondi, avec une marge.
   Widget getSliderWidget() {
     const double sliderHeight = 190;
     return Padding(
@@ -162,18 +192,16 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
                       child: const Center(
                           child: CircularProgressIndicator(color: kMisonGold, strokeWidth: 2)),
                     )
-                  : _services.isNotEmpty
+                  : _banners.isNotEmpty
                       ? PageView.builder(
                           controller: sliderPageController,
-                          itemCount: _services.length,
+                          itemCount: _banners.length,
                           itemBuilder: (context, index) {
-                            final service = _services[index];
+                            final banner = _banners[index];
                             return GestureDetector(
-                              onTap: () {
-                                MisonBookingFormScreen(service: service).launch(context);
-                              },
+                              onTap: () => _openBanner(banner),
                               child: CachedImageWidget(
-                                url: service.imageUrl ?? '',
+                                url: banner['image_url']?.toString() ?? '',
                                 height: sliderHeight,
                                 width: context.width(),
                                 fit: BoxFit.cover,
@@ -181,14 +209,14 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
                             );
                           },
                         )
-                      : CachedImageWidget(url: '', height: sliderHeight, width: context.width()),
-              if (_services.length > 1)
+                      : Image.asset(_fallbackBanner, height: sliderHeight, width: context.width(), fit: BoxFit.cover),
+              if (_banners.length > 1)
                 Positioned(
                   bottom: 6,
                   left: 8,
                   child: DotIndicator(
                     pageController: sliderPageController,
-                    pages: _services,
+                    pages: _banners,
                     indicatorColor: kMisonGold,
                     unselectedIndicatorColor: white,
                     currentBoxShape: BoxShape.rectangle,

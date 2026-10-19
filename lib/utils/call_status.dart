@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 /// Signalisation d'un appel entre les deux téléphones, via Firestore
@@ -35,8 +37,9 @@ String newCallKitId() {
   return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
 }
 
-/// Identifiants CallKit des appels en cours d'une commande.
-Future<List<String>> callKitIdsFor(String orderId) async {
+/// Identifiants CallKit des appels en cours d'une commande ([acceptedOnly] :
+/// seulement ceux décrochés ou sortants, pas ceux qui sonnent).
+Future<List<String>> callKitIdsFor(String orderId, {bool acceptedOnly = false}) async {
   try {
     final calls = await FlutterCallkitIncoming.activeCalls();
     if (calls is! List) return [];
@@ -44,7 +47,8 @@ Future<List<String>> callKitIdsFor(String orderId) async {
       for (final call in calls)
         if (call is Map)
           if (((call['extra'] as Map?)?['order_id']?.toString() ?? call['id']?.toString()) == orderId)
-            call['id'].toString(),
+            if (!acceptedOnly || call['accepted'] == true || call['isAccepted'] == true)
+              call['id'].toString(),
     ];
   } catch (_) {
     return [];
@@ -59,6 +63,34 @@ Future<void> endCallKitForOrder(String orderId) async {
   for (final id in ids) {
     await FlutterCallkitIncoming.endCall(id).catchError((_) {});
   }
+  _clearOngoingNotifications(ids);
+}
+
+/// Android : retire les notifications « Appel en cours / Raccrocher » de ces
+/// appels. Le module d'appel ne retire que celle de son service ; une autre
+/// (deuxième appel système de la même conversation, ou réaffichée par
+/// « appel connecté » juste après la fin) restait affichée. Refait 2 s plus
+/// tard pour celle qui serait réaffichée après coup.
+void _clearOngoingNotifications(Iterable<String> callKitIds) {
+  if (!Platform.isAndroid) return;
+  final notifIds = [for (final id in callKitIds) _javaHashCode('ongoing_$id')];
+  Future<void> cancel() async {
+    final plugin = FlutterLocalNotificationsPlugin();
+    for (final n in notifIds) {
+      await plugin.cancel(n).catchError((_) {});
+    }
+  }
+  cancel();
+  Future.delayed(const Duration(seconds: 2), cancel);
+}
+
+/// String.hashCode() de Java : identifiant de notification du module d'appel.
+int _javaHashCode(String s) {
+  var h = 0;
+  for (final c in s.codeUnits) {
+    h = (31 * h + c) & 0xFFFFFFFF;
+  }
+  return h >= 0x80000000 ? h - 0x100000000 : h;
 }
 
 /// Fin d'un appel MISON (un seul appel à la fois) : ferme aussi tout appel
@@ -69,13 +101,18 @@ Future<void> endLeftoverConnectedCalls() async {
   try {
     final calls = await FlutterCallkitIncoming.activeCalls();
     if (calls is! List) return;
+    final ended = <String>[];
     for (final call in calls) {
       if (call is! Map) continue;
       // iOS : « accepted » ; Android : « isAccepted » (appel décroché ou sortant).
       if (call['accepted'] != true && call['isAccepted'] != true) continue;
       final id = call['id']?.toString();
-      if (id != null && id.isNotEmpty) await FlutterCallkitIncoming.endCall(id).catchError((_) {});
+      if (id != null && id.isNotEmpty) {
+        ended.add(id);
+        await FlutterCallkitIncoming.endCall(id).catchError((_) {});
+      }
     }
+    _clearOngoingNotifications(ended);
     // Filet de sécurité : plus aucun appel qui sonne → on ferme tout ce que le
     // module d'appel garde encore (notification « Raccrocher » restée affichée).
     final left = await FlutterCallkitIncoming.activeCalls();

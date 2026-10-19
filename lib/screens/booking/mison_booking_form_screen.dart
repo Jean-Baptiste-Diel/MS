@@ -15,6 +15,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:intl/intl.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
+import 'package:booking_system_flutter/utils/require_login.dart';
+import 'package:booking_system_flutter/main.dart';
 
 /// Écran formulaire de commande Mison
 /// Correspond au design Figma "Onboarding_001"
@@ -64,6 +66,12 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   void initState() {
     super.initState();
     zoneCont.addListener(_onZoneTextChanged);
+    // Visiteur sans compte : se connecter avant de commander.
+    if (!appStore.isLoggedIn) {
+      afterBuildCreated(() async {
+        if (!await requireClientLogin(context) && mounted) finish(context);
+      });
+    }
   }
 
   void _onZoneTextChanged() {

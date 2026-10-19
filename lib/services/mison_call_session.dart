@@ -270,6 +270,16 @@ class MisonCallSession extends ChangeNotifier {
   ///   y est déjà, via l'appel entrant CallKit qu'il a accepté.
   Future<void> _keepAliveInBackground() async {
     if (Platform.isIOS && !isCaller) return;
+    // Android, décroché depuis la notification d'appel : cet appel système
+    // tient déjà l'app en vie. En créer un second laissait une notification
+    // « Raccrocher » après l'appel, et celle du décroché ne raccrochait plus.
+    if (Platform.isAndroid && !isCaller) {
+      final ids = await callKitIdsFor(orderId, acceptedOnly: true);
+      if (ids.isNotEmpty) {
+        callKitId ??= ids.first;
+        return;
+      }
+    }
     try {
       await FlutterCallkitIncoming.startCall(CallKitParams(
         id: callKitId = newCallKitId(),

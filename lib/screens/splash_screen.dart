@@ -1,5 +1,4 @@
 import 'package:booking_system_flutter/main.dart';
-import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/screens/maintenance_mode_screen.dart';
 import 'package:booking_system_flutter/screens/mison_welcome_screen.dart';
@@ -116,7 +115,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           refreshPushTokens();
           DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
         } else {
-          SignInScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
+          // Sans compte : l'app s'ouvre sur l'accueil (services consultables
+          // librement) ; la connexion n'est demandée que pour commander.
+          DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
         }
       }
     }

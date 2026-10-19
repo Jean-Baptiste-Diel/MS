@@ -64,6 +64,14 @@ class MisonOrder {
   int? searchRadiusKm; // recherche progressive : 5, puis 10, puis 15 km
   String? searchStartedAt; // début (ou redémarrage après désistement) de la recherche
   String? searchExhaustedAt; // personne trouvé : le back-office prend le relais
+  // Accord sur le prix avant le déplacement : propositions du client ou du
+  // prestataire, puis prix convenu (ferme, payé à la fin).
+  int? priceProposal;
+  String priceProposedBy = ''; // 'client' ou 'artisan'
+  int? agreedPrice;
+  // Interrupteur du back-office : tant qu'il est éteint, la commande suit
+  // l'ancien parcours (prix fixé à la fin), comme les anciennes versions.
+  bool priceAgreementRequired = false;
 
   MisonOrder({
     this.id,
@@ -134,7 +142,12 @@ class MisonOrder {
       searchRadiusKm: num.tryParse(json['search_radius_km']?.toString() ?? '')?.toInt(),
       searchStartedAt: json['search_started_at']?.toString(),
       searchExhaustedAt: json['search_exhausted_at']?.toString(),
-    )..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null;
+    )
+      ..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null
+      ..priceProposal = num.tryParse(json['price_proposal']?.toString() ?? '')?.round()
+      ..priceProposedBy = json['price_proposed_by']?.toString() ?? ''
+      ..agreedPrice = num.tryParse(json['agreed_price']?.toString() ?? '')?.round()
+      ..priceAgreementRequired = json['price_agreement_required'] == true;
   }
 
   Map<String, dynamic> toJson() {
@@ -189,8 +202,21 @@ class MisonOrder {
   /// Frais de service Mison ajoutés au prix de la prestation.
   int get serviceFee => serverServiceFee ?? 100;
 
-  /// Prix de la prestation fixé par l'ouvrier (FCFA), null tant qu'il ne l'est pas.
-  int? get prestationPrice => num.tryParse(realizationFee ?? '')?.round();
+  /// Prix de la prestation (FCFA) : celui facturé, sinon le prix convenu ;
+  /// null tant qu'aucun n'est fixé.
+  int? get prestationPrice => num.tryParse(realizationFee ?? '')?.round() ?? agreedPrice;
+
+  /// Le client et le prestataire se sont accordés sur le prix (ferme).
+  bool get isPriceAgreed => agreedPrice != null;
+
+  /// Accord sur le prix à trouver : commande acceptée, prestataire pas encore
+  /// parti (les anciennes commandes déjà en route continuent sans accord).
+  bool get needsPriceAgreement =>
+      priceAgreementRequired &&
+      isBeforeStart &&
+      !needsArtisanConfirmation &&
+      !isPriceAgreed &&
+      (enRouteAt ?? '').isEmpty;
 
   /// Montant payé par le client : prestation + frais de service.
   int? get clientTotal {

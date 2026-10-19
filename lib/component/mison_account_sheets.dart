@@ -129,6 +129,49 @@ Future<bool> showMisonConfirmSheet(
   return confirmed ?? false;
 }
 
+// ── Signalement ─────────────────────────────────────────────────────────────
+
+/// Motifs de signalement (mêmes codes que le serveur).
+const kReportReasons = <String, String>{
+  'harassment': 'Insultes ou harcèlement',
+  'inappropriate': 'Contenu choquant ou inapproprié',
+  'spam': 'Spam ou publicité',
+  'fraud': 'Arnaque ou fraude',
+  'other': 'Autre',
+};
+
+/// Choix du motif d'un signalement (ou d'un blocage). Retourne le code du
+/// motif, ou null si annulé.
+Future<String?> showMisonReportSheet(
+  BuildContext context, {
+  required String title,
+  required String subtitle,
+  IconData icon = Icons.flag_outlined,
+}) {
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => _sheetFrame(sheetContext, children: [
+      _sheetIcon(icon, _dangerRed),
+      16.height,
+      Text(title, textAlign: TextAlign.center, style: boldTextStyle(size: 20, color: kMisonDark)),
+      8.height,
+      Text(subtitle, textAlign: TextAlign.center, style: secondaryTextStyle(size: 14)),
+      16.height,
+      for (final reason in kReportReasons.entries)
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          title: Text(reason.value, style: primaryTextStyle(size: 15, color: kMisonDark)),
+          trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+          onTap: () => Navigator.pop(sheetContext, reason.key),
+        ),
+      10.height,
+      _secondaryButton(label: 'Annuler', onPressed: () => Navigator.pop(sheetContext)),
+    ]),
+  );
+}
+
 // ── Déconnexion ──────────────────────────────────────────────────────────────
 
 /// Confirmation de déconnexion. Retourne true si l'utilisateur confirme.
