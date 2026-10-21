@@ -1351,7 +1351,7 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
                       ? 'Confirmer la commande'
                       : 'Accepter la commande',
                   subtitle: order.needsArtisanConfirmation
-                      ? 'Cette commande vous a été affectée par Mison. La confirmez-vous ?'
+                      ? 'Cette commande vous a été affectée par MISON. La confirmez-vous ?'
                       : 'Confirmez-vous l\'acceptation de cette commande ?',
                   action: () => artisanAcceptOrder(order.id!),
                   icon: Icons.assignment_turned_in_outlined,

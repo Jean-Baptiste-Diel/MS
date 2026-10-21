@@ -109,7 +109,7 @@ class _MisonLocationPickerScreenState extends State<MisonLocationPickerScreen> {
 
   void _confirm() {
     if (!_inDakarRegion(_target)) {
-      TopToast.show(message: 'Ce lieu est hors de la région de Dakar, où Mison intervient.', type: TopToastType.error);
+      TopToast.show(message: 'Ce lieu est hors de la région de Dakar, où MISON intervient.', type: TopToastType.error);
       return;
     }
     final address = (_address ?? '').trim().isNotEmpty ? _address!.trim() : 'Lieu choisi sur la carte';

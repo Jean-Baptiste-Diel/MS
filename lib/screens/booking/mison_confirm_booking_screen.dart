@@ -203,7 +203,7 @@ class _MisonConfirmBookingScreenState
                             10.width,
                             Expanded(
                               child: Text(
-                                'En confirmant cette commande, j\'accepte les Conditions Générales d\'Utilisation de Mison et m\'engage à respecter la décision de la plateforme en cas de litige.',
+                                'En confirmant cette commande, j\'accepte les Conditions Générales d\'Utilisation de MISON et m\'engage à respecter la décision de la plateforme en cas de litige.',
                                 style: secondaryTextStyle(size: 14),
                               ),
                             ),

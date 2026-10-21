@@ -14,8 +14,8 @@ String _fcfa(num value) {
 }
 
 /// Accord sur le prix entre le client et le prestataire, avant le déplacement.
-/// Chacun peut proposer un prix ou faire une contre-proposition ; l'autre
-/// l'accepte ou la refuse. Le prix accepté est ferme et payé à la fin.
+/// Le prestataire annonce son prix ; le client l'accepte ou le refuse (pas de
+/// contre-proposition). Le prix accepté est ferme et payé à la fin.
 class MisonPriceAgreementCard extends StatefulWidget {
   final MisonOrder order;
   final bool isArtisan;
@@ -88,7 +88,12 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
   }
 
   Future<void> _decline() async {
-    await _run(() => declineOrderPrice(order.id!), 'Prix refusé. Vous pouvez faire une nouvelle proposition.');
+    await _run(
+      () => declineOrderPrice(order.id!),
+      widget.isArtisan
+          ? 'Prix refusé. Vous pouvez faire une nouvelle proposition.'
+          : 'Prix refusé. Le prestataire va vous faire une nouvelle proposition.',
+    );
   }
 
   @override
@@ -117,8 +122,8 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
             widget.isArtisan
                 ? 'Mettez-vous d\'accord avec le client sur le prix avant de vous déplacer '
                     '(par message ou par appel). Il doit le valider.'
-                : 'Avant que le prestataire se déplace, mettez-vous d\'accord sur le prix '
-                    '(par message ou par appel). Vous le paierez à la fin de la prestation.',
+                : 'Avant de se déplacer, le prestataire vous propose son prix. Vous pouvez '
+                    'l\'accepter ou le refuser. Vous le paierez à la fin de la prestation.',
             style: secondaryTextStyle(size: 13),
           ),
           if (!widget.isArtisan) ...[
@@ -128,8 +133,11 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
           14.height,
           if (_proposedByOther) ..._otherProposal()
           else if (_proposedByMe) ..._myProposal()
+          else if (widget.isArtisan)
+            _button('Proposer un prix', Icons.edit_rounded, () => _propose(), filled: true)
           else
-            _button('Proposer un prix', Icons.edit_rounded, () => _propose(), filled: true),
+            // Le client ne propose pas en premier : il attend le prix du prestataire.
+            _waitingLine('En attente du prix de ${_otherName.split(' ').first}'),
         ],
       ),
     );
@@ -148,13 +156,16 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
           ),
         ),
       14.height,
-      _button('Accepter ce prix', Icons.check_rounded, _accept, filled: true),
-      8.height,
+      // Le client accepte ou refuse : il ne fait pas de contre-proposition.
       Row(children: [
-        Expanded(child: _button('Contre-proposer', Icons.swap_horiz_rounded, () => _propose(counter: true))),
-        8.width,
         Expanded(child: _button('Refuser', Icons.close_rounded, _decline, danger: true)),
+        8.width,
+        Expanded(child: _button('Accepter', Icons.check_rounded, _accept, filled: true)),
       ]),
+      if (widget.isArtisan) ...[
+        8.height,
+        _button('Contre-proposer', Icons.swap_horiz_rounded, () => _propose(counter: true)),
+      ],
     ];
   }
 
@@ -162,20 +173,25 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
     return [
       _priceLine('Vous avez proposé', order.priceProposal!),
       6.height,
-      Row(children: [
-        const SizedBox(
-          width: 12,
-          height: 12,
-          child: CircularProgressIndicator(strokeWidth: 1.5, color: kMisonGold),
-        ),
-        8.width,
-        Expanded(
-          child: Text('En attente de la réponse de ${_otherName.split(' ').first}', style: secondaryTextStyle(size: 13)),
-        ),
-      ]),
-      14.height,
-      _button('Modifier ma proposition', Icons.edit_rounded, () => _propose()),
+      _waitingLine('En attente de la réponse de ${_otherName.split(' ').first}'),
+      // Seul le prestataire propose un prix.
+      if (widget.isArtisan) ...[
+        14.height,
+        _button('Modifier ma proposition', Icons.edit_rounded, () => _propose()),
+      ],
     ];
+  }
+
+  Widget _waitingLine(String text) {
+    return Row(children: [
+      const SizedBox(
+        width: 12,
+        height: 12,
+        child: CircularProgressIndicator(strokeWidth: 1.5, color: kMisonGold),
+      ),
+      8.width,
+      Expanded(child: Text(text, style: secondaryTextStyle(size: 13))),
+    ]);
   }
 
   Widget _buildAgreed() {
@@ -374,7 +390,7 @@ class MisonWavePaymentNotice extends StatelessWidget {
                   TextSpan(text: 'La prestation se paie '),
                   TextSpan(text: "uniquement par Wave, dans l'application MISON", style: TextStyle(fontWeight: FontWeight.bold)),
                   TextSpan(text: ", à la fin de l'intervention. Ne payez jamais le prestataire en espèces : "
-                      "sans paiement dans l'app, Mison ne peut pas vous protéger en cas de litige."),
+                      "sans paiement dans l'app, MISON ne peut pas vous protéger en cas de litige."),
                 ],
               ),
             ),

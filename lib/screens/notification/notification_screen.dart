@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_offline_banner.dart';
 import 'package:booking_system_flutter/component/app_empty_state.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
@@ -23,6 +24,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
   bool _isLoading = true;
   String? _error;
 
+  /// Liste affichée depuis le téléphone (pas de réseau).
+  bool _offline = false;
+
   @override
   void initState() {
     super.initState();
@@ -36,9 +40,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Future<void> _load() async {
     try {
-      final res = await getMisonNotifications();
+      final res = await getMisonNotifications(offlineFallback: true);
       setState(() {
         _items = res.data;
+        _offline = res.fromCache;
         _error = null;
         _isLoading = false;
       });
@@ -74,6 +79,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Future<void> _open(MisonNotification n) async {
+    // Hors ligne : rien ne peut être ouvert ni marqué comme lu.
+    if (_offline) {
+      TopToast.show(message: 'Vous êtes hors ligne. Connectez-vous pour ouvrir cette notification.');
+      return;
+    }
     if (!n.isRead) {
       setState(() => _items = _items.map((e) => e.id == n.id ? e.copyWith(isRead: true) : e).toList());
       _syncBadges();
@@ -95,14 +105,19 @@ class _NotificationScreenState extends State<NotificationScreen> {
           icon: const Icon(Icons.arrow_back, color: kMisonDark),
           onPressed: () => Navigator.pop(context),
         ),
-        titleTrailing: _unreadCount > 0
+        titleTrailing: _unreadCount > 0 && !_offline
             ? TextButton(
                 onPressed: _markAllRead,
                 child: Text('Tout marquer lu', style: boldTextStyle(size: 13, color: kMisonGold)),
               )
             : null,
       ),
-      body: DotGridBackground(child: _buildBody()),
+      body: DotGridBackground(
+        child: Column(children: [
+          if (_offline && !_isLoading) const MisonOfflineBanner(),
+          Expanded(child: _buildBody()),
+        ]),
+      ),
     );
   }
 

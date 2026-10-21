@@ -1,5 +1,6 @@
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
+import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -14,16 +15,147 @@ const List<String> kCancelReasons = [
   'Autre',
 ];
 
-/// Panneau d'annulation d'une commande (style Mison) : motif, confirmation,
-/// chargement pendant la requête. Retourne true si la commande a été annulée.
-Future<bool> showMisonCancelOrderSheet(BuildContext context, {required String orderId}) async {
+/// Issue du panneau d'annulation du client.
+enum MisonCancelResult { kept, cancelled, artisanChanged }
+
+/// Annulation par le client. Ouvrier trouvé ([hasArtisan]) : d'abord un choix,
+/// « Trouver un autre ouvrier » (la recherche repart sans lui) ou « Annuler la
+/// commande ». En recherche : directement le panneau d'annulation (motif,
+/// confirmation, chargement).
+Future<MisonCancelResult> showMisonCancelOrderSheet(
+  BuildContext context, {
+  required String orderId,
+  bool hasArtisan = false,
+}) async {
+  if (hasArtisan) {
+    final choice = await showModalBottomSheet<MisonCancelResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ChangeOrCancelSheet(orderId: orderId),
+    );
+    if (choice != MisonCancelResult.cancelled) return choice ?? MisonCancelResult.kept;
+    if (!context.mounted) return MisonCancelResult.kept;
+  }
   final cancelled = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (_) => _CancelOrderSheet(orderId: orderId),
   );
-  return cancelled ?? false;
+  return cancelled == true ? MisonCancelResult.cancelled : MisonCancelResult.kept;
+}
+
+/// Après une annulation : retour à l'accueil (client comme prestataire).
+void goToMisonHome(BuildContext context) {
+  DashboardScreen().launch(context, isNewTask: true, pageRouteAnimation: PageRouteAnimation.Fade);
+}
+
+/// Premier choix : changer d'ouvrier (la recherche repart, sans lui) ou annuler.
+/// Retourne artisanChanged une fois l'ouvrier écarté, cancelled pour passer
+/// au panneau d'annulation, null si fermé.
+class _ChangeOrCancelSheet extends StatefulWidget {
+  final String orderId;
+  const _ChangeOrCancelSheet({required this.orderId});
+
+  @override
+  State<_ChangeOrCancelSheet> createState() => _ChangeOrCancelSheetState();
+}
+
+class _ChangeOrCancelSheetState extends State<_ChangeOrCancelSheet> {
+  bool _isLoading = false;
+
+  Future<void> _changeArtisan() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      await changeOrderArtisan(widget.orderId);
+      if (!mounted) return;
+      Navigator.pop(context, MisonCancelResult.artisanChanged);
+      TopToast.show(message: 'Nous recherchons un autre ouvrier.', type: TopToastType.success);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      TopToast.show(message: e.toString(), type: TopToastType.error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          20.height,
+          Center(
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(color: kMisonGold.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: const Icon(Icons.engineering_rounded, color: kMisonGold, size: 32),
+            ),
+          ),
+          16.height,
+          Text('Que souhaitez-vous faire ?', textAlign: TextAlign.center, style: boldTextStyle(size: 20, color: kMisonDark)),
+          8.height,
+          Text(
+            'Cet ouvrier ne vous convient pas ? Nous pouvons en chercher un autre, sans refaire votre commande. '
+            'Il ne pourra plus prendre cette commande.',
+            textAlign: TextAlign.center,
+            style: secondaryTextStyle(size: 14),
+          ),
+          24.height,
+          SizedBox(
+            height: 52,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _changeArtisan,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kMisonGold,
+                disabledBackgroundColor: kMisonGold.withValues(alpha: 0.6),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                    )
+                  : Text('Trouver un autre ouvrier', style: boldTextStyle(color: Colors.white, size: 15)),
+            ),
+          ),
+          12.height,
+          SizedBox(
+            height: 52,
+            child: OutlinedButton(
+              onPressed: _isLoading ? null : () => Navigator.pop(context, MisonCancelResult.cancelled),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: _cancelRed),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Text('Annuler la commande', style: boldTextStyle(color: _cancelRed, size: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CancelOrderSheet extends StatefulWidget {

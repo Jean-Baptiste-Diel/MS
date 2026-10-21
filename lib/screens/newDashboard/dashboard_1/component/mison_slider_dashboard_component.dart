@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/image_cache_key.dart';
+import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:booking_system_flutter/utils/service_search.dart';
 import 'dart:async';
 
@@ -81,20 +83,33 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
   }
 
   Future<void> _fetchBanners() async {
+    // D'abord la liste enregistrée à la dernière ouverture : affichée tout
+    // de suite, images comprises (cache disque), même hors connexion.
+    final saved = _withImage(getSavedHomeBanners());
+    if (saved.isNotEmpty) {
+      _banners = saved;
+      _isLoading = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startAutoSlide());
+    }
     try {
-      final banners = await getHomeBanners();
+      final banners = _withImage(await getHomeBanners());
       if (!mounted) return;
       setState(() {
-        _banners = banners.where((b) => (b['image_url'] ?? '').toString().isNotEmpty).toList();
+        _banners = banners;
         _isLoading = false;
+        if (_currentPage >= _slideCount) _currentPage = 0;
       });
       _startAutoSlide();
       _precacheSlides();
     } catch (e) {
+      // Hors connexion : la liste enregistrée reste affichée.
       log('Error fetching home banners: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  static List<Map<String, dynamic>> _withImage(List<Map<String, dynamic>> banners) =>
+      banners.where((b) => (b['image_url'] ?? '').toString().isNotEmpty).toList();
 
   /// Image touchée : ouvre la commande du service lié, s'il y en a un.
   void _openBanner(Map<String, dynamic> banner) {
@@ -127,8 +142,10 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
     for (final banner in _banners) {
       final url = banner['image_url']?.toString();
       if (url == null || url.isEmpty) continue;
+      // Même clé que l'affichage (adresse sans la signature, qui change) :
+      // l'image est gardée une seule fois et retrouvée hors connexion.
       precacheImage(
-        CachedNetworkImageProvider(url, maxWidth: width),
+        CachedNetworkImageProvider(url, maxWidth: width, cacheKey: imageCacheKey(url)),
         context,
       ).catchError((_) {});
     }
@@ -189,8 +206,7 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
               _isLoading
                   ? Container(
                       color: kMisonGold.withValues(alpha: 0.1),
-                      child: const Center(
-                          child: CircularProgressIndicator(color: kMisonGold, strokeWidth: 2)),
+                      child: const MisonPageLoader(),
                     )
                   : _banners.isNotEmpty
                       ? PageView.builder(

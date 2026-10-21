@@ -218,7 +218,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.deniedForever) {
-        TopToast.show(message: 'Autorisez la localisation de Mison dans les réglages du téléphone.');
+        TopToast.show(message: 'Autorisez la localisation de MISON dans les réglages du téléphone.');
         await Geolocator.openAppSettings();
         return;
       }
@@ -355,6 +355,14 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
 
   Future<void> _continueToConfirmation() async {
     if (_isLocatingZone) return;
+    // Hors ligne : la commande ne peut pas partir, on ne va pas plus loin.
+    if (!await isNetworkAvailable()) {
+      TopToast.show(
+        message: 'Vous êtes hors ligne. Connectez-vous à Internet pour passer une commande.',
+        type: TopToastType.error,
+      );
+      return;
+    }
     if (_formKey.currentState!.validate()) {
       if (!isImmediateService && (selectedDate == null || selectedTime == null)) {
         TopToast.show(message: 'Veuillez sélectionner une date et une heure');
@@ -787,7 +795,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
           _PromiseItem(icon: Icons.person_search_rounded, text: 'Trouvez un ouvrier pour seulement 100 FCFA'),
           _PromiseItem(icon: Icons.check_circle, text: 'Annulation possible à tout moment avant le rendez-vous'),
           _PromiseItem(icon: Icons.access_time, text: 'Disponible 24h/24'),
-          _PromiseItem(icon: Icons.security, text: 'Garanti par Mison Service et payer en toute sécurité'),
+          _PromiseItem(icon: Icons.security, text: 'Garanti par MISON Service et payer en toute sécurité'),
           _PromiseItem(icon: Icons.lock, text: 'Un paiement sûr et sécurisé'),
         ],
       ),

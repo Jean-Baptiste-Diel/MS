@@ -418,6 +418,12 @@ Future<void> clearPreferences() async {
   } catch (_) {}
   await removeKey('outgoing_call_order_id');
 
+  // Commandes enregistrées pour l'affichage hors ligne : pas pour le compte suivant.
+  await removeKey(_ordersCacheKey);
+  await removeKey(_notificationsCacheKey);
+  for (final key in sharedPreferences.getKeys().where((k) => k.startsWith('mison_chat_cache_')).toList()) {
+    await removeKey(key);
+  }
   await appStore.setLoggedIn(false);
   // Déconnecté = visiteur : l'app ne doit plus se comporter en prestataire.
   await appStore.setUserType('');
@@ -642,11 +648,28 @@ Future<List<BookingStatusResponse>> bookingStatus(
 
 //region Notification Api
 /// GET /api/notifications - Historique des notifications Mison (+ non lues)
-Future<MisonNotificationResponse> getMisonNotifications() async {
-  final response = await buildHttpResponse('notifications', method: HttpMethodType.GET);
-  final res = MisonNotificationResponse.fromJson(await handleResponse(response));
-  appStore.setUnreadCount(res.unreadCount);
-  return res;
+String get _notificationsCacheKey => 'mison_notifications_cache_${appStore.userId}';
+
+/// [offlineFallback] : hors ligne, la dernière liste enregistrée (`fromCache`).
+Future<MisonNotificationResponse> getMisonNotifications({bool offlineFallback = false}) async {
+  try {
+    final response = await buildHttpResponse('notifications', method: HttpMethodType.GET);
+    final body = await handleResponse(response);
+    final res = MisonNotificationResponse.fromJson(body);
+    setValue(_notificationsCacheKey, jsonEncode(body));
+    appStore.setUnreadCount(res.unreadCount);
+    return res;
+  } catch (e) {
+    if (offlineFallback && isOfflineError(e)) {
+      final saved = getStringAsync(_notificationsCacheKey);
+      if (saved.isNotEmpty) {
+        try {
+          return MisonNotificationResponse.fromJson(jsonDecode(saved) as Map<String, dynamic>, fromCache: true);
+        } catch (_) {}
+      }
+    }
+    rethrow;
+  }
 }
 
 /// POST /api/notifications/read - Marque une notification ([id]) ou toutes comme lues
@@ -720,9 +743,48 @@ const _kServicesCacheKey = 'mison_services_cache';
 
 /// GET /api/banners - Images du carrousel de l'accueil (réglées dans le
 /// back-office) : [{id, title, image_url, service_id}].
+const _kHomeBannersCacheKey = 'mison_home_banners_cache';
+
+List<Map<String, dynamic>> _bannersFrom(dynamic body) =>
+    ((body as Map)['data'] as List? ?? []).whereType<Map>().map((b) => b.cast<String, dynamic>()).toList();
+
+/// Images du carrousel. La liste reçue est enregistrée sur le téléphone : à
+/// la prochaine ouverture (même hors connexion), [getSavedHomeBanners] la
+/// rend tout de suite, et les images viennent du cache disque.
 Future<List<Map<String, dynamic>>> getHomeBanners() async {
   final res = await handleResponse(await buildHttpResponse('banners', method: HttpMethodType.GET));
-  return ((res as Map)['data'] as List? ?? []).whereType<Map>().map((b) => b.cast<String, dynamic>()).toList();
+  final banners = _bannersFrom(res);
+  if (banners.isNotEmpty) setValue(_kHomeBannersCacheKey, jsonEncode(res));
+  return banners;
+}
+
+/// Dernière liste du carrousel enregistrée (vide si aucune).
+List<Map<String, dynamic>> getSavedHomeBanners() {
+  final saved = getStringAsync(_kHomeBannersCacheKey);
+  if (saved.isEmpty) return [];
+  try {
+    return _bannersFrom(jsonDecode(saved));
+  } catch (_) {
+    return [];
+  }
+}
+
+/// Prestataires de la carte (onglet Service), autour de [lat]/[lng]. Position
+/// approximative (quelques centaines de mètres), décalée par le serveur.
+/// [serviceId] : seulement les ouvriers de ce service.
+Future<List<Map<String, dynamic>>> getArtisansMap({
+  double? lat,
+  double? lng,
+  int radiusKm = 30,
+  String? serviceId,
+}) async {
+  final params = [
+    if (lat != null && lng != null) ...['lat=$lat', 'lng=$lng', 'radius_km=$radiusKm'],
+    if (serviceId != null) 'service_id=$serviceId',
+  ];
+  final query = params.isEmpty ? '' : '?${params.join('&')}';
+  final res = await handleResponse(await buildHttpResponse('artisans/map$query', method: HttpMethodType.GET));
+  return ((res as Map)['data'] as List? ?? []).whereType<Map>().map((a) => a.cast<String, dynamic>()).toList();
 }
 
 Future<MisonServicesResponse> getMisonServices({bool forceRefresh = false}) async {
@@ -756,20 +818,50 @@ Future<MisonServicesResponse> getMisonServices({bool forceRefresh = false}) asyn
 
 /// GET /api/orders - Liste des commandes du client authentifié
 /// @param status - Filtre optionnel: PENDING, ASSIGNED, ACCEPTED, IN_PROGRESS, COMPLETED, CANCELLED, REJECTED
-Future<MisonOrderResponse> getMisonOrders({String? status}) async {
+/// Commande terminée ou annulée : ses messages sont supprimés sur le serveur,
+/// et leur copie enregistrée sur le téléphone (hors ligne) aussi.
+void _forgetClosedChats(List<MisonOrder> orders) {
+  final prefix = 'mison_chat_cache_${appStore.userId}_';
+  final open = orders.where((o) => o.id != null && o.canChat).map((o) => '$prefix${o.id}').toSet();
+  for (final key in sharedPreferences.getKeys().where((k) => k.startsWith(prefix)).toList()) {
+    if (!key.endsWith('_support') && !open.contains(key)) removeKey(key);
+  }
+}
+
+/// Dernière liste complète des commandes, enregistrée par compte.
+String get _ordersCacheKey => 'mison_orders_cache_${appStore.userId}';
+
+/// [offlineFallback] : hors ligne, rend la dernière liste enregistrée
+/// (`fromCache` vrai) au lieu d'une erreur. Réservé à l'affichage (« Mes
+/// réservations ») : les rappels et l'accueil prestataire restent sur le serveur.
+Future<MisonOrderResponse> getMisonOrders({String? status, bool offlineFallback = false}) async {
+  final full = status == null || status.isEmpty;
   try {
     String endpoint = 'orders';
-    if (status != null && status.isNotEmpty) {
+    if (!full) {
       endpoint += '?status=$status';
     }
     final response = await buildHttpResponse(endpoint, method: HttpMethodType.GET);
-    final result = MisonOrderResponse.fromJson(await handleResponse(response));
-    // Prestataire : rappel « Commencer » tant qu'il est arrivé sans commencer
-    // (liste complète seulement, pour retirer aussi les rappels périmés).
-    if (status == null || status.isEmpty) StartReminder.syncOrders(result.data ?? []);
+    final body = await handleResponse(response);
+    final result = MisonOrderResponse.fromJson(body);
+    if (full) {
+      // Prestataire : rappel « Commencer » tant qu'il est arrivé sans commencer
+      // (liste complète seulement, pour retirer aussi les rappels périmés).
+      StartReminder.syncOrders(result.data ?? []);
+      setValue(_ordersCacheKey, jsonEncode(body));
+      _forgetClosedChats(result.data ?? []);
+    }
     return result;
   } catch (e) {
-    throw e;
+    if (offlineFallback && full && isOfflineError(e)) {
+      final saved = getStringAsync(_ordersCacheKey);
+      if (saved.isNotEmpty) {
+        try {
+          return MisonOrderResponse.fromJson(jsonDecode(saved) as Map<String, dynamic>)..fromCache = true;
+        } catch (_) {}
+      }
+    }
+    rethrow;
   }
 }
 
@@ -858,6 +950,13 @@ Future<void> cancelMisonOrder(String orderId, {String? reason}) async {
   } catch (e) {
     throw e;
   }
+}
+
+/// POST /api/orders/{id}/change-artisan - Le client écarte l'ouvrier affecté :
+/// la recherche repart pour la même commande.
+Future<void> changeOrderArtisan(String orderId) async {
+  await handleResponse(await buildHttpResponse('orders/$orderId/change-artisan', method: HttpMethodType.POST));
+  _orderChanged(orderId);
 }
 
 /// POST /api/auth/fcm-token - Enregistrer le token FCM de l'appareil

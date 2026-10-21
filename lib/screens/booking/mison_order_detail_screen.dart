@@ -474,7 +474,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
             ? 'Vous vous êtes désisté de cette commande'
             : 'Commande annulée',
       );
-      init(); setState(() {});
+      if (mounted) goToMisonHome(context);
     } catch (e) { TopToast.show(message: e.toString(), type: TopToastType.error); }
     finally { appStore.setLoading(false); }
   }
@@ -694,10 +694,19 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                           onConfirm: () => _cancelOrder(order.id!),
                         )
                     : () async {
-                        final cancelled = await showMisonCancelOrderSheet(context, orderId: order.id!);
-                        if (cancelled && mounted) {
-                          init();
-                          setState(() {});
+                        final result = await showMisonCancelOrderSheet(
+                          context,
+                          orderId: order.id!,
+                          hasArtisan: order.artisan != null,
+                        );
+                        if (!mounted) return;
+                        if (result == MisonCancelResult.cancelled) {
+                          goToMisonHome(context);
+                        } else if (result == MisonCancelResult.artisanChanged) {
+                          // Nouvelle recherche : on la suit sur la carte.
+                          Navigator.of(context).pushReplacement(MaterialPageRoute(
+                            builder: (_) => MisonOrderSearchingScreen(orderId: order.id!),
+                          ));
                         }
                       },
                 onPay: () => _showPaymentModal(order),
@@ -1007,7 +1016,7 @@ class _OrderDetailBody extends StatelessWidget {
                           8.width,
                           Expanded(
                             child: Text(
-                              'Cette commande vous a été affectée par Mison. Confirmez-la pour la démarrer.',
+                              'Cette commande vous a été affectée par MISON. Confirmez-la pour la démarrer.',
                               style: secondaryTextStyle(size: 14, color: kMisonGold),
                             ),
                           ),

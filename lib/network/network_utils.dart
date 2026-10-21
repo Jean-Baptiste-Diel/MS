@@ -202,6 +202,11 @@ Future<Response> buildHttpResponse(
   }
 }
 
+/// Vrai si la requête a échoué faute de réseau (téléphone hors ligne ou
+/// serveur injoignable), et non à cause d'une réponse du serveur.
+bool isOfflineError(Object? error) =>
+    error is SocketException || error is TimeoutException || error?.toString() == errorInternetNotAvailable;
+
 /// Vrai si l'erreur levée par [handleResponse] vient d'un 404 : la ressource
 /// n'existe plus ou n'est pas accessible depuis ce compte (ex. commande d'un
 /// autre compte, commande prise par un autre artisan).

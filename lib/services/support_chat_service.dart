@@ -77,6 +77,32 @@ class SupportChatMessage {
     );
   }
 
+  /// Préfixe des discussions enregistrées sur le téléphone (hors ligne).
+  static const cachePrefix = 'mison_chat_cache_';
+
+  Map<String, dynamic> toCacheJson() => {
+        'id': id,
+        'content': content,
+        'image_url': imageUrl,
+        'audio_url': audioUrl,
+        'sender_name': senderName,
+        'is_me': isMe,
+        'created_at': createdAt.toIso8601String(),
+        'message_type': messageType.name,
+      };
+
+  factory SupportChatMessage.fromCacheJson(Map<String, dynamic> json) => SupportChatMessage(
+        id: json['id']?.toString() ?? '',
+        localId: '',
+        content: json['content']?.toString() ?? '',
+        imageUrl: json['image_url']?.toString(),
+        audioUrl: json['audio_url']?.toString(),
+        senderName: json['sender_name']?.toString() ?? '',
+        isMe: json['is_me'] == true,
+        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
+        messageType: MessageType.values.where((t) => t.name == json['message_type']).firstOrNull ?? MessageType.text,
+      );
+
   factory SupportChatMessage.optimistic(String content) {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     return SupportChatMessage(

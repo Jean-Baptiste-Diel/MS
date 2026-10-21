@@ -281,7 +281,7 @@ Future<Uint8List> buildOrderInvoicePdf(MisonOrder order) async {
     ]),
   );
 
-  final doc = pw.Document(title: 'Facture ${invoiceNumber(order)}', author: 'Mison');
+  final doc = pw.Document(title: 'Facture ${invoiceNumber(order)}', author: 'MISON');
   doc.addPage(
     pw.Page(
       pageTheme: pw.PageTheme(
@@ -319,5 +319,5 @@ Future<String> downloadOrderInvoice(MisonOrder order) async {
 
   final dir = await getApplicationDocumentsDirectory();
   await File('${dir.path}/$name').writeAsBytes(bytes, flush: true);
-  return 'Fichiers › Sur mon iPhone › Mison';
+  return 'Fichiers › Sur mon iPhone › MISON';
 }

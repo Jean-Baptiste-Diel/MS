@@ -44,7 +44,7 @@ Future<String> downloadOrderInvoiceJpeg(BuildContext context, MisonOrder order) 
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/$name');
     await file.writeAsBytes(jpegBytes, flush: true);
-    return 'Fichiers › Sur mon iPhone › Mison';
+    return 'Fichiers › Sur mon iPhone › MISON';
   } finally {
     appStore.setLoading(false);
   }

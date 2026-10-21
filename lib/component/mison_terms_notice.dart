@@ -42,7 +42,7 @@ class MisonTermsNotice extends StatelessWidget {
               ..onTap = () => checkIfLink(context, appConfigurationStore.privacyPolicy,
                   title: language.privacyPolicy),
           ),
-          const TextSpan(text: ' de Mison. $kZeroToleranceRule'),
+          const TextSpan(text: ' de MISON. $kZeroToleranceRule'),
         ],
       ),
       textAlign: TextAlign.center,

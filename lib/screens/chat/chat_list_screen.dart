@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_offline_banner.dart';
 import 'package:booking_system_flutter/utils/auto_refresh_mixin.dart';
 import 'package:booking_system_flutter/component/unread_badge.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
@@ -39,16 +40,25 @@ class _ChatListScreenState extends State<ChatListScreen> with AutoRefreshMixin {
     super.dispose();
   }
 
+  /// Liste affichée depuis le téléphone (pas de réseau).
+  bool _offline = false;
+
   @override
   Future<void> onAutoRefresh() async {
-    final res = await getMisonOrders();
+    final res = await _fetch();
     ChatUnreadStore.refresh();
     if (mounted) setState(() => _future = Future.value(res));
   }
 
   void _load() {
-    _future = getMisonOrders();
+    _future = _fetch();
     ChatUnreadStore.refresh();
+  }
+
+  Future<MisonOrderResponse> _fetch() async {
+    final res = await getMisonOrders(offlineFallback: true);
+    if (mounted && _offline != res.fromCache) setState(() => _offline = res.fromCache);
+    return res;
   }
 
   /// Nom de l'interlocuteur : l'ouvrier pour un client, le client pour un ouvrier.
@@ -73,7 +83,9 @@ class _ChatListScreenState extends State<ChatListScreen> with AutoRefreshMixin {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: const MisonAppBar(title: 'Discussions'),
-      body: FutureBuilder<MisonOrderResponse>(
+      body: Column(children: [
+        if (_offline) const MisonOfflineBanner(),
+        Expanded(child: FutureBuilder<MisonOrderResponse>(
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
@@ -132,7 +144,8 @@ class _ChatListScreenState extends State<ChatListScreen> with AutoRefreshMixin {
                   ),
           );
         },
-      ),
+        )),
+      ]),
     );
   }
 }

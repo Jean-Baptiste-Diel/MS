@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/colors.dart';
 import 'package:booking_system_flutter/utils/common.dart';
@@ -258,7 +259,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       autoFocus: true,
                       errorThisFieldRequired: language.requiredText,
                       decoration: inputDecoration(context, labelText: language.hintEmailTxt),
-                    ).visible(!appStore.isLoading, defaultWidget: Loader()),
+                    ).visible(!appStore.isLoading, defaultWidget: const LoaderWidget()),
                   )
                 else
                   Observer(
@@ -299,7 +300,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                         ),
                       ],
-                    ).visible(!appStore.isLoading, defaultWidget: Loader()),
+                    ).visible(!appStore.isLoading, defaultWidget: const LoaderWidget()),
                   ),
                 16.height,
                 AppButton(
@@ -391,7 +392,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                     enableActiveFill: true,
                     onChanged: (value) {},
-                  ).visible(!appStore.isLoading, defaultWidget: Loader()),
+                  ).visible(!appStore.isLoading, defaultWidget: const LoaderWidget()),
                 ),
                 
                 // Resend OTP

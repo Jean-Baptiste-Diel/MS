@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:booking_system_flutter/screens/booking/mison_artisan_reviews_screen.dart';
 import 'package:booking_system_flutter/component/mison_price_agreement_card.dart';
@@ -14,6 +15,7 @@ import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart';
 import 'package:booking_system_flutter/utils/artisan_eta_tracker.dart';
 import 'package:booking_system_flutter/utils/colors.dart' show completed;
+import 'package:booking_system_flutter/utils/service_icons.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -120,6 +122,9 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
   bool _fittedOnArtisan = false;
 
   BitmapDescriptor? _artisanIcon;
+
+  /// Service dont l'épingle est dessinée (null : pas encore connu).
+  String? _artisanIconService;
   BitmapDescriptor? _clientIcon;
 
   /// Le client a déplacé ou zoomé la carte : le radar (dessiné au centre de
@@ -215,6 +220,8 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
       if (!mounted || _leaving) return;
       final order = (results[0] as MisonOrderDetailResponse).data;
       if (order == null) return;
+      _order ??= order;
+      _buildArtisanIcon();
 
       if (!MisonOrderSearchingScreen.canFollow(order)) return _leave(order);
 
@@ -369,32 +376,43 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
   void _openDetail() => MisonOrderDetailScreen(orderId: widget.orderId).launch(context);
 
   Future<void> _cancel() async {
-    final cancelled = await showMisonCancelOrderSheet(context, orderId: widget.orderId);
-    if (cancelled && mounted) {
+    final result = await showMisonCancelOrderSheet(
+      context,
+      orderId: widget.orderId,
+      hasArtisan: _order?.artisan != null,
+    );
+    if (!mounted) return;
+    if (result == MisonCancelResult.cancelled) {
       _leaving = true;
       _poll?.cancel();
-      finish(context);
+      goToMisonHome(context);
+    } else if (result == MisonCancelResult.artisanChanged) {
+      // La recherche repart : l'écran l'affiche au prochain rafraîchissement.
+      _refresh();
     }
   }
 
   // ── Icônes de la carte ────────────────────────────────────────────────────
 
+  /// Ouvriers : même épingle que la carte « Notre réseau » (grande taille,
+  /// icône et couleur du service commandé).
+  Future<void> _buildArtisanIcon() async {
+    final service = _order?.service?.name;
+    if (service == null || service == _artisanIconService) return;
+    _artisanIconService = service;
+    final icon = await serviceMarkerIcon(serviceStyle(service), big: true);
+    if (mounted) setState(() => _artisanIcon = icon);
+  }
+
   Future<void> _buildIcons() async {
-    final artisan = await _roundIcon(
-      background: kMisonGold,
-      glyph: Icons.engineering_rounded,
-      glyphColor: Colors.white,
-    );
+    _buildArtisanIcon();
     final client = await _roundIcon(
       background: const Color(0xFF1B1F2A),
       glyph: Icons.home_rounded,
       glyphColor: Colors.white,
     );
     if (!mounted) return;
-    setState(() {
-      _artisanIcon = artisan;
-      _clientIcon = client;
-    });
+    setState(() => _clientIcon = client);
   }
 
   Future<BitmapDescriptor> _roundIcon({
@@ -445,7 +463,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
           markerId: MarkerId('artisan_${entry.key}'),
           position: entry.value,
           icon: _artisanIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
-          anchor: const Offset(0.5, 0.5),
+          anchor: const Offset(0.5, 1),
         ));
       }
     } else if ((_tracker?.artisanPosition ?? _assignedPosition) != null) {
@@ -453,7 +471,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
         markerId: const MarkerId('my_artisan'),
         position: _tracker?.artisanPosition ?? _assignedPosition!,
         icon: _artisanIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
-        anchor: const Offset(0.5, 0.5),
+        anchor: const Offset(0.5, 1),
         zIndexInt: 3,
       ));
     }
@@ -495,7 +513,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
                   Container(
                     color: const Color(0xFFEFEFEF),
                     alignment: Alignment.center,
-                    child: const CircularProgressIndicator(color: kMisonGold),
+                    child: const LoaderWidget(),
                   )
                 else
                   Listener(
@@ -768,7 +786,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
     if (order.hasArrived) {
       return (
         '$who est arrivé',
-        'Demandez-lui de lancer la prestation dans l\'app Mison.',
+        'Demandez-lui de lancer la prestation dans l\'app MISON.',
         Icons.where_to_vote_rounded,
       );
     }
@@ -844,7 +862,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    artisan.fullName.isEmpty ? 'Prestataire Mison' : artisan.fullName,
+                    artisan.fullName.isEmpty ? 'Prestataire MISON' : artisan.fullName,
                     style: boldTextStyle(size: 16),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

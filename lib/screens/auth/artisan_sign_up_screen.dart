@@ -1293,7 +1293,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: CircularProgressIndicator(color: _brandGold, strokeWidth: 2),
+                  child: LoaderWidget(),
                 ),
               )
             : AnimatedDropdown<String>(

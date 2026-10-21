@@ -45,14 +45,18 @@ class MisonNotificationResponse {
   final int unreadCount;
   final List<MisonNotification> data;
 
-  const MisonNotificationResponse({required this.unreadCount, required this.data});
+  /// Liste enregistrée sur le téléphone, affichée hors ligne.
+  final bool fromCache;
 
-  factory MisonNotificationResponse.fromJson(Map<String, dynamic> json) {
+  const MisonNotificationResponse({required this.unreadCount, required this.data, this.fromCache = false});
+
+  factory MisonNotificationResponse.fromJson(Map<String, dynamic> json, {bool fromCache = false}) {
     return MisonNotificationResponse(
       unreadCount: int.tryParse(json['unread_count']?.toString() ?? '') ?? 0,
       data: (json['data'] as List? ?? [])
           .map((e) => MisonNotification.fromJson(e as Map<String, dynamic>))
           .toList(),
+      fromCache: fromCache,
     );
   }
 }

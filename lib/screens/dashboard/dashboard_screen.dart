@@ -5,7 +5,7 @@ import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/image_border_component.dart';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
-import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
+import 'package:booking_system_flutter/screens/map/mison_artisans_map_screen.dart';
 import 'package:booking_system_flutter/screens/chat/chat_list_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/dashboard_fragment.dart';
 import 'package:booking_system_flutter/screens/dashboard/fragment/mison_booking_fragment.dart';
@@ -117,7 +117,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 builder: (context) => appStore.isLoggedIn
                     ? const MisonBookingFragment()
                     : const SignInScreen(isFromDashboard: true)),
-            const MisonSearchServiceScreen(showBackButton: false),
+            // Onglet « Notre réseau » : carte des prestataires autour du client.
+            const MisonArtisansMapScreen(),
             if (appConfigurationStore.isEnableChat)
               Observer(
                   builder: (context) => appStore.isLoggedIn
@@ -154,10 +155,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: language.booking,
                 ),
                 NavigationDestination(
-                  icon: ic_category.iconImage(color: appTextSecondaryColor),
-                  selectedIcon:
-                      ic_category.iconImage(color: kMisonGold),
-                  label: 'Service',
+                  icon: const Icon(Icons.map_outlined, color: appTextSecondaryColor),
+                  selectedIcon: const Icon(Icons.map_rounded, color: kMisonGold),
+                  label: 'Notre réseau',
                 ),
                 if (appConfigurationStore.isEnableChat)
                   NavigationDestination(

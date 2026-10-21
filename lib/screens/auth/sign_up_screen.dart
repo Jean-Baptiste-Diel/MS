@@ -999,7 +999,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   8.height,
                   Text(
-                    'Rejoignez le réseau Mison',
+                    'Rejoignez le réseau MISON',
                     style: TextStyle(
                         color: appTextSecondaryColor,
                         fontSize: 14,

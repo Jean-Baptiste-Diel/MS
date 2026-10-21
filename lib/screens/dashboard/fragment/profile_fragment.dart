@@ -308,7 +308,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Bienvenue sur Mison', style: boldTextStyle(size: 19)),
+          Text('Bienvenue sur MISON', style: boldTextStyle(size: 19)),
           6.height,
           Text(
             'Connectez-vous pour gérer votre profil et vos paramètres.',

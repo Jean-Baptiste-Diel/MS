@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
@@ -36,7 +37,7 @@ class _MisonArtisanReviewsScreenState extends State<MisonArtisanReviewsScreen> {
     final reason = await showMisonReportSheet(
       context,
       title: 'Signaler cet avis',
-      subtitle: "Pourquoi signalez-vous cet avis ? L'équipe Mison le vérifiera sous 24 h.",
+      subtitle: "Pourquoi signalez-vous cet avis ? L'équipe MISON le vérifiera sous 24 h.",
     );
     if (reason == null) return;
     try {
@@ -44,7 +45,7 @@ class _MisonArtisanReviewsScreenState extends State<MisonArtisanReviewsScreen> {
       if (!mounted) return;
       setState(() => _reported.add(orderId));
       TopToast.show(
-        message: "Merci, votre signalement a été envoyé à l'équipe Mison. Il sera traité sous 24 h.",
+        message: "Merci, votre signalement a été envoyé à l'équipe MISON. Il sera traité sous 24 h.",
         type: TopToastType.success,
       );
     } catch (_) {
@@ -91,7 +92,7 @@ class _MisonArtisanReviewsScreenState extends State<MisonArtisanReviewsScreen> {
           future: _future,
           builder: (context, snap) {
             if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator(color: kMisonGold));
+              return const MisonPageLoader();
             }
             if (snap.hasError) {
               return Center(

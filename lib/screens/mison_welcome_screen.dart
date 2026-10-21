@@ -136,7 +136,7 @@ class _MisonWelcomeScreenState extends State<MisonWelcomeScreen>
                             24.height,
                             // App name
                             Text(
-                              'Mison',
+                              'MISON',
                               style: boldTextStyle(
                                 size: 42,
                                 color: Colors.white,

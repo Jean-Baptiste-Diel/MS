@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_offline_banner.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/mison_cancel_order_sheet.dart';
@@ -65,6 +66,9 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
   static const Color _chipSelectedText = Color(0xFF8A6A0F);
   bool _showAllFilters = false;
 
+  /// Liste affichée depuis le téléphone (pas de réseau).
+  bool _offline = false;
+
   final List<Map<String, String>> _filters = const [
     // « Tous » : sélectionné (en couleur) quand aucun statut n'est choisi
     {'value': '', 'label': 'Tous'},
@@ -115,19 +119,37 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
   /// Actualisation silencieuse : la liste reste affichée pendant le chargement.
   @override
   Future<void> onAutoRefresh() async {
-    final res = await getMisonOrders();
-    if (mounted) setState(() => _future = Future.value(res));
+    final res = await getMisonOrders(offlineFallback: true);
+    if (mounted) {
+      setState(() {
+        _future = Future.value(res);
+        _offline = res.fromCache;
+      });
+    }
   }
 
   void _load() {
-    _future = getMisonOrders();
+    _future = getMisonOrders(offlineFallback: true).then((res) {
+      if (mounted && _offline != res.fromCache) setState(() => _offline = res.fromCache);
+      return res;
+    });
     _key = UniqueKey();
   }
 
   /// Panneau d'annulation Mison (motif, confirmation, chargement).
   Future<void> _showCancelDialog(MisonOrder order) async {
-    final cancelled = await showMisonCancelOrderSheet(context, orderId: order.id ?? '');
-    if (cancelled && mounted) setState(() => _load());
+    final result = await showMisonCancelOrderSheet(
+      context,
+      orderId: order.id ?? '',
+      hasArtisan: order.artisan != null,
+    );
+    if (!mounted) return;
+    if (result == MisonCancelResult.cancelled) {
+      goToMisonHome(context);
+    } else if (result == MisonCancelResult.artisanChanged) {
+      setState(() => _load());
+      MisonOrderSearchingScreen(orderId: order.id ?? '').launch(context);
+    }
   }
 
   /// Filtres de la ligne principale. Si le filtre choisi fait partie des
@@ -249,6 +271,7 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
             ],
           ),
         ),
+        if (_offline) const MisonOfflineBanner(),
         Expanded(
           child: SnapHelperWidget<MisonOrderResponse>(
             key: _key,

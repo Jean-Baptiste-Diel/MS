@@ -53,7 +53,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                           title: 'Ouvrier / Prestataire',
                           tag: 'Je propose des services',
                           description:
-                              'Plombier, électricien, peintre… Rejoignez le réseau Mison, '
+                              'Plombier, électricien, peintre… Rejoignez le réseau MISON, '
                               'recevez des demandes clients dans votre zone et gérez vos chantiers depuis l\'app.',
                           features: const [
                             'Recevez des demandes',

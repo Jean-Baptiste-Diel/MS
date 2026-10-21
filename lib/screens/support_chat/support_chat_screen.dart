@@ -1,3 +1,6 @@
+import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/component/mison_offline_banner.dart';
+import 'dart:convert';
 import 'package:booking_system_flutter/utils/configs.dart' show DOMAIN_URL;
 import 'package:booking_system_flutter/screens/support_chat/chat_image_viewer.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
@@ -46,7 +49,7 @@ class SupportChatScreen extends StatefulWidget {
   const SupportChatScreen({
     Key? key,
     this.orderId,
-    this.title = 'Support Mison',
+    this.title = 'Support MISON',
     this.emptyTitle = 'Démarrez la conversation',
     this.emptySubtitle = 'Notre équipe vous répondra dans les plus brefs délais.',
     this.emptyIcon = Icons.support_agent_rounded,
@@ -73,6 +76,32 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   bool _left = false;
 
   bool _isConnecting = true;
+
+  /// Pas de réseau : derniers messages enregistrés, en lecture seule.
+  bool _offline = false;
+
+  String get _cacheKey =>
+      '${SupportChatMessage.cachePrefix}${appStore.userId}_${widget.orderId ?? 'support'}';
+
+  /// Garde les 200 derniers messages envoyés (hors images en cours d'envoi).
+  void _saveCache() {
+    final sent = _messages.where((m) => m.status == MessageStatus.sent && m.id.isNotEmpty).toList();
+    final last = sent.length > 200 ? sent.sublist(sent.length - 200) : sent;
+    setValue(_cacheKey, jsonEncode(last.map((m) => m.toCacheJson()).toList()));
+  }
+
+  List<SupportChatMessage> _cachedMessages() {
+    final saved = getStringAsync(_cacheKey);
+    if (saved.isEmpty) return [];
+    try {
+      return (jsonDecode(saved) as List)
+          .whereType<Map>()
+          .map((m) => SupportChatMessage.fromCacheJson(m.cast<String, dynamic>()))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
   bool _wsConnected = false;
   String? _error;
 
@@ -98,6 +127,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     setState(() {
       _isConnecting = true;
       _error = null;
+      _offline = false;
       // Garder les messages failed existants pour permettre le retry
       _messages.removeWhere((m) => m.status != MessageStatus.failed);
     });
@@ -125,6 +155,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           // Trier par date
           _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
         });
+        _saveCache();
         _scrollToBottom();
       });
 
@@ -138,6 +169,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           final exists = msg.id.isNotEmpty && _messages.any((m) => m.id == msg.id);
           if (!exists) _messages.add(msg);
         });
+        _saveCache();
         _scrollToBottom();
       });
 
@@ -178,7 +210,21 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       _reconnectAttempt = 0;
       setState(() => _wsConnected = true);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (!mounted) return;
+      final cached = isOfflineError(e) ? _cachedMessages() : <SupportChatMessage>[];
+      if (cached.isNotEmpty) {
+        // Hors ligne : les derniers messages enregistrés, sans envoi possible.
+        setState(() {
+          _offline = true;
+          _messages
+            ..removeWhere((m) => m.status != MessageStatus.failed)
+            ..insertAll(0, cached)
+            ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        });
+        _scrollToBottom();
+      } else {
+        setState(() => _error = e.toString());
+      }
     } finally {
       if (mounted) setState(() => _isConnecting = false);
     }
@@ -358,13 +404,15 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             icon: const Icon(Icons.arrow_back, color: kMisonDark),
             onPressed: () => finish(context),
           ),
-          actions: _isOrderChat && !_isConnecting && _error == null ? [_buildModerationMenu()] : null,
+          actions: _isOrderChat && !_isConnecting && _error == null && !_offline ? [_buildModerationMenu()] : null,
         ),
         body: DotGridBackground(
           child: Column(
             children: [
+              // Toucher le bandeau : nouvel essai de connexion.
+              if (_offline) GestureDetector(onTap: _initChat, child: const MisonOfflineBanner()),
               Expanded(child: _buildBody()),
-              if (!_isConnecting && _error == null)
+              if (!_isConnecting && _error == null && !_offline)
                 _isOrderChat && _service.isBlocked ? _buildBlockedBar() : _buildInputBar(),
             ],
           ),
@@ -722,7 +770,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     final ok = await _service.report(messageId: messageId, reason: reason);
     TopToast.show(
       message: ok
-          ? "Merci, votre signalement a été envoyé à l'équipe Mison. Il sera traité sous 24 h."
+          ? "Merci, votre signalement a été envoyé à l'équipe MISON. Il sera traité sous 24 h."
           : 'Signalement non envoyé, réessayez.',
       type: ok ? TopToastType.success : TopToastType.error,
     );
@@ -732,7 +780,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     final reason = await showMisonReportSheet(
       context,
       title: 'Signaler ce message',
-      subtitle: "Pourquoi signalez-vous ce message ? L'équipe Mison le vérifiera sous 24 h.",
+      subtitle: "Pourquoi signalez-vous ce message ? L'équipe MISON le vérifiera sous 24 h.",
     );
     if (reason == null) return;
     await _sendReport(messageId: msg.id, reason: reason);
@@ -742,7 +790,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     final reason = await showMisonReportSheet(
       context,
       title: 'Signaler $_peerName',
-      subtitle: "Pourquoi signalez-vous cette personne ? L'équipe Mison vérifiera sous 24 h.",
+      subtitle: "Pourquoi signalez-vous cette personne ? L'équipe MISON vérifiera sous 24 h.",
     );
     if (reason == null) return;
     await _sendReport(reason: reason);
@@ -754,7 +802,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       icon: Icons.block_rounded,
       title: 'Bloquer $_peerName ?',
       subtitle: 'Vous ne verrez plus ses messages, et vous ne pourrez plus vous écrire ni vous appeler. '
-          "L'équipe Mison sera prévenue. Pourquoi bloquez-vous cette personne ?",
+          "L'équipe MISON sera prévenue. Pourquoi bloquez-vous cette personne ?",
     );
     if (reason == null) return;
     final ok = await _service.setBlocked(true, reason: reason);
@@ -765,7 +813,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     }
     // Ses messages disparaissent tout de suite.
     setState(() => _messages.removeWhere((m) => !m.isMe));
-    TopToast.show(message: "$_peerName est bloqué. L'équipe Mison a été prévenue.", type: TopToastType.success);
+    TopToast.show(message: "$_peerName est bloqué. L'équipe MISON a été prévenue.", type: TopToastType.success);
   }
 
   Future<void> _unblock() async {
@@ -827,6 +875,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   void _leaveClosedChat() {
     if (_left || !mounted) return;
     _left = true;
+    removeKey(_cacheKey); // messages supprimés : la copie du téléphone aussi
     TopToast.show(message: 'Prestation terminée : cette discussion est fermée.');
     final route = ModalRoute.of(context);
     if (route != null && route.isActive) Navigator.of(context).removeRoute(route);

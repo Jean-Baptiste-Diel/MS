@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -59,7 +60,7 @@ class _ChatImageViewerState extends State<ChatImageViewer> {
             imageUrl: widget.url ?? '',
             cacheKey: imageCacheKey(widget.url),
             fit: BoxFit.contain,
-            placeholder: (_, __) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+            placeholder: (_, __) => const Center(child: LoaderWidget(colors: [Colors.white, Color(0xFFC49716)])),
             errorWidget: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white54, size: 48),
           );
 

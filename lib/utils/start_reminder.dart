@@ -69,7 +69,7 @@ class StartReminder {
       await FlutterLocalNotificationsPlugin().show(
         _idFor(orderId),
         client.isEmpty ? 'Vous êtes chez le client' : 'Vous êtes chez $client',
-        'Appuyez sur « Commencer la prestation » dans l\'app Mison pour démarrer.',
+        'Appuyez sur « Commencer la prestation » dans l\'app MISON pour démarrer.',
         const NotificationDetails(
           android: AndroidNotificationDetails(
             _channelId,

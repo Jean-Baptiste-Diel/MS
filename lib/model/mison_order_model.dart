@@ -5,6 +5,9 @@ class MisonOrderResponse {
   String? message;
   List<MisonOrder>? data;
 
+  /// Liste enregistrée sur le téléphone, affichée hors ligne.
+  bool fromCache = false;
+
   MisonOrderResponse({this.message, this.data});
 
   factory MisonOrderResponse.fromJson(Map<String, dynamic> json) {
