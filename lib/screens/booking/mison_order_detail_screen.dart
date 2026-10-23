@@ -688,8 +688,10 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 // ouvrier : confirmation de désistement inchangée
                 onCancel: appStore.userType == USER_TYPE_PROVIDER
                     ? () => _confirm(
-                          title: 'Se désister de la commande',
-                          subtitle: 'La commande sera reproposée aux autres ouvriers. Confirmez-vous ?',
+                          title: order.isPendingDirectRequest ? 'Refuser la demande' : 'Se désister de la commande',
+                          subtitle: order.isPendingDirectRequest
+                              ? 'Le client sera prévenu et sa demande sera proposée à d\'autres prestataires.'
+                              : 'La commande sera reproposée aux autres ouvriers. Confirmez-vous ?',
                           type: DialogType.DELETE,
                           onConfirm: () => _cancelOrder(order.id!),
                         )
@@ -832,7 +834,11 @@ class _OrderDetailBody extends StatelessWidget {
     late final Color primaryActionColor;
     late final VoidCallback primaryActionTap;
     if (showAcceptButton) {
-      primaryActionLabel = order.needsArtisanConfirmation ? 'Confirmer cette commande' : 'Accepter cette commande';
+      primaryActionLabel = order.isPendingDirectRequest
+          ? 'Accepter la demande'
+          : order.needsArtisanConfirmation
+              ? 'Confirmer cette commande'
+              : 'Accepter cette commande';
       primaryActionIcon = Icons.check_circle_outline_rounded;
       primaryActionColor = kMisonGold; // Accepter / Confirmer en doré
       primaryActionTap = onAccept;
@@ -948,7 +954,7 @@ class _OrderDetailBody extends StatelessWidget {
                     _ArtisanHeroCard(
                       artisan: order.artisan!,
                       statusColor: sColor,
-                      statusLabel: statusLabel(order.status),
+                      statusLabel: order.isPendingDirectRequest ? 'En attente de réponse' : statusLabel(order.status),
                       serviceName: order.service?.name ?? '',
                     ),
                   20.height,
@@ -992,7 +998,7 @@ class _OrderDetailBody extends StatelessWidget {
                   _ClientHeroCard(
                     order: order,
                     statusColor: sColor,
-                    statusLabel: statusLabel(order.status),
+                    statusLabel: order.isPendingDirectRequest ? 'En attente de réponse' : statusLabel(order.status),
                   ),
                   16.height,
                 ],
@@ -1016,7 +1022,9 @@ class _OrderDetailBody extends StatelessWidget {
                           8.width,
                           Expanded(
                             child: Text(
-                              'Cette commande vous a été affectée par MISON. Confirmez-la pour la démarrer.',
+                              order.isPendingDirectRequest
+                                  ? 'Ce client vous a choisi. Acceptez ou refusez sa demande.'
+                                  : 'Cette commande vous a été affectée par MISON. Confirmez-la pour la démarrer.',
                               style: secondaryTextStyle(size: 14, color: kMisonGold),
                             ),
                           ),
@@ -1073,13 +1081,15 @@ class _OrderDetailBody extends StatelessWidget {
                   16.height,
                   // Désistement discret, même style que l'annulation côté client
                   MisonDiscreetCancelButton(
-                    label: 'Se désister de la commande',
+                    label: order.isPendingDirectRequest ? 'Refuser la demande' : 'Se désister de la commande',
                     onTap: onCancel,
                     expanded: true,
                   ),
                   8.height,
                   Text(
-                    'La commande sera reproposée aux autres ouvriers du service.',
+                    order.isPendingDirectRequest
+                        ? 'Le client sera prévenu et sa demande proposée aux autres ouvriers du service.'
+                        : 'La commande sera reproposée aux autres ouvriers du service.',
                     style: secondaryTextStyle(size: 12, color: Colors.grey.shade500),
                     textAlign: TextAlign.center,
                   ).center(),

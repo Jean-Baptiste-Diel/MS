@@ -313,7 +313,12 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
       TopToast.show(message: "Ce service n'est pas disponible pour le moment.");
       return;
     }
-    MisonBookingFormScreen(service: service).launch(context);
+    // Commande proposée à ce prestataire ; s'il refuse, recherche habituelle.
+    MisonBookingFormScreen(
+      service: service,
+      artisanId: a['id']?.toString(),
+      artisanName: a['name']?.toString(),
+    ).launch(context);
   }
 
   void _openReviews(Map<String, dynamic> a) {
@@ -633,6 +638,7 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
   Widget _artisanCard(Map<String, dynamic> a) {
     final style = serviceStyle(a['service_name']?.toString());
     final available = a['is_available'] == true;
+    final busy = a['is_busy'] == true;
     final rating = double.tryParse(a['average_rating']?.toString() ?? '') ?? 0;
     final reviews = (a['total_reviews'] as num?)?.toInt() ?? 0;
     final distance = (a['distance_km'] as num?)?.toDouble();
@@ -700,8 +706,8 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
             if (years > 0) _info(Icons.work_history_outlined, '$years an${years > 1 ? 's' : ''} d\'expérience'),
             _info(
               available ? Icons.circle : Icons.circle_outlined,
-              available ? 'Disponible' : 'Indisponible',
-              color: available ? Colors.green : Colors.grey,
+              available ? 'Disponible' : (busy ? 'En mission' : 'Indisponible'),
+              color: available ? Colors.green : (busy ? kMisonGold : Colors.grey),
             ),
           ]),
           14.height,
@@ -717,6 +723,8 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
                 child: Text('Voir les avis', style: boldTextStyle(size: 13, color: kMisonGold)),
               ),
             ),
+            // En mission ou indisponible : pas de commande possible.
+            if (available) ...[
             10.width,
             Expanded(
               child: ElevatedButton(
@@ -733,6 +741,7 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
                 ),
               ),
             ),
+            ],
           ]),
         ],
       ),

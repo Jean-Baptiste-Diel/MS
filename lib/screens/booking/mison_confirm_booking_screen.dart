@@ -83,7 +83,15 @@ class _MisonConfirmBookingScreenState
 
       final order = response.data;
       if (!mounted) return;
-      if (order != null && (order.id ?? '').isNotEmpty && order.isPending && (order.latitude ?? '').isNotEmpty) {
+      // Prestataire choisi plus disponible : le serveur l'explique (recherche lancée).
+      if (widget.artisanId != null && order != null && order.isPending && (response.message ?? '').isNotEmpty) {
+        TopToast.show(message: response.message!);
+      }
+      // Recherche, ou demande envoyée au prestataire choisi : suivi sur la carte.
+      if (order != null &&
+          (order.id ?? '').isNotEmpty &&
+          (order.isPending || order.isPendingDirectRequest) &&
+          (order.latitude ?? '').isNotEmpty) {
         // Commande confirmée : directement la recherche sur la carte, avec
         // « Mes commandes » dessous pour le retour.
         final navigator = Navigator.of(context);

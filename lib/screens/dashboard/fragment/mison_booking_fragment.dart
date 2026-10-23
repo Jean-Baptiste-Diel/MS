@@ -533,7 +533,7 @@ class MisonOrderItemComponent extends StatelessWidget {
                     6.width,
                     Expanded(
                       child: Text(
-                        _statusLabel(order.status),
+                        order.isPendingDirectRequest ? 'En attente de réponse' : _statusLabel(order.status),
                         style: boldTextStyle(size: 13, color: _statusColor(order.status)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

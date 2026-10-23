@@ -1347,15 +1347,21 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
         onApprove: ((order.isPending && order.artisan == null) ||
                 order.needsArtisanConfirmation)
             ? () => _confirmAction(
-                  title: order.needsArtisanConfirmation
-                      ? 'Confirmer la commande'
-                      : 'Accepter la commande',
-                  subtitle: order.needsArtisanConfirmation
-                      ? 'Cette commande vous a été affectée par MISON. La confirmez-vous ?'
-                      : 'Confirmez-vous l\'acceptation de cette commande ?',
+                  title: order.isPendingDirectRequest
+                      ? 'Accepter la demande'
+                      : order.needsArtisanConfirmation
+                          ? 'Confirmer la commande'
+                          : 'Accepter la commande',
+                  subtitle: order.isPendingDirectRequest
+                      ? 'Ce client vous a choisi. Acceptez-vous sa demande ?'
+                      : order.needsArtisanConfirmation
+                          ? 'Cette commande vous a été affectée par MISON. La confirmez-vous ?'
+                          : 'Confirmez-vous l\'acceptation de cette commande ?',
                   action: () => artisanAcceptOrder(order.id!),
                   icon: Icons.assignment_turned_in_outlined,
-                  confirmLabel: order.needsArtisanConfirmation ? 'Oui, je confirme' : "Oui, j'accepte",
+                  confirmLabel: order.needsArtisanConfirmation && !order.isPendingDirectRequest
+                      ? 'Oui, je confirme'
+                      : "Oui, j'accepte",
                 )
             : null,
         // Seulement une fois arrivé chez le client (avant : « Aller chez le
@@ -1366,7 +1372,19 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
                 if (await showMisonStartPrestationSheet(context, orderId: order.id!)) _reload();
               }
             : null,
-        onRelease: order.canReleaseByArtisan
+        onRelease: order.isPendingDirectRequest
+            ? () => _confirmAction(
+                  title: 'Refuser la demande',
+                  subtitle: 'Le client sera prévenu et sa demande sera proposée à d\'autres prestataires.',
+                  action: () async {
+                    await cancelMisonOrder(order.id!);
+                    return MisonActionResponse(message: 'Demande refusée');
+                  },
+                  icon: Icons.event_busy_rounded,
+                  confirmLabel: 'Oui, refuser',
+                  danger: true,
+                )
+            : order.canReleaseByArtisan
             ? () => _confirmAction(
                   title: 'Se désister',
                   subtitle: 'La commande sera reproposée aux autres ouvriers. Confirmez-vous ?',
@@ -1741,7 +1759,7 @@ class _ArtisanOrderCard extends StatelessWidget {
                       shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       onTap: onApprove,
                       child: Text(
-                        order.needsArtisanConfirmation ? 'Confirmer' : 'Accepter',
+                        order.needsArtisanConfirmation && !order.isPendingDirectRequest ? 'Confirmer' : 'Accepter',
                         style: boldTextStyle(color: Colors.white, size: 14),
                       ),
                     ),
@@ -1764,7 +1782,10 @@ class _ArtisanOrderCard extends StatelessWidget {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: onRelease,
-                      child: Text('Se désister', style: boldTextStyle(color: rejected, size: 14)),
+                      child: Text(
+                        order.isPendingDirectRequest ? 'Refuser' : 'Se désister',
+                        style: boldTextStyle(color: rejected, size: 14),
+                      ),
                     ),
                   ],
                 ],

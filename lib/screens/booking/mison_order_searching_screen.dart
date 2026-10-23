@@ -46,12 +46,17 @@ class MisonOrderSearchingScreen extends StatefulWidget {
   /// Ouvert depuis la notification de désistement : bandeau qui l'explique.
   final bool artisanReleased;
 
+  /// Ouvert depuis la notification « recherche en cours » d'une demande
+  /// envoyée depuis la carte (prestataire choisi sans réponse ou pas disponible).
+  final bool searchWidened;
+
   const MisonOrderSearchingScreen({
     super.key,
     required this.orderId,
     this.initialOrder,
     this.justConfirmed = false,
     this.artisanReleased = false,
+    this.searchWidened = false,
   });
 
   /// Commande dont le suivi est à l'écran : une notification de cette
@@ -74,7 +79,7 @@ class MisonOrderSearchingScreen extends StatefulWidget {
 }
 
 /// Bandeau affiché quelques secondes en haut de la carte.
-enum _Notice { confirmed, found, released }
+enum _Notice { confirmed, found, released, widened }
 
 class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
     with SingleTickerProviderStateMixin {
@@ -158,6 +163,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
     });
     if (widget.justConfirmed) _showNotice(_Notice.confirmed);
     if (widget.artisanReleased) _showNotice(_Notice.released);
+    if (widget.searchWidened) _showNotice(_Notice.widened);
     _tickClock();
     _clock = Timer.periodic(const Duration(seconds: 1), (_) => _tickClock());
   }
@@ -192,6 +198,7 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
       _Notice.confirmed => const Duration(seconds: 3),
       _Notice.found => const Duration(seconds: 4),
       _Notice.released => const Duration(seconds: 6),
+      _Notice.widened => const Duration(seconds: 6),
     };
     _noticeHide = Timer(duration, () {
       if (mounted) setState(() => _notice = null);
@@ -220,6 +227,11 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
       if (!mounted || _leaving) return;
       final order = (results[0] as MisonOrderDetailResponse).data;
       if (order == null) return;
+      // Demande envoyée depuis la carte : le prestataire choisi a accepté, ou
+      // la recherche s'élargit (jamais présentée comme refusée ou annulée).
+      final previous = _order;
+      final wasDirect = previous != null && previous.isPendingDirectRequest;
+      final widened = wasDirect && order.isPending;
       _order ??= order;
       _buildArtisanIcon();
 
@@ -243,11 +255,18 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
           _fitArtisanAndClient();
         }
         if (wasSearching != false) _onArtisanFound(order, announce: wasSearching == true);
+        if (wasDirect && !order.isPendingDirectRequest) _showNotice(_Notice.found);
         return;
       }
 
-      // En recherche (de nouveau, si le prestataire s'est désisté).
-      if (wasSearching == false) _onArtisanReleased();
+      // En recherche (de nouveau, si le prestataire s'est désisté ou si le
+      // prestataire choisi sur la carte n'a pas accepté la demande).
+      if (widened) {
+        _stopTracking();
+        _showNotice(_Notice.widened);
+      } else if (wasSearching == false) {
+        _onArtisanReleased();
+      }
       _searchStart = _searchStartOf(order) ?? _searchStart;
       final nearby = results.length > 1 ? results[1] as Map<String, dynamic> : <String, dynamic>{};
       final previousRadius = _radiusKm;
@@ -652,12 +671,21 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
       child = const SizedBox.shrink(key: ValueKey('none'));
     } else {
       final (Color color, IconData icon, String title, String body) = switch (notice) {
-        _Notice.confirmed => (
-            completed,
-            Icons.check_circle_rounded,
-            'Commande confirmée',
-            'Nous recherchons un prestataire près de vous. Vous serez notifié dès qu\'il accepte.',
-          ),
+        _Notice.confirmed => _order?.isPendingDirectRequest == true
+            ? (
+                completed,
+                Icons.check_circle_rounded,
+                'Demande envoyée',
+                firstName.isEmpty
+                    ? 'Le prestataire va vous répondre.'
+                    : '$firstName va vous répondre. S\'il refuse, nous en chercherons un autre.',
+              )
+            : (
+                completed,
+                Icons.check_circle_rounded,
+                'Commande confirmée',
+                'Nous recherchons un prestataire près de vous. Vous serez notifié dès qu\'il accepte.',
+              ),
         _Notice.found => (
             completed,
             Icons.person_pin_circle_rounded,
@@ -669,6 +697,12 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
             Icons.info_rounded,
             'Votre prestataire s\'est désisté',
             'Pas d\'inquiétude : nous en cherchons un autre près de vous.',
+          ),
+        _Notice.widened => (
+            kMisonGold,
+            Icons.travel_explore_rounded,
+            'Recherche en cours',
+            'Nous prévenons d\'autres prestataires près de chez vous.',
           ),
       };
       child = Container(
@@ -796,6 +830,9 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
           ? 'En route vers votre adresse.'
           : 'Arrivée vers ${eta.arrivalTime} · ${eta.durationText} · ${eta.distanceText}';
       return ('$who est en route', detail, Icons.directions_car_rounded);
+    }
+    if (order.isPendingDirectRequest) {
+      return ('Demande envoyée', 'En attente de la réponse de $who.', Icons.hourglass_top_rounded);
     }
     if (order.needsArtisanConfirmation) {
       return ('Prestataire affecté', '$who doit encore confirmer la commande.', Icons.person_pin_circle_rounded);

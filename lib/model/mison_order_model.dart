@@ -71,6 +71,9 @@ class MisonOrder {
   // prestataire, puis prix convenu (ferme, payé à la fin).
   int? priceProposal;
   String priceProposedBy = ''; // 'client' ou 'artisan'
+
+  /// Commande passée depuis la carte à ce prestataire, en attente de sa réponse.
+  bool directRequest = false;
   int? agreedPrice;
   // Interrupteur du back-office : tant qu'il est éteint, la commande suit
   // l'ancien parcours (prix fixé à la fin), comme les anciennes versions.
@@ -149,6 +152,7 @@ class MisonOrder {
       ..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null
       ..priceProposal = num.tryParse(json['price_proposal']?.toString() ?? '')?.round()
       ..priceProposedBy = json['price_proposed_by']?.toString() ?? ''
+      ..directRequest = json['direct_request'] == true
       ..agreedPrice = num.tryParse(json['agreed_price']?.toString() ?? '')?.round()
       ..priceAgreementRequired = json['price_agreement_required'] == true;
   }
@@ -257,6 +261,9 @@ class MisonOrder {
 
   /// L'ouvrier doit encore confirmer une commande que l'admin lui a affectée.
   bool get needsArtisanConfirmation => isAssigned && artisan != null;
+
+  /// Le client a choisi ce prestataire sur la carte : il accepte ou refuse.
+  bool get isPendingDirectRequest => needsArtisanConfirmation && directRequest;
 
   /// L'ouvrier peut démarrer la prestation (plus de paiement préalable).
   bool get canStart =>

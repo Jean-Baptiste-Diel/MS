@@ -22,9 +22,12 @@ import 'package:booking_system_flutter/main.dart';
 /// Correspond au design Figma "Onboarding_001"
 class MisonBookingFormScreen extends StatefulWidget {
   final MisonService service;
+  /// Prestataire choisi sur la carte « Notre réseau » : la commande lui est
+  /// proposée en premier.
   final String? artisanId;
+  final String? artisanName;
 
-  const MisonBookingFormScreen({Key? key, required this.service, this.artisanId}) : super(key: key);
+  const MisonBookingFormScreen({Key? key, required this.service, this.artisanId, this.artisanName}) : super(key: key);
 
   @override
   State<MisonBookingFormScreen> createState() => _MisonBookingFormScreenState();
@@ -417,6 +420,11 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
               
+                  if (widget.artisanId != null) ...[
+                    _buildChosenArtisan(),
+                    20.height,
+                  ],
+
                   // Date selection
                   _buildDateSection(),
                   24.height,
@@ -459,6 +467,31 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         ),
         ),
       ),
+    );
+  }
+
+  /// Prestataire choisi sur la carte : il reçoit la demande en premier.
+  Widget _buildChosenArtisan() {
+    final name = (widget.artisanName ?? '').isNotEmpty ? widget.artisanName! : 'ce prestataire';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kMisonGold.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kMisonGold.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.person_pin_circle_rounded, color: kMisonGold, size: 22),
+        10.width,
+        Expanded(
+          child: Text(
+            'Votre demande sera envoyée à $name. S\'il refuse, nous chercherons '
+            'un autre prestataire près de chez vous.',
+            style: secondaryTextStyle(size: 13, color: kMisonDark),
+          ),
+        ),
+      ]),
     );
   }
 
