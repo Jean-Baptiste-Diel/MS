@@ -8,11 +8,13 @@ import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
+import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_artisan_reviews_screen.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
 import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
+import 'package:booking_system_flutter/utils/require_login.dart';
 import 'package:booking_system_flutter/utils/service_icons.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:flutter/material.dart';
@@ -325,6 +327,14 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
     MisonArtisanReviewsScreen(artisanId: a['id'].toString(), artisanName: a['name']?.toString() ?? '').launch(context);
   }
 
+  /// Visiteur sans compte : se connecter, puis la carte se recharge avec
+  /// le détail des prestataires (nom, photo, avis).
+  Future<void> _loginToSeeDetails() async {
+    _cardTimer?.cancel();
+    setState(() => _selected = null);
+    if (await requireClientLogin(context) && mounted) _load(_fetchedAt);
+  }
+
   // ---------------------------------------------------------------- écran
 
   @override
@@ -635,7 +645,75 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 16, offset: const Offset(0, 6))],
       );
 
+  /// Fiche d'un prestataire pour un visiteur sans compte : service et
+  /// disponibilité seulement, connexion demandée pour le reste.
+  Widget _guestCard(Map<String, dynamic> a) {
+    final style = serviceStyle(a['service_name']?.toString());
+    final available = a['is_available'] == true;
+    final busy = a['is_busy'] == true;
+    final distance = (a['distance_km'] as num?)?.toDouble();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 16, offset: const Offset(0, -4))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: style.color.withValues(alpha: 0.15),
+              child: Icon(style.icon, color: style.color),
+            ),
+            12.width,
+            Expanded(
+              child: Text(
+                a['service_name']?.toString() ?? 'Prestataire',
+                style: boldTextStyle(size: 16, color: kMisonDark),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close_rounded, size: 20),
+              onPressed: () => setState(() => _selected = null),
+            ),
+          ]),
+          10.height,
+          Wrap(spacing: 12, runSpacing: 6, children: [
+            if (distance != null) _info(Icons.near_me_outlined, '≈ ${_formatKm(distance)}'),
+            _info(
+              available ? Icons.circle : Icons.circle_outlined,
+              available ? 'Disponible' : (busy ? 'En mission' : 'Indisponible'),
+              color: available ? Colors.green : (busy ? kMisonGold : Colors.grey),
+            ),
+          ]),
+          8.height,
+          Text('Connectez-vous pour voir ce prestataire, ses avis et le commander.', style: secondaryTextStyle(size: 13)),
+          14.height,
+          ElevatedButton.icon(
+            onPressed: _loginToSeeDetails,
+            icon: const Icon(Icons.lock_outline_rounded, size: 18, color: Colors.white),
+            label: Text('Se connecter', style: boldTextStyle(size: 13, color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kMisonGold,
+              elevation: 0,
+              minimumSize: const Size.fromHeight(44),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _artisanCard(Map<String, dynamic> a) {
+    // Sans compte (ou carte enregistrée avant la connexion) : fiche réduite.
+    if (!appStore.isLoggedIn || a['name'] == null) return _guestCard(a);
     final style = serviceStyle(a['service_name']?.toString());
     final available = a['is_available'] == true;
     final busy = a['is_busy'] == true;

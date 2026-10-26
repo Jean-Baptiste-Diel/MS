@@ -25,6 +25,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:nb_utils/nb_utils.dart';
 
 import '../model/wallet_response.dart';
@@ -113,6 +114,41 @@ Future<BaseResponseModel> createUser(
   );
 
   return completer.future;
+}
+
+/// Prestataire rejeté : envoie les infos et documents corrigés.
+/// POST /api/auth/artisan/resubmit (multipart, identifiant + mot de passe).
+/// Seuls les champs non nuls sont envoyés ; [files] : nom du champ → image.
+Future<String> resubmitArtisanDossier({
+  required String identifier,
+  required String password,
+  Map<String, String> fields = const {},
+  Map<String, XFile> files = const {},
+}) async {
+  final request = await getMultiPartRequest('auth/artisan/resubmit');
+  request.fields['identifier'] = identifier;
+  request.fields['password'] = password;
+  request.fields.addAll(fields);
+  for (final entry in files.entries) {
+    request.files.add(MultipartFile.fromBytes(entry.key, await entry.value.readAsBytes(), filename: entry.value.name));
+  }
+  // Envoi direct : sendMultiPartRequest traite un 401 comme une session
+  // expirée, alors qu'ici il signifie un mot de passe changé entre-temps.
+  final Response response;
+  try {
+    response = await Response.fromStream(await request.send());
+  } on SocketException {
+    throw language.internetNotAvailable;
+  }
+  final body = response.body.isJson() ? jsonDecode(response.body) : null;
+  final message = body is Map ? body['message']?.toString() : null;
+  if (response.statusCode.isSuccessful()) return message ?? 'Dossier envoyé.';
+  if (body is Map && message == null) {
+    // Erreur de validation DRF : { champ: [message] }.
+    final first = body.values.first;
+    throw first is List && first.isNotEmpty ? first.first.toString() : errorSomethingWentWrong;
+  }
+  throw message ?? errorSomethingWentWrong;
 }
 
 /// Inscription d'un ouvrier via l'API Mison

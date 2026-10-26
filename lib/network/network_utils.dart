@@ -17,6 +17,18 @@ import 'package:nb_utils/nb_utils.dart';
 
 const kPendingApprovalError = 'PENDING_APPROVAL';
 
+/// Connexion d'un prestataire dont le dossier a été rejeté : raison saisie
+/// par l'admin et infos actuelles, pour l'écran « Corriger mon dossier ».
+class ArtisanRejectedError {
+  final String reason;
+  final Map<String, dynamic> dossier;
+
+  ArtisanRejectedError(this.reason, this.dossier);
+
+  @override
+  String toString() => 'Compte rejeté : $reason';
+}
+
 // ── Redirect to login ─────────────────────────────────────────────────────────
 
 bool _isRedirectingToLogin = false;
@@ -232,6 +244,9 @@ Future handleResponse(Response response, {HttpResponseType httpResponseType = Ht
     if (response.body.isJson()) {
       final body = jsonDecode(response.body);
       if (body is Map) {
+        if (body['reason'] != null && body['dossier'] is Map) {
+          throw ArtisanRejectedError(body['reason'].toString(), Map<String, dynamic>.from(body['dossier']));
+        }
         final msg = (body['message'] ?? '').toString().toLowerCase();
         if (msg.contains('approbation') || msg.contains('attente') || msg.contains('pending') || msg.contains('approval')) {
           throw kPendingApprovalError;

@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/screens/auth/otp_verification_screen.dart';
+import 'package:booking_system_flutter/screens/auth/artisan_sign_up_screen.dart';
 import 'package:booking_system_flutter/component/animated_dropdown.dart';
 import 'package:booking_system_flutter/component/back_widget.dart';
 import 'package:booking_system_flutter/component/base_scaffold_body.dart';
@@ -183,6 +184,10 @@ class _SignInScreenState extends State<SignInScreen> {
       onLoginSuccessRedirection();
     } catch (e) {
       appStore.setLoading(false);
+      if (e is ArtisanRejectedError) {
+        _showRejectedSheet(identifier, passwordCont.text.trim(), e);
+        return;
+      }
       final msg = e.toString();
       if (msg == kPendingApprovalError) {
         _showPendingApprovalSheet();
@@ -215,6 +220,72 @@ class _SignInScreenState extends State<SignInScreen> {
       isFromSignUp: true,
       password: passwordCont.text,
     ).launch(context);
+  }
+
+  /// Dossier prestataire refusé : raison de l'admin et accès à la correction.
+  void _showRejectedSheet(String identifier, String password, ArtisanRejectedError rejected) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
+            ),
+            24.height,
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), shape: BoxShape.circle),
+              child: Icon(Icons.assignment_late_outlined, color: Colors.red.shade700, size: 36),
+            ),
+            20.height,
+            Text('Dossier à corriger', style: boldTextStyle(size: 18)),
+            12.height,
+            Text(
+              "Votre compte prestataire n'a pas été validé :",
+              style: secondaryTextStyle(size: 14),
+              textAlign: TextAlign.center,
+            ),
+            8.height,
+            Text(rejected.reason, style: boldTextStyle(size: 14), textAlign: TextAlign.center),
+            28.height,
+            AppButton(
+              width: double.infinity,
+              color: _brandGold,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final sent = await ArtisanSignUpScreen(
+                  resubmit: ArtisanResubmit(
+                    identifier: identifier,
+                    password: password,
+                    reason: rejected.reason,
+                    dossier: rejected.dossier,
+                  ),
+                ).launch(context);
+                if (sent == true && mounted) _showPendingApprovalSheet();
+              },
+              child: Text('Corriger mon dossier', style: boldTextStyle(color: Colors.white, size: 15)),
+            ),
+            8.height,
+            TextButton(
+              onPressed: () => Navigator.pop(sheetContext),
+              child: Text('Plus tard', style: secondaryTextStyle(size: 14)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showPendingApprovalSheet() {

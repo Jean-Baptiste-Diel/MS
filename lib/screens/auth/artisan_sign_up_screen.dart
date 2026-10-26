@@ -33,8 +33,28 @@ import 'package:booking_system_flutter/utils/top_toast.dart';
 const Color _brandGold = Color(0xFFC49716);
 const Color _brandDark = Color(0xFF3A3A3A);
 
+/// Prestataire rejeté : identifiants saisis à la connexion, raison de l'admin
+/// et dossier actuel, pour rouvrir l'inscription en mode « correction ».
+class ArtisanResubmit {
+  final String identifier;
+  final String password;
+  final String reason;
+  final Map<String, dynamic> dossier;
+
+  const ArtisanResubmit({
+    required this.identifier,
+    required this.password,
+    required this.reason,
+    required this.dossier,
+  });
+}
+
 class ArtisanSignUpScreen extends StatefulWidget {
-  const ArtisanSignUpScreen({Key? key}) : super(key: key);
+  /// Renseigné : même formulaire, prérempli, qui renvoie le dossier corrigé
+  /// (téléphone et code PIN inchangés, documents déjà envoyés conservés).
+  final ArtisanResubmit? resubmit;
+
+  const ArtisanSignUpScreen({Key? key, this.resubmit}) : super(key: key);
 
   @override
   State<ArtisanSignUpScreen> createState() => _ArtisanSignUpScreenState();
@@ -149,6 +169,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
 
   Map<String, String?> fieldErrors = {};
 
+  bool get _isResubmit => widget.resubmit != null;
+  Map<String, dynamic> get _dossier => widget.resubmit?.dossier ?? const {};
+
   // ── Lifecycle ────────────────────────────────────────────────────────────────
 
   @override
@@ -159,8 +182,85 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
-    fetchServices();
-    _fetchCurrentLocation();
+    if (_isResubmit) {
+      _prefillFromDossier();
+      // Après le chargement des métiers : sélection du métier enregistré.
+      fetchServices().then((_) => _prefillProfessions());
+    } else {
+      fetchServices();
+      _fetchCurrentLocation();
+    }
+  }
+
+  void _prefillFromDossier() {
+    final d = _dossier;
+    fNameCont.text = d['first_name']?.toString() ?? '';
+    lNameCont.text = d['last_name']?.toString() ?? '';
+    emailCont.text = d['email']?.toString() ?? '';
+    ageCont.text = d['age']?.toString() ?? '';
+    experienceCont.text = d['experience_years']?.toString() ?? '';
+    addressCont.text = d['address']?.toString() ?? '';
+    addressLat = double.tryParse(d['latitude']?.toString() ?? '');
+    addressLon = double.tryParse(d['longitude']?.toString() ?? '');
+
+    // Numéro : indicatif le plus long qui correspond (+221…, +33…).
+    final phone = (d['phone']?.toString() ?? '').replaceAll('+', '');
+    Country? phoneCountry;
+    for (final c in _allCountries) {
+      if (phone.startsWith(c.phoneCode) &&
+          (phoneCountry == null || c.phoneCode.length > phoneCountry.phoneCode.length)) {
+        phoneCountry = c;
+      }
+    }
+    if (phoneCountry != null) {
+      selectedCountry = phoneCountry;
+      mobileCont.text = phone.substring(phoneCountry.phoneCode.length);
+    }
+
+    final nationality = d['nationality']?.toString() ?? '';
+    selectedNationalityCountry = _allCountries.where((c) => c.name == nationality).firstOrNull;
+    final education = d['education_level']?.toString();
+    selectedEducationLevel =
+        _educationLevelApiValues.entries.where((e) => e.value == education).firstOrNull?.key;
+    final department = d['department']?.toString() ?? '';
+    selectedDepartment = dakarDepartmentOptions.contains(department) ? department : null;
+    selectedMobileMoneyAccounts.addAll((d['mobile_money_accounts']?.toString() ?? '')
+        .split(',')
+        .map((e) => e.trim())
+        .where(mobileMoneyOptions.contains));
+    joinWhatsappCommunity = d['join_whatsapp_community'] == true;
+    hasOtherProfessions = d['has_other_professions'] == true;
+  }
+
+  void _prefillProfessions() {
+    if (!mounted) return;
+    final d = _dossier;
+    final serviceId = d['service_id']?.toString();
+    final profession = d['profession_name']?.toString() ?? '';
+    setState(() {
+      final known = serviceOptions.where((s) => s['id'] == serviceId).firstOrNull;
+      if (known != null) {
+        selectedServiceId = serviceId;
+        professionCont.text = known['name'] ?? profession;
+      } else {
+        // Métier saisi librement (« Autre ») et pas encore validé.
+        selectedServiceId = otherServiceValue;
+        customMetierCont.text = profession;
+      }
+      final custom = <String>[];
+      for (final p in (d['other_professions']?.toString() ?? '').split(',').map((e) => e.trim())) {
+        if (p.isEmpty) continue;
+        if (p != 'Autre' && secondaryProfessionOptions.contains(p)) {
+          selectedOtherProfessions.add(p);
+        } else {
+          custom.add(p);
+        }
+      }
+      if (custom.isNotEmpty) {
+        selectedOtherProfessions.add('Autre');
+        otherProfessionCustomCont.text = custom.join(', ');
+      }
+    });
   }
 
   @override
@@ -357,7 +457,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['email'] = 'Email invalide';
           v = false;
         }
-        final pinError = validatePin(passwordCont.text);
+        final pinError = _isResubmit ? null : validatePin(passwordCont.text);
         if (pinError != null) {
           fieldErrors['password'] = pinError;
           v = false;
@@ -385,7 +485,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           fieldErrors['department'] = 'Département requis';
           v = false;
         }
-        if (mobileCont.text.trim().isEmpty) {
+        if (_isResubmit) {
+          // Numéro du compte : non modifiable.
+        } else if (mobileCont.text.trim().isEmpty) {
           fieldErrors['mobile'] = 'Téléphone requis';
           v = false;
         } else if (selectedCountry.countryCode == 'SN' &&
@@ -447,21 +549,24 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       case 2:
         bool v = true;
         if (profileImageFile == null &&
-            (profileImageBytes == null || profileImageBytes!.isEmpty)) {
+            (profileImageBytes == null || profileImageBytes!.isEmpty) &&
+            _dossier['profile_picture_url'] == null) {
           fieldErrors['profileImage'] = 'Photo de profil requise';
           v = false;
         }
         if (identityFrontFile == null &&
-            (identityFrontBytes == null || identityFrontBytes!.isEmpty)) {
+            (identityFrontBytes == null || identityFrontBytes!.isEmpty) &&
+            _dossier['has_identity_document'] != true) {
           fieldErrors['identityFront'] = 'Pièce d\'identité (Recto) requise';
           v = false;
         }
         if (identityBackFile == null &&
-            (identityBackBytes == null || identityBackBytes!.isEmpty)) {
+            (identityBackBytes == null || identityBackBytes!.isEmpty) &&
+            _dossier['has_identity_document_back'] != true) {
           fieldErrors['identityBack'] = 'Pièce d\'identité (Verso) requise';
           v = false;
         }
-        if (!isAcceptedTc) {
+        if (!isAcceptedTc && !_isResubmit) {
           fieldErrors['terms'] = language.termsConditionsAccept;
           v = false;
         }
@@ -480,7 +585,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       return;
     }
 
-    if (currentStep == 0) {
+    if (currentStep == 0 && !_isResubmit) {
       final bool canProceed = await _checkEmailPhoneAvailability();
       if (!canProceed) {
         HapticFeedback.heavyImpact();
@@ -588,31 +693,15 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           .map((p) => p == 'Autre' ? otherProfessionCustomCont.text.trim() : p)
           .where((p) => p.isNotEmpty)
           .toList();
+      if (_isResubmit) {
+        _resubmitDossier(metierPrincipal, otherProfessionsList);
+        return;
+      }
       Map<String, dynamic> request = {
         'email': emailCont.text.trim(),
         'password': passwordCont.text.trim(),
         'phone': buildMobileNumber(),
-        'first_name': fNameCont.text.trim(),
-        'last_name': lNameCont.text.trim(),
-        'service': selectedServiceId == otherServiceValue
-            ? metierPrincipal
-            : (selectedServiceId != null && selectedServiceId!.isNotEmpty
-                ? selectedServiceId!.trim()
-                : professionCont.text.trim()),
-        'profession_name': metierPrincipal,
-        'experience_years': int.parse(experienceCont.text.trim()),
-        'has_other_professions': hasOtherProfessions ?? false,
-        'other_professions': otherProfessionsList.join(','),
-        'address': addressCont.text.trim(),
-        'latitude': addressLat!.toString(),
-        'longitude': addressLon!.toString(),
-        'age': int.parse(ageCont.text.trim()),
-        'nationality': selectedNationalityCountry?.name ?? '',
-        'education_level': _educationLevelApiValues[selectedEducationLevel] ?? '',
-        'region': selectedRegion,
-        'department': selectedDepartment ?? '',
-        'mobile_money_accounts': selectedMobileMoneyAccounts.join(','),
-        'join_whatsapp_community': joinWhatsappCommunity,
+        ..._formFields(metierPrincipal, otherProfessionsList),
       };
       File? profilePictureFile;
       if (!kIsWeb && profileImageFile != null) {
@@ -661,6 +750,61 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     } else {
       isFirstTimeValidation = false;
       setState(() {});
+    }
+  }
+
+  /// Champs du formulaire communs à l'inscription et au renvoi du dossier.
+  Map<String, dynamic> _formFields(String metierPrincipal, List<String> otherProfessionsList) => {
+        'first_name': fNameCont.text.trim(),
+        'last_name': lNameCont.text.trim(),
+        'service': selectedServiceId == otherServiceValue
+            ? metierPrincipal
+            : (selectedServiceId != null && selectedServiceId!.isNotEmpty
+                ? selectedServiceId!.trim()
+                : professionCont.text.trim()),
+        'profession_name': metierPrincipal,
+        'experience_years': int.parse(experienceCont.text.trim()),
+        'has_other_professions': hasOtherProfessions ?? false,
+        'other_professions': otherProfessionsList.join(','),
+        'address': addressCont.text.trim(),
+        'latitude': addressLat!.toString(),
+        'longitude': addressLon!.toString(),
+        'age': int.parse(ageCont.text.trim()),
+        'nationality': selectedNationalityCountry?.name ?? '',
+        'education_level': _educationLevelApiValues[selectedEducationLevel] ?? '',
+        'region': selectedRegion,
+        'department': selectedDepartment ?? '',
+        'mobile_money_accounts': selectedMobileMoneyAccounts.join(','),
+        'join_whatsapp_community': joinWhatsappCommunity,
+      };
+
+  Future<void> _resubmitDossier(String metierPrincipal, List<String> otherProfessionsList) async {
+    final resubmit = widget.resubmit!;
+    final fields = {
+      'email': emailCont.text.trim(),
+      ..._formFields(metierPrincipal, otherProfessionsList),
+    }.map((k, v) => MapEntry(k, v.toString()));
+    final files = <String, XFile>{
+      if (profileImageFile != null) 'profile_picture': profileImageFile!,
+      if (identityFrontFile != null) 'identity_document': identityFrontFile!,
+      if (identityBackFile != null) 'identity_document_back': identityBackFile!,
+      if (professionProofFile != null) 'profession_proof': professionProofFile!,
+    };
+    try {
+      final message = await resubmitArtisanDossier(
+        identifier: resubmit.identifier,
+        password: resubmit.password,
+        fields: fields,
+        files: files,
+      );
+      if (!mounted) return;
+      TopToast.show(message: message);
+      Navigator.pop(context, true);
+    } catch (e) {
+      TopToast.show(message: e.toString(), type: TopToastType.error);
+    } finally {
+      isRegistering = false;
+      appStore.setLoading(false);
     }
   }
 
@@ -799,6 +943,35 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     );
   }
 
+  Widget _buildRejectionBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.assignment_late_outlined, size: 20, color: Colors.red.shade700),
+          10.width,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Dossier à corriger', style: boldTextStyle(size: 13, color: Colors.red.shade700)),
+                4.height,
+                Text(widget.resubmit!.reason, style: primaryTextStyle(size: 13, color: _brandDark)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStepIndicator() {
     return Container(
       padding: EdgeInsets.only(
@@ -823,6 +996,10 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             alignment: Alignment.centerLeft,
             child: _buildBrandRow(),
           ),
+          if (_isResubmit) ...[
+            14.height,
+            _buildRejectionBanner(),
+          ],
           18.height,
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
@@ -977,7 +1154,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         _fieldError('email'),
         20.height,
 
-        // Mot de passe
+        // Mot de passe (inchangé en correction de dossier)
+        if (!_isResubmit) ...[
         TextField(
           controller: passwordCont,
           focusNode: passwordFocus,
@@ -1003,6 +1181,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         ),
         _fieldError('password'),
         20.height,
+        ],
 
         // Age
         TextField(
@@ -1067,8 +1246,13 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         _fieldError('department'),
         20.height,
 
-        // Téléphone : indicatif (liste animée) + numéro sur la même ligne
-        AnimatedDropdown<String>(
+        // Téléphone : indicatif (liste animée) + numéro sur la même ligne.
+        // Correction de dossier : numéro du compte, non modifiable.
+        IgnorePointer(
+          ignoring: _isResubmit,
+          child: Opacity(
+            opacity: _isResubmit ? 0.6 : 1,
+            child: AnimatedDropdown<String>(
           hint: 'Indicatif *',
           value: selectedCountry.countryCode,
           options: _allCountries
@@ -1153,6 +1337,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                 ],
               ),
             ),
+        ),
+          ),
         ),
 
         // Erreur à gauche, compteur de chiffres à droite
@@ -1612,13 +1798,16 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       children: [
         _docUploadZone(
           label: 'Photo de profil',
-          required: true,
+          required: _dossier['profile_picture_url'] == null,
           errorKey: 'profileImage',
           isUploaded: profileImageFile != null,
           previewBytes: profileImageBytes,
           isCircle: true,
           accentColor: _brandGold,
           icon: Icons.person_rounded,
+          hint: _isResubmit && _dossier['profile_picture_url'] != null && profileImageFile == null
+              ? 'Photo actuelle conservée · touchez pour la remplacer'
+              : null,
           onTap: () {
             pickImage();
             setState(() => fieldErrors.remove('profileImage'));
@@ -1635,14 +1824,14 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
 
         _docUploadZone(
           label: 'Pièce d\'identité (Recto)',
-          required: true,
+          required: _dossier['has_identity_document'] != true,
           errorKey: 'identityFront',
           isUploaded: identityFrontFile != null,
           previewBytes: identityFrontBytes,
           isCircle: false,
           accentColor: _brandGold,
           icon: Icons.badge_outlined,
-          hint: 'CNI · Passeport · Permis (Face avant)',
+          hint: _keptHint('has_identity_document', identityFrontFile) ?? 'CNI · Passeport · Permis (Face avant)',
           onTap: () {
             pickIdentityDocumentFront();
             setState(() => fieldErrors.remove('identityFront'));
@@ -1659,14 +1848,14 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
 
         _docUploadZone(
           label: 'Pièce d\'identité (Verso)',
-          required: true,
+          required: _dossier['has_identity_document_back'] != true,
           errorKey: 'identityBack',
           isUploaded: identityBackFile != null,
           previewBytes: identityBackBytes,
           isCircle: false,
           accentColor: _brandGold,
           icon: Icons.badge_outlined,
-          hint: 'CNI · Permis (Face arrière)',
+          hint: _keptHint('has_identity_document_back', identityBackFile) ?? 'CNI · Permis (Face arrière)',
           onTap: () {
             pickIdentityDocumentBack();
             setState(() => fieldErrors.remove('identityBack'));
@@ -1690,7 +1879,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
           isCircle: false,
           accentColor: _brandGold,
           icon: Icons.workspace_premium_outlined,
-          hint: 'Diplôme · Certificat · Recommandation',
+          hint: _keptHint('has_profession_proof', professionProofFile) ?? 'Diplôme · Certificat · Recommandation',
           onTap: pickProfessionProof,
           onRemove: professionProofFile != null
               ? () => setState(() {
@@ -1701,7 +1890,8 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         ),
         24.height,
 
-        // CGU
+        // CGU (déjà acceptées à l'inscription)
+        if (!_isResubmit) ...[
         GestureDetector(
           onTap: () {
             HapticFeedback.selectionClick();
@@ -1781,9 +1971,16 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         8.height,
         // Règle de tolérance zéro (App Store 1.2).
         Text(kZeroToleranceRule, style: secondaryTextStyle(size: 13)),
+        ],
       ],
     );
   }
+
+  /// Document déjà envoyé et non remplacé : il est conservé.
+  String? _keptHint(String dossierKey, XFile? picked) =>
+      _isResubmit && _dossier[dossierKey] == true && picked == null
+          ? 'Document actuel conservé · touchez pour le remplacer'
+          : null;
 
   Widget _docUploadZone({
     required String label,
@@ -1991,7 +2188,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        currentStep == totalSteps - 1 ? "S'inscrire" : 'Suivant',
+                        currentStep == totalSteps - 1
+                            ? (_isResubmit ? 'Renvoyer mon dossier' : "S'inscrire")
+                            : 'Suivant',
                         style: boldTextStyle(size: 14, color: Colors.white),
                       ),
                       8.width,
@@ -2113,7 +2312,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     ),
                   ),
                   _buildNavigationButtons(),
-                  _buildFooterWidget(),
+                  if (!_isResubmit) _buildFooterWidget(),
                 ],
               ),
             ),
@@ -2129,7 +2328,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                             LoaderWidget(colors: const [_brandDark, _brandGold]),
                             if (isRegistering) ...[
                               14.height,
-                              Text('Inscription en cours...',
+                              Text(_isResubmit ? 'Envoi du dossier...' : 'Inscription en cours...',
                                   style: secondaryTextStyle(
                                       color: Colors.white)),
                             ],

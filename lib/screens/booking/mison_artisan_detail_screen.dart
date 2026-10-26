@@ -2,6 +2,8 @@ import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
+import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/screens/booking/mison_artisan_reviews_screen.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
@@ -35,8 +37,14 @@ class MisonArtisanDetailScreen extends StatelessWidget {
     ).launch(context);
   }
 
-  void _openReviews(BuildContext context) {
+  Future<void> _openReviews(BuildContext context) async {
     if (artisan.id == null) return;
+    // Avis réservés aux comptes connectés.
+    if (!appStore.isLoggedIn) {
+      TopToast.show(message: 'Connectez-vous pour voir les avis.');
+      await SignInScreen(returnExpected: true).launch(context);
+      if (!appStore.isLoggedIn || !context.mounted) return;
+    }
     MisonArtisanReviewsScreen(
       artisanId: artisan.id!,
       artisanName: '${artisan.firstName ?? ''} ${artisan.lastName ?? ''}'.trim(),
