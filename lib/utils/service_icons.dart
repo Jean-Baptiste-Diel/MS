@@ -47,11 +47,13 @@ ServiceStyle serviceStyle(String? serviceName) {
 /// Épingle de lieu à la couleur du service, avec son icône dans la tête ;
 /// grisée si le prestataire n'est pas disponible. La pointe touche la
 /// position : ancre `Offset(0.5, 1)`. Carte « Notre réseau » et recherche.
-Future<BitmapDescriptor> serviceMarkerIcon(ServiceStyle style, {bool available = true, bool big = false}) async {
+/// [scale] : réduit ou agrandit l'épingle (1 = taille normale).
+Future<BitmapDescriptor> serviceMarkerIcon(ServiceStyle style,
+    {bool available = true, bool big = false, double scale = 1}) async {
   return BitmapDescriptor.bytes(
     await serviceMarkerPng(style, available: available),
-    width: big ? 72 : 54,
-    height: big ? 88 : 66,
+    width: (big ? 72 : 54) * scale,
+    height: (big ? 88 : 66) * scale,
   );
 }
 

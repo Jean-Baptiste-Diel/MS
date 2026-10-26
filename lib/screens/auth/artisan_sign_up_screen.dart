@@ -145,23 +145,16 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     'InTouch',
   ];
 
-  // Métier principal : valeur sentinelle pour l'option "Autre"
-  final String otherServiceValue = '__other__';
-  final TextEditingController customMetierCont = TextEditingController();
-
   // Autres métiers maîtrisés
   bool? hasOtherProfessions = false; // case décochée = non
   final Set<String> selectedOtherProfessions = {};
-  final TextEditingController otherProfessionCustomCont = TextEditingController();
 
-  // Liste issue de la BD (services), sans le métier principal, + "Autre"
-  List<String> get secondaryProfessionOptions => [
-        ...serviceOptions
-            .where((s) => s['id'] != selectedServiceId)
-            .map((s) => s['name'] ?? '')
-            .where((name) => name.isNotEmpty && name != 'Autre'),
-        'Autre',
-      ];
+  // Liste issue de la BD (services), sans le métier principal
+  List<String> get secondaryProfessionOptions => serviceOptions
+      .where((s) => s['id'] != selectedServiceId)
+      .map((s) => s['name'] ?? '')
+      .where((name) => name.isNotEmpty && name != 'Autre')
+      .toList();
 
   double? addressLat;
   double? addressLon;
@@ -239,26 +232,13 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     final profession = d['profession_name']?.toString() ?? '';
     setState(() {
       final known = serviceOptions.where((s) => s['id'] == serviceId).firstOrNull;
+      // Métier hors liste (ancien choix « Autre ») : à choisir dans la liste.
       if (known != null) {
         selectedServiceId = serviceId;
         professionCont.text = known['name'] ?? profession;
-      } else {
-        // Métier saisi librement (« Autre ») et pas encore validé.
-        selectedServiceId = otherServiceValue;
-        customMetierCont.text = profession;
       }
-      final custom = <String>[];
       for (final p in (d['other_professions']?.toString() ?? '').split(',').map((e) => e.trim())) {
-        if (p.isEmpty) continue;
-        if (p != 'Autre' && secondaryProfessionOptions.contains(p)) {
-          selectedOtherProfessions.add(p);
-        } else {
-          custom.add(p);
-        }
-      }
-      if (custom.isNotEmpty) {
-        selectedOtherProfessions.add('Autre');
-        otherProfessionCustomCont.text = custom.join(', ');
+        if (secondaryProfessionOptions.contains(p)) selectedOtherProfessions.add(p);
       }
     });
   }
@@ -276,8 +256,6 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
     addressCont.dispose();
     ageCont.dispose();
     ageFocus.dispose();
-    customMetierCont.dispose();
-    otherProfessionCustomCont.dispose();
     _pageController.dispose();
     _progressAnimationController.dispose();
     _scrollController.dispose();
@@ -511,10 +489,6 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         if (selectedServiceId == null || selectedServiceId!.isEmpty) {
           fieldErrors['service'] = 'Veuillez sélectionner un métier';
           v = false;
-        } else if (selectedServiceId == otherServiceValue &&
-            customMetierCont.text.trim().isEmpty) {
-          fieldErrors['customMetier'] = 'Veuillez préciser votre métier';
-          v = false;
         }
         if (experienceCont.text.trim().isEmpty) {
           fieldErrors['experience'] = 'Années d\'expérience requises';
@@ -529,10 +503,6 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         } else if (hasOtherProfessions == true) {
           if (selectedOtherProfessions.isEmpty) {
             fieldErrors['otherProfessions'] = 'Sélectionnez au moins un métier';
-            v = false;
-          } else if (selectedOtherProfessions.contains('Autre') &&
-              otherProfessionCustomCont.text.trim().isEmpty) {
-            fieldErrors['otherProfessionCustom'] = 'Veuillez préciser le métier';
             v = false;
           }
         }
@@ -686,13 +656,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       formKey.currentState!.save();
       isRegistering = true;
       appStore.setLoading(true);
-      final String metierPrincipal = selectedServiceId == otherServiceValue
-          ? customMetierCont.text.trim()
-          : professionCont.text.trim();
-      final List<String> otherProfessionsList = selectedOtherProfessions
-          .map((p) => p == 'Autre' ? otherProfessionCustomCont.text.trim() : p)
-          .where((p) => p.isNotEmpty)
-          .toList();
+      final String metierPrincipal = professionCont.text.trim();
+      final List<String> otherProfessionsList =
+          selectedOtherProfessions.where((p) => p.isNotEmpty).toList();
       if (_isResubmit) {
         _resubmitDossier(metierPrincipal, otherProfessionsList);
         return;
@@ -757,11 +723,9 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
   Map<String, dynamic> _formFields(String metierPrincipal, List<String> otherProfessionsList) => {
         'first_name': fNameCont.text.trim(),
         'last_name': lNameCont.text.trim(),
-        'service': selectedServiceId == otherServiceValue
-            ? metierPrincipal
-            : (selectedServiceId != null && selectedServiceId!.isNotEmpty
-                ? selectedServiceId!.trim()
-                : professionCont.text.trim()),
+        'service': selectedServiceId != null && selectedServiceId!.isNotEmpty
+            ? selectedServiceId!.trim()
+            : professionCont.text.trim(),
         'profession_name': metierPrincipal,
         'experience_years': int.parse(experienceCont.text.trim()),
         'has_other_professions': hasOtherProfessions ?? false,
@@ -1485,45 +1449,24 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             : AnimatedDropdown<String>(
                 hint: 'Sélectionnez un métier',
                 value: selectedServiceId,
-                options: [
-                  ...serviceOptions.map((s) => DropdownOption(s['id'] ?? '', s['name'] ?? '')),
-                  DropdownOption(otherServiceValue, 'Autre'),
-                ],
+                options: serviceOptions.map((s) => DropdownOption(s['id'] ?? '', s['name'] ?? '')).toList(),
                 accentColor: _brandGold,
                 hasError: fieldErrors['service'] != null,
                 onChanged: (val) {
                   setState(() {
                     selectedServiceId = val;
                     fieldErrors.remove('service');
-                    if (val == otherServiceValue) {
-                      professionCont.text = '';
-                    } else {
-                      final sel = serviceOptions.firstWhere(
-                          (e) => e['id'] == val,
-                          orElse: () => {});
-                      professionCont.text =
-                          sel.isNotEmpty ? (sel['name'] ?? '') : '';
-                      // Le métier principal ne peut pas être aussi secondaire
-                      selectedOtherProfessions.remove(sel['name']);
-                      customMetierCont.clear();
-                      fieldErrors.remove('customMetier');
-                    }
+                    final sel = serviceOptions.firstWhere(
+                        (e) => e['id'] == val,
+                        orElse: () => {});
+                    professionCont.text =
+                        sel.isNotEmpty ? (sel['name'] ?? '') : '';
+                    // Le métier principal ne peut pas être aussi secondaire
+                    selectedOtherProfessions.remove(sel['name']);
                   });
                 },
               ),
         _fieldError('service'),
-        if (selectedServiceId == otherServiceValue) ...[
-          12.height,
-          TextField(
-            controller: customMetierCont,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => FocusScope.of(context).unfocus(),
-            style: primaryTextStyle(),
-            decoration: _dec('Précisez votre métier *'),
-            onChanged: (_) => setState(() => fieldErrors.remove('customMetier')),
-          ),
-          _fieldError('customMetier'),
-        ],
         20.height,
 
         // Années d'expérience
@@ -1557,9 +1500,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
               hasOtherProfessions = !(hasOtherProfessions ?? false);
               if (hasOtherProfessions == false) {
                 selectedOtherProfessions.clear();
-                otherProfessionCustomCont.clear();
                 fieldErrors.remove('otherProfessions');
-                fieldErrors.remove('otherProfessionCustom');
               }
             });
           },
@@ -1635,7 +1576,6 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                           setState(() {
                             if (selected) {
                               selectedOtherProfessions.remove(option);
-                              if (option == 'Autre') otherProfessionCustomCont.clear();
                             } else {
                               selectedOtherProfessions.add(option);
                             }
@@ -1675,19 +1615,6 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                     }).toList(),
                   ),
                   _fieldError('otherProfessions'),
-                  if (selectedOtherProfessions.contains('Autre')) ...[
-                    12.height,
-                    TextField(
-                      controller: otherProfessionCustomCont,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                      style: primaryTextStyle(),
-                      decoration: _dec('Précisez le métier *'),
-                      onChanged: (_) =>
-                          setState(() => fieldErrors.remove('otherProfessionCustom')),
-                    ),
-                    _fieldError('otherProfessionCustom'),
-                  ],
                   ],
                 )
               : const SizedBox(width: double.infinity),

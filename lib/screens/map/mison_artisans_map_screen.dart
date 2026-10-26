@@ -286,7 +286,8 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
       for (final big in const [false, true]) {
         final key = _iconKey(a, big: big);
         if (_icons.containsKey(key)) continue;
-        _icons[key] = await serviceMarkerIcon(style, available: a['is_available'] == true, big: big);
+        // Épingles un peu plus petites : la carte en affiche beaucoup.
+        _icons[key] = await serviceMarkerIcon(style, available: a['is_available'] == true, big: big, scale: 0.85);
       }
     }
   }
