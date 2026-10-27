@@ -3,6 +3,7 @@ import 'package:booking_system_flutter/component/mison_offline_banner.dart';
 import 'dart:convert';
 import 'package:booking_system_flutter/utils/configs.dart' show DOMAIN_URL;
 import 'package:booking_system_flutter/screens/support_chat/chat_image_viewer.dart';
+import 'package:booking_system_flutter/screens/support_chat/chat_video_player.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/utils/image_pick_sizes.dart';
 import 'package:booking_system_flutter/utils/image_cache_key.dart';
@@ -255,6 +256,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     } else if (messageType == 'audio') {
       if (!_service.sendAudioMessage(content)) {
         TopToast.show(message: 'Note vocale non envoyée, réessayez.', type: TopToastType.error);
+      }
+    } else if (messageType == 'video') {
+      if (!_service.sendVideoMessage(content)) {
+        TopToast.show(message: 'Vidéo non envoyée, réessayez.', type: TopToastType.error);
       }
     } else {
       _sendMessage(content);
@@ -628,6 +633,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             ),
             child: msg.isImage
                 ? _buildImageContent(msg)
+                : msg.isVideo
+                ? _buildVideoContent(msg)
                 : msg.isAudio
                     ? VoiceNotePlayer(
                         url: (msg.audioUrl != null && msg.audioUrl!.isNotEmpty)
@@ -720,6 +727,41 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             ),
             errorWidget: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Vidéo : vignette avec ▶, appui pour la lire en plein écran.
+  Widget _buildVideoContent(SupportChatMessage msg) {
+    final url = (msg.videoUrl != null && msg.videoUrl!.isNotEmpty)
+        ? msg.videoUrl!
+        : '$DOMAIN_URL/media/minio/${msg.content}';
+    return GestureDetector(
+      onTap: () => ChatVideoPlayer.open(context, url: url),
+      child: Container(
+        width: 200,
+        height: 140,
+        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(8)),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
+              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 34),
+            ),
+            Positioned(
+              left: 10,
+              bottom: 8,
+              child: Row(children: [
+                const Icon(Icons.videocam_rounded, color: Colors.white70, size: 16),
+                4.width,
+                Text('Vidéo', style: secondaryTextStyle(size: 12, color: Colors.white70)),
+              ]),
+            ),
+          ],
         ),
       ),
     );
@@ -885,6 +927,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     return ChatInput(
       onUpload: _service.uploadImage,
       onUploadAudio: _service.uploadAudio,
+      onUploadVideo: _service.uploadVideo,
       onSend: _handleSend,
       enabled: _wsConnected,
     );
@@ -896,6 +939,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
 class ChatInput extends StatefulWidget {
   final Future<String?> Function(File file) onUpload;
   final Future<String?> Function(File file) onUploadAudio;
+  final Future<String> Function(File file) onUploadVideo;
   final void Function(String content, String messageType) onSend;
   final bool enabled;
 
@@ -903,6 +947,7 @@ class ChatInput extends StatefulWidget {
     Key? key,
     required this.onUpload,
     required this.onUploadAudio,
+    required this.onUploadVideo,
     required this.onSend,
     this.enabled = true,
   }) : super(key: key);
@@ -917,7 +962,18 @@ class _ChatInputState extends State<ChatInput> {
   final _picker = ImagePicker();
 
   File? _selectedImage;
+  File? _selectedVideo;
   bool _isUploading = false;
+
+  // Vidéo : 1 min au plus, 50 Mo au plus (même limite que le serveur).
+  static const _maxVideoDuration = Duration(minutes: 1);
+  static const _maxVideoBytes = 50 * 1024 * 1024;
+
+  bool get _hasAttachment => _selectedImage != null || _selectedVideo != null;
+
+  /// Envoi de vidéos désactivé pour l'instant (aussi côté serveur) : passer à
+  /// true pour réafficher « Vidéo de la galerie » et « Filmer une vidéo ».
+  static const _videoEnabled = true;
 
   // ── Note vocale : maintenir le micro pour enregistrer, relâcher pour
   // envoyer, glisser vers la gauche pour annuler.
@@ -1064,7 +1120,27 @@ class _ChatInputState extends State<ChatInput> {
       maxHeight: kChatPhotoMaxSide,
     );
     if (picked == null || !mounted) return;
-    setState(() => _selectedImage = File(picked.path));
+    setState(() {
+      _selectedImage = File(picked.path);
+      _selectedVideo = null;
+    });
+  }
+
+  Future<void> _pickVideo(ImageSource source) async {
+    final picked = await _picker.pickVideo(source: source, maxDuration: _maxVideoDuration);
+    if (picked == null || !mounted) return;
+    final file = File(picked.path);
+    if (await file.length() > _maxVideoBytes) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vidéo trop lourde (50 Mo maximum) : choisissez une vidéo plus courte.')),
+      );
+      return;
+    }
+    setState(() {
+      _selectedVideo = file;
+      _selectedImage = null;
+    });
   }
 
   void _showImageSourceSheet() {
@@ -1094,6 +1170,24 @@ class _ChatInputState extends State<ChatInput> {
                   _pickImage(ImageSource.camera);
                 },
               ),
+              if (_videoEnabled) ...[
+              ListTile(
+                leading: Icon(Icons.video_library_outlined, color: kMisonGold),
+                title: const Text('Vidéo de la galerie'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickVideo(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.videocam_outlined, color: kMisonGold),
+                title: const Text('Filmer une vidéo (1 min max)'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickVideo(ImageSource.camera);
+                },
+              ),
+              ],
               8.height,
             ],
           ),
@@ -1105,7 +1199,20 @@ class _ChatInputState extends State<ChatInput> {
   Future<void> _send() async {
     if (_isUploading) return;
 
-    if (_selectedImage != null) {
+    if (_selectedVideo != null) {
+      setState(() => _isUploading = true);
+      try {
+        final objectName = await widget.onUploadVideo(_selectedVideo!);
+        if (!mounted) return;
+        widget.onSend(objectName, 'video');
+        setState(() => _selectedVideo = null);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      } finally {
+        if (mounted) setState(() => _isUploading = false);
+      }
+    } else if (_selectedImage != null) {
       setState(() => _isUploading = true);
       try {
         final objectName = await widget.onUpload(_selectedImage!);
@@ -1156,7 +1263,7 @@ class _ChatInputState extends State<ChatInput> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_selectedImage != null) _buildPreview(),
+            if (_hasAttachment) _buildPreview(),
             if (_isRecording && _isLocked)
               _buildLockedRecordingBar()
             else
@@ -1180,10 +1287,14 @@ class _ChatInputState extends State<ChatInput> {
                       maxLines: 5,
                       textCapitalization: TextCapitalization.sentences,
                       keyboardType: TextInputType.multiline,
-                      enabled: widget.enabled && !_isUploading && _selectedImage == null,
+                      enabled: widget.enabled && !_isUploading && !_hasAttachment,
                       onFieldSubmitted: (_) => _send(),
                       decoration: inputDecoration(context).copyWith(
-                        hintText: _selectedImage != null ? 'Image prête à envoyer' : 'Votre message...',
+                        hintText: _selectedVideo != null
+                            ? 'Vidéo prête à envoyer'
+                            : _selectedImage != null
+                                ? 'Image prête à envoyer'
+                                : 'Votre message...',
                         hintStyle: secondaryTextStyle(),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       ),
@@ -1207,7 +1318,7 @@ class _ChatInputState extends State<ChatInput> {
                                   ),
                                 ),
                               )
-                            : (_hasText || _selectedImage != null)
+                            : (_hasText || _hasAttachment)
                                 ? IconButton(
                                     icon: const Icon(Icons.send_rounded, color: Colors.white),
                                     onPressed: widget.enabled ? _send : null,
@@ -1394,20 +1505,43 @@ class _ChatInputState extends State<ChatInput> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.file(
-              _selectedImage!,
-              width: 64,
-              height: 64,
-              fit: BoxFit.cover,
+          if (_selectedVideo != null)
+            GestureDetector(
+              onTap: () => ChatVideoPlayer.open(context, file: _selectedVideo),
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
+              ),
+            )
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(
+                _selectedImage!,
+                width: 64,
+                height: 64,
+                fit: BoxFit.cover,
+              ),
+            ),
+          8.width,
+          Expanded(
+            child: Text(
+              _selectedVideo != null
+                  ? (_isUploading ? 'Envoi de la vidéo…' : 'Vidéo prête à envoyer')
+                  : 'Image prête à envoyer',
+              style: secondaryTextStyle(),
             ),
           ),
-          8.width,
-          Expanded(child: Text('Image prête à envoyer', style: secondaryTextStyle())),
           IconButton(
             icon: const Icon(Icons.close, size: 20),
-            onPressed: _isUploading ? null : () => setState(() => _selectedImage = null),
+            onPressed: _isUploading
+                ? null
+                : () => setState(() {
+                      _selectedImage = null;
+                      _selectedVideo = null;
+                    }),
           ),
         ],
       ),

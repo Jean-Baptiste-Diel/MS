@@ -63,11 +63,10 @@ class MisonOrderSearchingScreen extends StatefulWidget {
   /// commande ne rouvre pas l'écran par-dessus lui-même.
   static String? openOrderId;
 
-  /// Commande suivie sur la carte : en recherche, ou prestataire en approche
-  /// ou sur place. Dès que l'intervention commence (puis terminée, annulée…),
-  /// c'est le détail de la commande qui s'affiche.
-  static bool canFollow(MisonOrder order) =>
-      (order.latitude ?? '').isNotEmpty && (order.isPending || order.isBeforeStart);
+  /// Carte de recherche : seulement tant qu'aucun prestataire n'est rattaché.
+  /// Dès qu'il y en a un (accepté, demande envoyée, en route…), c'est
+  /// directement le suivi de la commande : appel, discussion, carte du trajet.
+  static bool canFollow(MisonOrder order) => (order.latitude ?? '').isNotEmpty && order.isPending;
 
   /// Ouvre le suivi si la commande s'y prête, sinon son détail.
   static Widget screenFor(MisonOrder order) => canFollow(order)
@@ -377,7 +376,8 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
     });
   }
 
-  /// Plus rien à suivre : annulée → retour ; terminée, paiement… → détail.
+  /// Plus de recherche : annulée → retour ; prestataire trouvé, terminée… →
+  /// suivi de la commande.
   void _leave(MisonOrder order) {
     _leaving = true;
     _poll?.cancel();
@@ -385,6 +385,10 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
       TopToast.show(message: 'Votre commande a été annulée.');
       finish(context);
       return;
+    }
+    if (_order?.isPending == true && order.isBeforeStart && !order.isPendingDirectRequest) {
+      final name = order.artisan?.firstName?.trim() ?? '';
+      TopToast.show(message: name.isEmpty ? 'Un prestataire a accepté votre commande.' : '$name a accepté votre commande.');
     }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => MisonOrderDetailScreen(orderId: widget.orderId)),

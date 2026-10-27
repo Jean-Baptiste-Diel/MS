@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/component/mison_favorite_places.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/component/loader_widget.dart';
@@ -124,6 +125,7 @@ class ProfileFragmentState extends State<ProfileFragment> {
   Widget _menuItem({
     required String title,
     String? icon,
+    IconData? iconData,
     required VoidCallback onTap,
     String? subtitle,
     Color? accent,
@@ -138,16 +140,18 @@ class ProfileFragmentState extends State<ProfileFragment> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
           children: [
-            if (icon != null) ...[
+            if (icon != null || iconData != null) ...[
               // Icône seule, sans rond derrière (même largeur pour aligner les titres).
               SizedBox(
                 width: 24,
-                child: Image.asset(
-                  icon,
-                  width: 20,
-                  height: 20,
-                  color: itemAccent,
-                ),
+                child: icon != null
+                    ? Image.asset(
+                        icon,
+                        width: 20,
+                        height: 20,
+                        color: itemAccent,
+                      )
+                    : Icon(iconData, size: 22, color: itemAccent),
               ),
               14.width,
             ],
@@ -368,6 +372,13 @@ class ProfileFragmentState extends State<ProfileFragment> {
                             }
                           },
                         ),
+                        if (appStore.userType != USER_TYPE_PROVIDER)
+                          _menuItem(
+                            title: 'Mes lieux favoris',
+                            subtitle: 'Adresses proposées à chaque commande',
+                            iconData: Icons.star_outline_rounded,
+                            onTap: () => const MisonFavoritePlacesScreen().launch(context),
+                          ),
                         _menuItem(
                           title: 'Sécurité',
                           subtitle: 'Code PIN, déconnexion et suppression du compte',

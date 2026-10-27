@@ -5,6 +5,8 @@ import 'package:booking_system_flutter/component/mison_service_image_header.dart
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/dot_grid_background.dart';
 import 'package:booking_system_flutter/component/nominatim_address_field.dart';
+import 'package:booking_system_flutter/component/mison_favorite_places.dart';
+import 'package:booking_system_flutter/services/favorite_places_store.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/screens/booking/mison_confirm_booking_screen.dart';
 import 'package:booking_system_flutter/services/location_service.dart';
@@ -57,6 +59,9 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
   /// Texte de la zone correspondant à zoneLat/zoneLon. Si le client modifie ou
   /// colle autre chose, la position n'est plus valable : elle est revérifiée.
   String? _resolvedText;
+
+  /// Lieux favoris du client, proposés sous le champ d'adresse.
+  List<FavoritePlace> _favorites = FavoritePlacesStore.load();
 
   /// « Ma position » : remplit la zone d'intervention avec l'adresse actuelle.
   ///
@@ -198,6 +203,48 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
       zoneLon = picked.lon;
       _locatedAccuracy = null;
     });
+  }
+
+  void _useFavorite(FavoritePlace place) {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _resolvedText = place.address;
+      zoneCont.text = place.address;
+      zoneLat = place.lat;
+      zoneLon = place.lon;
+      _locatedAccuracy = null;
+    });
+  }
+
+  Future<void> _addZoneToFavorites() async {
+    if (zoneLat == null || zoneLon == null) return;
+    final saved = await saveFavoritePlace(context, address: zoneCont.text.trim(), lat: zoneLat!, lon: zoneLon!);
+    if (saved && mounted) setState(() => _favorites = FavoritePlacesStore.load());
+  }
+
+  /// Lieux favoris en un appui, sous le champ d'adresse.
+  Widget _buildFavoriteChips() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final place in _favorites) ...[
+              ChoiceChip(
+                avatar: Icon(favoritePlaceIcon(place.label), size: 18, color: kMisonGold),
+                label: Text(place.label),
+                selected: zoneLat != null && place.isSamePlace(zoneLat!, zoneLon!),
+                selectedColor: kMisonGold.withValues(alpha: 0.18),
+                showCheckmark: false,
+                onSelected: (_) => _useFavorite(place),
+              ),
+              8.width,
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   String _formatKm(double km) => km < 1 ? 'à ${(km * 1000).round()} m' : 'à ${km.toStringAsFixed(1)} km';
@@ -744,6 +791,7 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
             ),
           ),
         ),
+        if (_favorites.isNotEmpty) _buildFavoriteChips(),
         if (_locateStep != null)
           Padding(
             padding: const EdgeInsets.only(top: 8, left: 2, right: 2),
@@ -781,7 +829,20 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
                       ? 'Position détectée (à ~${_locatedAccuracy!.round()} m près)'
                       : 'Adresse localisée sur la carte',
                   style: secondaryTextStyle(size: 13, color: Colors.green.shade600),
-                ),
+                ).expand(),
+                // Proposé pour chaque nouvelle adresse : la retrouver en un appui.
+                if (!_favorites.any((p) => p.isSamePlace(zoneLat!, zoneLon!)))
+                  TextButton.icon(
+                    onPressed: _addZoneToFavorites,
+                    style: TextButton.styleFrom(
+                      foregroundColor: kMisonGold,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.star_outline_rounded, size: 18),
+                    label: Text('Favori', style: boldTextStyle(size: 13, color: kMisonGold)),
+                  ),
               ],
             ),
           ),

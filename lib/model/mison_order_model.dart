@@ -216,14 +216,15 @@ class MisonOrder {
   /// Le client et le prestataire se sont accordés sur le prix (ferme).
   bool get isPriceAgreed => agreedPrice != null;
 
-  /// Accord sur le prix à trouver : commande acceptée, prestataire pas encore
-  /// parti (les anciennes commandes déjà en route continuent sans accord).
+  /// Accord sur le prix à trouver : commande acceptée, prestation pas encore
+  /// commencée. Toujours proposé (le prestataire propose, le client accepte ou
+  /// refuse), avant le départ ou une fois sur place ; il ne bloque pas le
+  /// départ. L'interrupteur du back-office (priceAgreementRequired) ne décide
+  /// plus que du démarrage sans prix validé, côté serveur.
   bool get needsPriceAgreement =>
-      priceAgreementRequired &&
       isBeforeStart &&
       !needsArtisanConfirmation &&
-      !isPriceAgreed &&
-      (enRouteAt ?? '').isEmpty;
+      !isPriceAgreed;
 
   /// Montant payé par le client : prestation + frais de service.
   int? get clientTotal {

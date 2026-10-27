@@ -78,8 +78,7 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
       subtitle: widget.isArtisan
           ? 'Ce prix est ferme : c\'est celui que le client paiera à la fin de la prestation.'
           : "Ce prix est ferme : vous le paierez avec Wave, dans l'application MISON, à la fin de la prestation "
-              '(+ ${_fcfa(order.serviceFee)} de frais de service). Ne payez jamais le prestataire en espèces. '
-              'Le prestataire pourra alors se mettre en route.',
+              '(+ ${_fcfa(order.serviceFee)} de frais de service). Ne payez jamais le prestataire en espèces.',
       icon: Icons.handshake_outlined,
       confirmLabel: 'Oui, je valide',
     );
@@ -120,9 +119,9 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
           8.height,
           Text(
             widget.isArtisan
-                ? 'Mettez-vous d\'accord avec le client sur le prix avant de vous déplacer '
-                    '(par message ou par appel). Il doit le valider.'
-                : 'Avant de se déplacer, le prestataire vous propose son prix. Vous pouvez '
+                ? 'Mettez-vous d\'accord avec le client sur le prix (par message ou par appel), '
+                    'avant de partir ou une fois sur place. Il doit le valider avant le début de la prestation.'
+                : 'Le prestataire vous propose son prix, avant de partir ou une fois sur place. Vous pouvez '
                     'l\'accepter ou le refuser. Vous le paierez à la fin de la prestation.',
             style: secondaryTextStyle(size: 13),
           ),

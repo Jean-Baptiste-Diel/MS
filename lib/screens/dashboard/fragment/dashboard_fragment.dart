@@ -1,6 +1,8 @@
 import 'package:booking_system_flutter/model/mison_notification_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
+import 'package:booking_system_flutter/component/mison_active_orders_section.dart';
+import 'package:booking_system_flutter/utils/constant.dart' show USER_TYPE_PROVIDER;
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/booking/mison_search_service_screen.dart';
 import 'package:booking_system_flutter/screens/newDashboard/dashboard_1/component/mison_service_list_component.dart';
@@ -28,6 +30,8 @@ class _DashboardFragmentState extends State<DashboardFragment> {
   // dès qu'on remonte (sans devoir revenir tout en haut).
   bool _newOrderExpanded = true;
   StreamSubscription<String?>? _orderEventsSub;
+  /// Augmenté à chaque actualisation : les commandes en cours se rechargent.
+  int _refreshTick = 0;
 
   @override
   void initState() {
@@ -101,7 +105,7 @@ class _DashboardFragmentState extends State<DashboardFragment> {
           RefreshIndicator(
             color: kMisonGold,
             onRefresh: () async {
-              setState(() {});
+              setState(() => _refreshTick++);
               await 2.seconds.delay;
             },
             child: CustomScrollView(
@@ -150,6 +154,12 @@ class _DashboardFragmentState extends State<DashboardFragment> {
 
                 SliverList(
                   delegate: SliverChildListDelegate([
+                    // Commandes en cours du client : état et prestataire.
+                    Observer(
+                      builder: (_) => appStore.isLoggedIn && appStore.userType != USER_TYPE_PROVIDER
+                          ? MisonActiveOrdersSection(refreshTick: _refreshTick)
+                          : const SizedBox.shrink(),
+                    ),
                     16.height,
                     // Liste des services avec détails (image, description, prix)
                     const MisonServiceListComponent(),

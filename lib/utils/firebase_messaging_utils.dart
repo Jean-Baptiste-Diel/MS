@@ -393,15 +393,14 @@ void handleNotificationClick(RemoteMessage message) {
     return;
   }
 
-  // Commande confirmée, prestataire trouvé ou désisté : le suivi sur la carte
-  // (il passe tout seul au détail si la commande est déjà terminée). Déjà
-  // affiché : rien à faire, il se met à jour de lui-même.
+  // Commande confirmée, prestataire désisté : la recherche sur la carte (elle
+  // passe toute seule au suivi de la commande si un prestataire est déjà
+  // trouvé). Déjà affichée : rien à faire, elle se met à jour d'elle-même.
+  // Prestataire trouvé, demande envoyée : plus bas, le suivi de la commande.
   const followTypes = {
     'ORDER_CONFIRMED',
-    'ORDER_ACCEPTED',
     'ORDER_ARTISAN_RELEASED',
-    // Demande envoyée depuis la carte, puis recherche si pas de réponse.
-    'ORDER_DIRECT_REQUEST_SENT',
+    // Pas de réponse du prestataire choisi sur la carte : recherche élargie.
     'ORDER_DIRECT_SEARCH',
   };
   if (followTypes.contains(message.data['type'])) {
@@ -411,7 +410,7 @@ void handleNotificationClick(RemoteMessage message) {
       navigatorKey.currentState?.push(MaterialPageRoute(
         builder: (_) => MisonOrderSearchingScreen(
           orderId: orderId,
-          justConfirmed: type == 'ORDER_CONFIRMED' || type == 'ORDER_DIRECT_REQUEST_SENT',
+          justConfirmed: type == 'ORDER_CONFIRMED',
           artisanReleased: type == 'ORDER_ARTISAN_RELEASED',
           searchWidened: type == 'ORDER_DIRECT_SEARCH',
         ),

@@ -842,15 +842,8 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionIcon = Icons.check_circle_outline_rounded;
       primaryActionColor = kMisonGold; // Accepter / Confirmer en doré
       primaryActionTap = onAccept;
-    } else if (showGoButton && order.needsPriceAgreement) {
-      // Pas de déplacement avant que le client ait validé le prix.
-      primaryActionLabel = 'Aller chez le client';
-      primaryActionIcon = Icons.lock_clock_rounded;
-      primaryActionColor = Colors.grey.shade400;
-      primaryActionTap = () => TopToast.show(
-            message: "Mettez-vous d'abord d'accord sur le prix : le client doit le valider avant votre déplacement.",
-          );
     } else if (showGoButton) {
+      // Disponible même sans accord sur le prix : il peut se conclure en chemin.
       primaryActionLabel = 'Aller chez le client';
       primaryActionIcon = Icons.directions_car_rounded;
       primaryActionColor = kMisonGold;
@@ -1034,7 +1027,7 @@ class _OrderDetailBody extends StatelessWidget {
                   ],
                 ],
 
-                // ── Accord sur le prix avant le déplacement (client et ouvrier),
+                // ── Accord sur le prix avant la prestation (client et ouvrier),
                 // puis rappel du prix convenu jusqu'à la fin de la prestation ──
                 if (order.needsPriceAgreement ||
                     (order.isPriceAgreed && (order.isBeforeStart || order.isInProgress))) ...[

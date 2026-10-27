@@ -15,7 +15,7 @@ final String _WS_BASE = '${DOMAIN_URL.replaceFirst('https://', 'wss://').replace
 const String _CONVERSATIONS_ENDPOINT = '${BASE_URL}chat/conversations';
 
 enum MessageStatus { sent, pending, failed }
-enum MessageType { text, image, audio, call }
+enum MessageType { text, image, audio, video, call }
 
 class SupportChatMessage {
   final String id;
@@ -23,6 +23,7 @@ class SupportChatMessage {
   final String content;       // texte ou object_name pour les images
   final String? imageUrl;     // URL pré-signée pour afficher l'image
   final String? audioUrl;     // URL pré-signée pour lire la note vocale
+  final String? videoUrl;     // URL pré-signée pour lire la vidéo
   final Uint8List? localBytes; // bytes locaux pour preview avant upload
   final String senderName;
   final bool isMe;
@@ -36,6 +37,7 @@ class SupportChatMessage {
     required this.content,
     this.imageUrl,
     this.audioUrl,
+    this.videoUrl,
     this.localBytes,
     required this.senderName,
     required this.isMe,
@@ -46,6 +48,7 @@ class SupportChatMessage {
 
   bool get isImage => messageType == MessageType.image;
   bool get isAudio => messageType == MessageType.audio;
+  bool get isVideo => messageType == MessageType.video;
   bool get isCall => messageType == MessageType.call;
 
   /// Appel : "completed:<secondes>", "missed" ou "declined" (voir le serveur).
@@ -61,18 +64,13 @@ class SupportChatMessage {
       content: json['content']?.toString() ?? '',
       imageUrl: json['image_url']?.toString(),
       audioUrl: json['audio_url']?.toString(),
+      videoUrl: json['video_url']?.toString(),
       senderName: json['sender_name']?.toString() ?? '',
       isMe: senderId == appStore.uid,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())?.toLocal() ?? DateTime.now()
           : DateTime.now(),
-      messageType: rawType == 'image'
-          ? MessageType.image
-          : rawType == 'audio'
-              ? MessageType.audio
-              : rawType == 'call'
-                  ? MessageType.call
-                  : MessageType.text,
+      messageType: MessageType.values.where((t) => t.name == rawType).firstOrNull ?? MessageType.text,
       status: MessageStatus.sent,
     );
   }
@@ -85,6 +83,7 @@ class SupportChatMessage {
         'content': content,
         'image_url': imageUrl,
         'audio_url': audioUrl,
+        'video_url': videoUrl,
         'sender_name': senderName,
         'is_me': isMe,
         'created_at': createdAt.toIso8601String(),
@@ -97,6 +96,7 @@ class SupportChatMessage {
         content: json['content']?.toString() ?? '',
         imageUrl: json['image_url']?.toString(),
         audioUrl: json['audio_url']?.toString(),
+        videoUrl: json['video_url']?.toString(),
         senderName: json['sender_name']?.toString() ?? '',
         isMe: json['is_me'] == true,
         createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
@@ -377,6 +377,43 @@ class SupportChatService {
       _log('SupportChat uploadAudio error: $e');
     }
     return null;
+  }
+
+  /// Upload une vidéo, retourne l'object_name. Échec : lève le message du
+  /// serveur (ex. vidéo trop lourde) ou un message générique.
+  Future<String> uploadVideo(File file) async {
+    if (_conversationId == null) throw 'Discussion indisponible.';
+    final uri = Uri.parse('${BASE_URL}chat/conversations/$_conversationId/upload-video');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers[HttpHeaders.authorizationHeader] = 'Bearer ${appStore.token}'
+      ..files.add(await http.MultipartFile.fromPath('video', file.path));
+    http.Response response;
+    try {
+      response = await http.Response.fromStream(await request.send());
+    } catch (e) {
+      _log('SupportChat uploadVideo error: $e');
+      throw "Échec de l'envoi de la vidéo, vérifiez votre connexion.";
+    }
+    _log('SupportChat uploadVideo: ${response.statusCode} ${response.body}');
+    final body = response.body.isNotEmpty ? jsonDecode(response.body) : null;
+    if ((response.statusCode == 200 || response.statusCode == 201) && body is Map && body['object_name'] != null) {
+      return body['object_name'].toString();
+    }
+    throw (body is Map ? body['detail']?.toString() : null) ?? "Échec de l'envoi de la vidéo.";
+  }
+
+  /// Envoie une vidéo via WS, retourne true si envoyé
+  bool sendVideoMessage(String objectName) {
+    if (_channel == null || !_isReady) {
+      _log('SupportChat: tentative d\'envoi vidéo mais WS non prêt');
+      return false;
+    }
+    _channel!.sink.add(jsonEncode({
+      'type': 'message',
+      'message_type': 'video',
+      'content': objectName,
+    }));
+    return true;
   }
 
   /// Envoie une note vocale via WS, retourne true si envoyé
