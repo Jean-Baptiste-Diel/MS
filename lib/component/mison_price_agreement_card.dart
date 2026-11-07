@@ -77,7 +77,7 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
       title: 'Valider ${_fcfa(price)} ?',
       subtitle: widget.isArtisan
           ? 'Ce prix est ferme : c\'est celui que le client paiera à la fin de la prestation.'
-          : "Ce prix est ferme : vous le paierez avec Wave, dans l'application MISON, à la fin de la prestation "
+          : "Ce prix est ferme : vous le paierez avec Wave ou Orange Money, dans l'application MISON, à la fin de la prestation "
               '(+ ${_fcfa(order.serviceFee)} de frais de service). Ne payez jamais le prestataire en espèces.',
       icon: Icons.handshake_outlined,
       confirmLabel: 'Oui, je valide',
@@ -212,9 +212,9 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
             4.height,
             Text(
               widget.isArtisan
-                  ? "Prix ferme, payé par le client avec Wave dans l'application MISON à la fin "
+                  ? "Prix ferme, payé par le client avec Wave ou Orange Money dans l'application MISON à la fin "
                       "de la prestation. N'acceptez pas de paiement en espèces."
-                  : "Prix ferme, à payer avec Wave dans l'application MISON à la fin de la prestation "
+                  : "Prix ferme, à payer avec Wave ou Orange Money dans l'application MISON à la fin de la prestation "
                       '(${_fcfa(price + order.serviceFee)} avec les frais de service). '
                       'Ne payez jamais le prestataire en espèces.',
               style: secondaryTextStyle(size: 13),
@@ -274,7 +274,6 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
 /// Saisie du prix proposé. Retourne le montant (FCFA) ou null si annulé.
 Future<int?> _askPrice(BuildContext context, {required MisonOrder order, bool counter = false}) {
   final ctrl = TextEditingController(text: order.priceProposal?.toString() ?? '');
-  final minPrice = num.tryParse(order.service?.minPrice ?? '')?.round();
   return showModalBottomSheet<int>(
     context: context,
     isScrollControlled: true,
@@ -313,8 +312,7 @@ Future<int?> _askPrice(BuildContext context, {required MisonOrder order, bool co
             Text(counter ? 'Votre contre-proposition' : 'Proposer un prix', style: boldTextStyle(size: 18)),
             6.height,
             Text(
-              'Prix de la prestation, en FCFA. Une fois validé par les deux, il ne pourra plus changer.'
-              '${minPrice != null && minPrice > 0 ? '\nPrix indicatif : à partir de ${_fcfa(minPrice)}.' : ''}',
+              'Prix de la prestation, en FCFA. Une fois validé par les deux, il ne pourra plus changer.',
               style: secondaryTextStyle(size: 13),
             ),
             16.height,
@@ -361,7 +359,7 @@ Future<int?> _askPrice(BuildContext context, {required MisonOrder order, bool co
   );
 }
 
-/// Avis au client : la prestation se paie uniquement par Wave, dans l'app
+/// Avis au client : la prestation se paie uniquement par Wave ou Orange Money, dans l'app
 /// MISON (jamais en espèces au prestataire).
 class MisonWavePaymentNotice extends StatelessWidget {
   const MisonWavePaymentNotice({Key? key}) : super(key: key);
@@ -387,7 +385,7 @@ class MisonWavePaymentNotice extends StatelessWidget {
                 style: secondaryTextStyle(size: 13, color: kMisonDark),
                 children: const [
                   TextSpan(text: 'La prestation se paie '),
-                  TextSpan(text: "uniquement par Wave, dans l'application MISON", style: TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: "uniquement par Wave ou Orange Money, dans l'application MISON", style: TextStyle(fontWeight: FontWeight.bold)),
                   TextSpan(text: ", à la fin de l'intervention. Ne payez jamais le prestataire en espèces : "
                       "sans paiement dans l'app, MISON ne peut pas vous protéger en cas de litige."),
                 ],

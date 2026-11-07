@@ -22,7 +22,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-/// Onglet « Notre réseau » : carte des prestataires inscrits autour du client, une
+/// Onglet « Notre réseau » : carte des prestataires disponibles à 10 km autour
+/// du client (100 km pour un service choisi), une
 /// icône par service. Filtre par service, avis, et commande du service.
 class MisonArtisansMapScreen extends StatefulWidget {
   const MisonArtisansMapScreen({Key? key}) : super(key: key);
@@ -35,7 +36,8 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
   static const String _mapStyle = '[{"featureType":"poi","stylers":[{"visibility":"off"}]},'
       '{"featureType":"transit","stylers":[{"visibility":"off"}]}]';
   static const LatLng _dakar = LatLng(14.7167, -17.4677);
-  static const int _radiusKm = 30;
+  /// Prestataires disponibles à 10 km autour du client (ou du point choisi).
+  static const int _radiusKm = 10;
 
   GoogleMapController? _map;
   bool _hasLocation = false;
@@ -104,7 +106,7 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
     final saved = getStringAsync(_kMapCacheKey);
     if (saved.isEmpty) return [];
     try {
-      return (jsonDecode(saved) as List).whereType<Map>().map((a) => a.cast<String, dynamic>()).toList();
+      return _availableOnly((jsonDecode(saved) as List).whereType<Map>().map((a) => a.cast<String, dynamic>()));
     } catch (_) {
       return [];
     }
@@ -148,8 +150,8 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
     }
   }
 
-  /// Nombre total de prestataires (tous services), du dernier chargement
-  /// sans filtre : le compteur n'affiche pas le nombre par service.
+  /// Nombre de prestataires du dernier chargement sans filtre (plus affiché) :
+  /// null tant que rien n'est chargé (chargement plein écran).
   int? _totalCount;
 
   /// Numéro de la dernière requête : une réponse plus ancienne (service
@@ -159,6 +161,10 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
   /// Service choisi : rayon élargi, pour trouver ses ouvriers même loin.
   static const int _serviceRadiusKm = 100;
 
+  /// Seulement les prestataires disponibles (ni indisponibles, ni en mission).
+  static List<Map<String, dynamic>> _availableOnly(Iterable<Map<String, dynamic>> artisans) =>
+      artisans.where((a) => a['is_available'] == true).toList();
+
   Future<void> _load(LatLng center, {bool fit = false}) async {
     final request = ++_request;
     final serviceId = _serviceFilter;
@@ -167,12 +173,12 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
       _showSearchHere = false;
     });
     try {
-      final artisans = await getArtisansMap(
+      final artisans = _availableOnly(await getArtisansMap(
         lat: center.latitude,
         lng: center.longitude,
         radiusKm: serviceId == null ? _radiusKm : _serviceRadiusKm,
         serviceId: serviceId,
-      );
+      ));
       await _prepareIcons(artisans);
       if (!mounted || request != _request) return;
       setState(() {
@@ -375,7 +381,7 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _searchBar(_totalCount),
+                  child: _searchBar(),
                 ),
                 10.height,
                 _filters(),
@@ -470,7 +476,7 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
     );
   }
 
-  Widget _searchBar(int? count) {
+  Widget _searchBar() {
     return Material(
       color: Colors.white,
       elevation: 3,
@@ -487,11 +493,6 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
             Expanded(
               child: Text('Rechercher un service', style: secondaryTextStyle(size: 14)),
             ),
-            if (count != null)
-              Text(
-                '$count prestataire${count > 1 ? 's' : ''}',
-                style: boldTextStyle(size: 12, color: kMisonDark),
-              ),
           ]),
         ),
       ),

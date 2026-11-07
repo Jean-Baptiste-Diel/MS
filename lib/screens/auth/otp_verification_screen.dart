@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
+import 'package:booking_system_flutter/utils/phone_utils.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
@@ -39,7 +40,6 @@ class OTPVerificationScreen extends StatefulWidget {
   /// Identifiant utilisé pour envoyer/vérifier l'OTP : email si disponible,
   /// sinon téléphone (inscription sans email).
   bool get _usesEmail => email != null && email!.trim().isNotEmpty;
-  String get _target => _usesEmail ? email!.trim() : phone!.trim();
 
   @override
   State<OTPVerificationScreen> createState() => _OTPVerificationScreenState();
@@ -50,6 +50,14 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   static const Color _brandGold = Color(0xFFC49716);
 
   TextEditingController otpController = TextEditingController();
+
+  /// Numéro de l'inscription : modifiable ici si la personne s'est trompée.
+  late String _phone = (widget.phone ?? '').trim();
+
+  String get _target => widget._usesEmail ? widget.email!.trim() : _phone;
+
+  /// Correction du numéro : inscription par téléphone.
+  bool get _canChangePhone => widget.isFromSignUp && !widget._usesEmail && _phone.isNotEmpty;
 
   Timer? _timer;
   int _remainingSeconds = 60;
@@ -96,7 +104,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     appStore.setLoading(true);
 
     Map<String, dynamic> request = {
-      (widget._usesEmail ? 'email' : 'phone'): widget._target,
+      (widget._usesEmail ? 'email' : 'phone'): _target,
       'otp_code': otpController.text.trim(),
     };
 
@@ -135,7 +143,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     appStore.setLoading(true);
 
     Map<String, dynamic> request = {
-      (widget._usesEmail ? 'email' : 'phone'): widget._target,
+      (widget._usesEmail ? 'email' : 'phone'): _target,
     };
 
     await api.resendOtp(request, purpose: 'verification').then((response) {
@@ -146,6 +154,112 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       appStore.setLoading(false);
       TopToast.show(message: e.toString(), type: TopToastType.error);
     });
+  }
+
+  /// « Ce n'est pas le bon numéro ? » : saisie du bon numéro, puis nouveau
+  /// code envoyé dessus (le compte de l'inscription est gardé).
+  Future<void> _changePhone() async {
+    final isSenegal = _phone.startsWith('+221');
+    final controller = TextEditingController(text: isSenegal ? _phone.substring(4) : _phone);
+    String? error;
+
+    final newPhone = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          void submit() {
+            final input = controller.text.trim();
+            final String? err = isSenegal
+                ? validateSenegalPhone(input)
+                : (input.startsWith('+') && input.length > 7
+                    ? null
+                    : "Saisissez le numéro avec l'indicatif (ex : +33 6 12 34 56 78)");
+            if (err != null) {
+              setSheetState(() => error = err);
+              return;
+            }
+            final phone = isSenegal
+                ? buildInternationalPhone(input, phoneCode: '221')
+                : '+${input.replaceAll(RegExp(r'[^0-9]'), '')}';
+            Navigator.of(sheetContext).pop(phone);
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.of(sheetContext).viewInsets.bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Modifier le numéro', style: boldTextStyle(size: 18)),
+                6.height,
+                Text(
+                  'Saisissez le bon numéro : un nouveau code vous sera envoyé par SMS.',
+                  style: secondaryTextStyle(),
+                ),
+                16.height,
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]'))],
+                  decoration: InputDecoration(
+                    prefixText: isSenegal ? '+221 ' : null,
+                    hintText: isSenegal ? '77 123 45 67' : '+33 6 12 34 56 78',
+                    errorText: error,
+                    errorMaxLines: 3,
+                    filled: true,
+                    fillColor: context.cardColor,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: _brandGold),
+                    ),
+                  ),
+                  onChanged: (_) {
+                    if (error != null) setSheetState(() => error = null);
+                  },
+                  onSubmitted: (_) => submit(),
+                ),
+                20.height,
+                AppButton(
+                  text: 'Envoyer le code à ce numéro',
+                  color: _brandGold,
+                  textColor: Colors.white,
+                  width: double.infinity,
+                  onTap: submit,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    controller.dispose();
+    if (newPhone == null || newPhone == _phone || !mounted) return;
+
+    appStore.setLoading(true);
+    try {
+      final saved = await api.changeSignupPhone(
+        phone: _phone,
+        newPhone: newPhone,
+      );
+      appStore.setLoading(false);
+      if (!mounted) return;
+      _timer?.cancel();
+      otpController.clear();
+      setState(() => _phone = saved);
+      startTimer();
+      TopToast.show(message: 'Numéro modifié : un nouveau code a été envoyé au $saved', type: TopToastType.success);
+    } catch (e) {
+      appStore.setLoading(false);
+      TopToast.show(
+        message: friendlyPhoneError(e.toString(), phoneCode: isSenegal ? '221' : ''),
+        type: TopToastType.error,
+      );
+    }
   }
 
   @override
@@ -203,12 +317,21 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                         TextSpan(text: language.enterTheCodeSentTo),
                         TextSpan(text: '\n'),
                         TextSpan(
-                          text: widget._usesEmail ? 'votre numéro de téléphone' : widget._target,
+                          text: widget._usesEmail ? 'votre numéro de téléphone' : _target,
                           style: boldTextStyle(color: _brandGold),
                         ),
                       ],
                     ),
                   ),
+                  if (_canChangePhone)
+                    TextButton.icon(
+                      onPressed: appStore.isLoading ? null : _changePhone,
+                      icon: const Icon(Icons.edit_outlined, size: 16, color: _brandGold),
+                      label: Text(
+                        "Ce n'est pas le bon numéro ? Modifier",
+                        style: primaryTextStyle(size: 14, color: _brandGold),
+                      ),
+                    ),
                   40.height,
                   // OTP Input
                   PinCodeTextField(

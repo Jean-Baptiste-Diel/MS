@@ -9,7 +9,10 @@ import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/auth/change_password_screen.dart';
 import 'package:booking_system_flutter/screens/auth/artisan_edit_profile_screen.dart';
 import 'package:booking_system_flutter/screens/auth/edit_profile_screen.dart';
+import 'package:booking_system_flutter/component/mison_account_sheets.dart';
+import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
+import 'package:booking_system_flutter/screens/auth/profile_selection_screen.dart';
 import 'package:booking_system_flutter/screens/setting_screen.dart';
 import 'package:booking_system_flutter/screens/support_chat/support_chat_screen.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
@@ -319,14 +322,31 @@ class ProfileFragmentState extends State<ProfileFragment> {
             style: secondaryTextStyle(size: 14),
           ),
           14.height,
-          AppButton(
-            width: context.width(),
-            text: 'Se connecter',
-            color: kMisonGold,
-            textStyle: boldTextStyle(color: white),
-            onTap: () {
-              const SignInScreen().launch(context);
-            },
+          Row(
+            children: [
+              AppButton(
+                text: "S'inscrire",
+                color: context.cardColor,
+                shapeBorder: RoundedRectangleBorder(
+                  borderRadius: radius(defaultRadius),
+                  side: const BorderSide(color: kMisonGold),
+                ),
+                textStyle: boldTextStyle(color: kMisonGold),
+                onTap: () {
+                  // Comme depuis la connexion : d'abord le type de compte.
+                  const ProfileSelectionScreen().launch(context);
+                },
+              ).expand(),
+              10.width,
+              AppButton(
+                text: 'Se connecter',
+                color: kMisonGold,
+                textStyle: boldTextStyle(color: white),
+                onTap: () {
+                  const SignInScreen().launch(context);
+                },
+              ).expand(),
+            ],
           ),
         ],
       ),
@@ -408,18 +428,13 @@ class ProfileFragmentState extends State<ProfileFragment> {
                             const SupportChatScreen().launch(context);
                           },
                         ),
-                      ]),
-                    ],
-                    // Connecté : déconnexion et suppression sont dans « Sécurité »
-                    if (!appStore.isLoggedIn) ...[
-                      _sectionTitle('Session'),
-                      _menuCard([
                         _menuItem(
-                          title: language.signIn,
-                          subtitle: 'Accéder à votre compte',
-                          icon: ic_lock,
-                          onTap: () {
-                            const SignInScreen().launch(context);
+                          title: 'Inviter un ami',
+                          subtitle: "Partager le lien de l'application (WhatsApp, Facebook, SMS…)",
+                          iconData: Icons.card_giftcard_rounded,
+                          onTap: () async {
+                            final message = await showMisonInviteFriendSheet(context);
+                            if (message != null) TopToast.show(message: message, type: TopToastType.success);
                           },
                         ),
                       ]),

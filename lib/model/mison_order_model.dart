@@ -294,8 +294,8 @@ class MisonOrder {
       case 'ORANGE_MONEY':
         return 'Orange Money';
       default:
-        // Pour le moment, seul Wave est proposé au client.
-        return isCompleted ? 'Wave' : 'Wave · en attente du paiement du client';
+        // Pas encore payé : le client choisit Wave ou Orange Money.
+        return isCompleted ? 'Wave' : 'En attente du paiement du client';
     }
   }
 

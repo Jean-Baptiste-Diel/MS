@@ -82,9 +82,22 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   bool _paymentLaunched = false;
   bool _paymentRequestInFlight = false;
 
-  /// Un paiement est en cours (requête, app Wave/Orange ouverte ou vérification
-  /// du statut) : le bouton "Payer" est désactivé pour éviter de payer deux fois.
-  bool get _paymentVerifying => _paymentRequestInFlight || _paymentLaunched || _paymentPollTimer != null;
+  /// Vérifications du statut depuis le retour dans l'app.
+  int _paymentPollTicks = 0;
+
+  /// Retour de Wave/Orange Money : « Vérification du paiement… » pendant ces
+  /// vérifications seulement (~6 s). Paiement abandonné (app fermée sans
+  /// payer) : « Payer la prestation » revient vite, la vérification continue
+  /// en arrière-plan. Pas de double paiement : Wave rouvre la même session,
+  /// et un second paiement est repéré par le serveur (doublon).
+  static const int _kVerifyingTicks = 2;
+
+  /// Un paiement est en cours (requête, app Wave/Orange ouverte ou premières
+  /// secondes de vérification) : le bouton "Payer" est désactivé.
+  bool get _paymentVerifying =>
+      _paymentRequestInFlight ||
+      _paymentLaunched ||
+      (_paymentPollTimer != null && _paymentPollTicks < _kVerifyingTicks);
 
   @override
   void initState() {
@@ -176,9 +189,11 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   /// chaque vérification.
   void _startPaymentPolling() {
     if (_paymentPollTimer != null) return; // déjà en cours
-    int ticks = 0;
+    _paymentPollTicks = 0;
     _paymentPollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (++ticks > 30 || !mounted) return _stopPaymentPolling();
+      if (++_paymentPollTicks > 30 || !mounted) return _stopPaymentPolling();
+      // Fin de la vérification visible : le bouton « Payer » revient.
+      if (_paymentPollTicks == _kVerifyingTicks) setState(() {});
       try {
         final res = await getMisonOrderDetail(widget.orderId);
         if (!mounted || _paymentPollTimer == null) return;
@@ -522,6 +537,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         onPayWave: () async {
           Navigator.pop(context);
           if (_paymentVerifying) return;
+          _stopPaymentPolling(); // nouvelle tentative : la vérification repartira au retour
           setState(() => _paymentRequestInFlight = true);
           appStore.setLoading(true);
           try {
@@ -542,6 +558,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         onPayOrange: () async {
           Navigator.pop(context);
           if (_paymentVerifying) return;
+          _stopPaymentPolling(); // nouvelle tentative : la vérification repartira au retour
           setState(() => _paymentRequestInFlight = true);
           appStore.setLoading(true);
           try {
@@ -676,7 +693,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 onSetRealizationFee: order.isPriceAgreed
                     ? () => _confirm(
                           title: 'Terminer la prestation ?',
-                          subtitle: 'Le client va payer le prix convenu de ${formatFcfa(order.agreedPrice!)} avec Wave.',
+                          subtitle: 'Le client va payer le prix convenu de ${formatFcfa(order.agreedPrice!)} avec Wave ou Orange Money.',
                           onConfirm: () => _finishWithAgreedPrice(order),
                         )
                     : () => _showSetFeeModal(
@@ -1689,9 +1706,9 @@ class _ArtisanSummaryCard extends StatelessWidget {
       _InfoRow(
         icon: Icons.account_balance_wallet_rounded,
         label: forClient ? 'Mode de paiement' : 'Paiement',
-        // Client, pas encore payé : formulé pour lui (seul Wave pour le moment)
+        // Client, pas encore payé : formulé pour lui (Wave ou Orange Money)
         value: forClient && order.paymentMethod == null && !order.isCompleted
-            ? 'Wave · à régler'
+            ? 'Wave ou Orange Money · à régler'
             : order.paymentMethodLabel,
       ),
       if (!forClient && (order.serviceAddress ?? '').isNotEmpty) ...[
@@ -1791,7 +1808,7 @@ class _FeeBottomSheet extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bottom sheet paiement (Wave / Orange Money grisé)
+// Bottom sheet paiement (Wave / Orange Money)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PaymentBottomSheet extends StatefulWidget {
@@ -1888,18 +1905,18 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
             enabled: true,
             onTap: () => setState(() => _selected = 'wave'),
           ),
-          // 10.height,
+          10.height,
 
           // Orange Money
-          // _MethodTile(
-          //   label: 'Orange Money',
-          //   subtitle: 'Paiement Orange Money',
-          //   logoAsset: 'assets/images/orange_money.jpg',
-          //   color: const Color(0xFFFF7900),
-          //   selected: isOrange,
-          //   enabled: true,
-          //   onTap: () => setState(() => _selected = 'orange'),
-          // ),
+          _MethodTile(
+            label: 'Orange Money',
+            subtitle: 'Paiement Orange Money ou Max it',
+            logoAsset: 'assets/images/orange_money.jpg',
+            color: const Color(0xFFFF7900),
+            selected: isOrange,
+            enabled: true,
+            onTap: () => setState(() => _selected = 'orange'),
+          ),
           24.height,
 
           AppButton(

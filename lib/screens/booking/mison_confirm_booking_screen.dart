@@ -190,7 +190,7 @@ class _MisonConfirmBookingScreenState
 
                       24.height,
 
-                      // ── Paiement : uniquement par Wave dans l'app ─────────
+                      // ── Paiement : Wave ou Orange Money dans l'app ─────────
                       const MisonWavePaymentNotice(),
                       12.height,
 

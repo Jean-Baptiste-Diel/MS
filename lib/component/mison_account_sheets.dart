@@ -1,8 +1,12 @@
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
+import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/pin_utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
+import 'package:flutter_native_contact_picker/model/contact.dart';
 import 'package:nb_utils/nb_utils.dart';
+import 'package:share_plus/share_plus.dart';
 
 const Color _dangerRed = Color(0xFFE53935);
 
@@ -320,6 +324,184 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
         color: _dangerRed,
         loading: _isLoading,
         onPressed: _confirm,
+      ),
+      10.height,
+      _secondaryButton(
+        label: 'Annuler',
+        onPressed: _isLoading ? null : () => Navigator.pop(context),
+      ),
+    ]);
+  }
+}
+
+
+// ── Inviter un ami ───────────────────────────────────────────────────────────
+
+/// Numéro d'un contact au format attendu par le serveur : chiffres seuls,
+/// « 00221… » devient « +221… » ; sans indicatif, le serveur ajoute +221.
+String _contactPhone(String raw) {
+  final cleaned = raw.replaceAll(RegExp(r'[^0-9+]'), '');
+  return cleaned.startsWith('00') ? '+${cleaned.substring(2)}' : cleaned;
+}
+
+/// Ouvre la liste de contacts du téléphone (sélecteur du système : l'app ne
+/// voit que le contact choisi, aucune autorisation sur tout le répertoire).
+Future<Contact?> _pickContact() async {
+  try {
+    final contact = await FlutterNativeContactPicker().selectPhoneNumber();
+    final phone = contact?.selectedPhoneNumber ?? contact?.phoneNumbers?.firstOrNull;
+    if (phone == null || phone.trim().isEmpty) return null;
+    return Contact(fullName: contact?.fullName, selectedPhoneNumber: phone);
+  } catch (_) {
+    return null;
+  }
+}
+
+const _kAndroidAppUrl = 'https://play.google.com/store/apps/details?id=com.mison.serviceuser';
+
+/// Texte partagé sur WhatsApp, Facebook, Messenger, etc.
+const _kInviteText = "Je te recommande MISON pour trouver des ouvriers qualifiés et vérifiés près de chez toi. "
+    "Télécharge l'application :\n"
+    'Android : $_kAndroidAppUrl\n'
+    'iPhone : $IOS_LINK_FOR_USER';
+
+/// « Inviter un ami » : partage du lien via les applications du téléphone
+/// (WhatsApp, Facebook, Messenger…), ou SMS envoyé par MISON à un contact.
+/// Retourne le message de confirmation (SMS), ou null.
+Future<String?> showMisonInviteFriendSheet(BuildContext context) async {
+  final choice = await showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => _sheetFrame(sheetContext, children: [
+      _sheetIcon(Icons.card_giftcard_rounded, kMisonGold),
+      16.height,
+      Text('Inviter un ami', textAlign: TextAlign.center, style: boldTextStyle(size: 20, color: kMisonDark)),
+      8.height,
+      Text(
+        "Envoyez-lui le lien de l'application MISON, pour Android et iPhone.",
+        textAlign: TextAlign.center,
+        style: secondaryTextStyle(size: 14),
+      ),
+      20.height,
+      _primaryButton(
+        label: 'Partager via WhatsApp, Facebook…',
+        color: kMisonGold,
+        onPressed: () => Navigator.pop(sheetContext, 'share'),
+      ),
+      10.height,
+      _secondaryButton(
+        label: 'Envoyer un SMS à un contact',
+        onPressed: () => Navigator.pop(sheetContext, 'sms'),
+      ),
+    ]),
+  );
+  if (!context.mounted) return null;
+  if (choice == 'share') {
+    // Feuille de partage du téléphone : WhatsApp, Facebook, Messenger, SMS…
+    final box = context.findRenderObject() as RenderBox?;
+    await SharePlus.instance.share(ShareParams(
+      text: _kInviteText,
+      subject: 'Découvre MISON',
+      sharePositionOrigin: box != null && box.hasSize ? box.localToGlobal(Offset.zero) & box.size : null,
+    ));
+    return null;
+  }
+  if (choice != 'sms') return null;
+  final contact = await _pickContact();
+  if (contact == null || !context.mounted) return null;
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _InviteFriendSheet(contact: contact),
+  );
+}
+
+class _InviteFriendSheet extends StatefulWidget {
+  final Contact contact;
+
+  const _InviteFriendSheet({required this.contact});
+
+  @override
+  State<_InviteFriendSheet> createState() => _InviteFriendSheetState();
+}
+
+class _InviteFriendSheetState extends State<_InviteFriendSheet> {
+  late Contact _contact = widget.contact;
+  bool _isLoading = false;
+  String? _error;
+
+  Future<void> _changeContact() async {
+    final contact = await _pickContact();
+    if (contact == null || !mounted) return;
+    setState(() {
+      _contact = contact;
+      _error = null;
+    });
+  }
+
+  Future<void> _send() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final res = await inviteFriend(_contactPhone(_contact.selectedPhoneNumber!));
+      if (!mounted) return;
+      Navigator.pop(context, res.message.validate(value: 'Invitation envoyée.'));
+    } catch (e) {
+      if (!mounted) return;
+      // Messages du serveur : « Numéro de téléphone invalide. », « C'est votre propre numéro. »
+      final message = e.toString().replaceFirst('Exception: ', '').trim();
+      setState(() {
+        _isLoading = false;
+        _error = message.isNotEmpty ? message : "Impossible d'envoyer l'invitation pour le moment.";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _contact.fullName.validate();
+    return _sheetFrame(context, children: [
+      _sheetIcon(Icons.card_giftcard_rounded, kMisonGold),
+      16.height,
+      Text('Inviter un ami',
+          textAlign: TextAlign.center, style: boldTextStyle(size: 20, color: kMisonDark)),
+      8.height,
+      Text(
+        "MISON lui envoie un SMS avec le lien de l'application, pour Android et iPhone.",
+        textAlign: TextAlign.center,
+        style: secondaryTextStyle(size: 14),
+      ),
+      20.height,
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: kMisonFieldBg, borderRadius: BorderRadius.circular(12)),
+        child: Row(children: [
+          const Icon(Icons.person_rounded, color: kMisonGold),
+          12.width,
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (name.isNotEmpty) Text(name, style: boldTextStyle(size: 15, color: kMisonDark)),
+            Text(_contact.selectedPhoneNumber!, style: secondaryTextStyle(size: 14)),
+          ]).expand(),
+          TextButton(
+            onPressed: _isLoading ? null : _changeContact,
+            child: Text('Changer', style: boldTextStyle(size: 13, color: kMisonGold)),
+          ),
+        ]),
+      ),
+      if (_error != null) ...[
+        8.height,
+        Text(_error!, style: secondaryTextStyle(size: 13, color: _dangerRed)),
+      ],
+      20.height,
+      _primaryButton(
+        label: "Envoyer l'invitation",
+        color: kMisonGold,
+        loading: _isLoading,
+        onPressed: _send,
       ),
       10.height,
       _secondaryButton(

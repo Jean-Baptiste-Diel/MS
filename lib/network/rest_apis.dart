@@ -532,6 +532,13 @@ Future<BaseResponseModel> changeUserPassword(Map request) async {
           request: request, method: HttpMethodType.POST)));
 }
 
+/// « Inviter un ami » : SMS MISON avec les liens de l'application.
+/// POST /api/auth/invite avec { phone } (+221… ou numéro sénégalais sans indicatif)
+Future<BaseResponseModel> inviteFriend(String phone) async {
+  return BaseResponseModel.fromJson(await handleResponse(
+      await buildHttpResponse('auth/invite', request: {'phone': phone}, method: HttpMethodType.POST)));
+}
+
 /// Forgot password - Envoie un OTP par email
 /// POST /api/auth/forgot-password avec { email }
 Future<BaseResponseModel> forgotPassword(Map request) async {
@@ -593,6 +600,21 @@ Future<BaseResponseModel> resendOtp(Map request,
   return BaseResponseModel.fromJson(await handleResponse(
       await buildHttpResponse('auth/resend-otp?purpose=$purpose',
           request: request, method: HttpMethodType.POST)));
+}
+
+/// POST /api/auth/register/change-phone : en attente du code OTP, corrige le
+/// numéro de l'inscription et envoie un nouveau code au bon numéro.
+/// Retourne le numéro enregistré par le serveur.
+Future<String> changeSignupPhone({
+  required String phone,
+  required String newPhone,
+}) async {
+  final res = await handleResponse(await buildHttpResponse(
+    'auth/register/change-phone',
+    request: {'phone': phone, 'new_phone': newPhone},
+    method: HttpMethodType.POST,
+  ));
+  return (res is Map && res['phone'] is String) ? res['phone'] as String : newPhone;
 }
 
 /// Get current user profile
