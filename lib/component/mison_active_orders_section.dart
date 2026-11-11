@@ -4,6 +4,7 @@ import 'package:booking_system_flutter/component/cached_image_widget.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold, kMisonDark;
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
+import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart' show formatFcfa;
 import 'package:booking_system_flutter/screens/booking/mison_order_searching_screen.dart';
 import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:flutter/material.dart';
@@ -140,7 +141,10 @@ class _ActiveOrderCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: stateColor.withValues(alpha: 0.35)),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+          Row(
             children: [
               if (artisan == null)
                 SizedBox(
@@ -175,15 +179,41 @@ class _ActiveOrderCard extends StatelessWidget {
                 ),
               ),
               6.width,
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: stateColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(stateLabel, style: boldTextStyle(size: 11, color: stateColor)),
-              ),
+              // État : texte de sa couleur, sans fond.
+              Text(stateLabel, style: boldTextStyle(size: 11, color: stateColor)),
+              2.width,
               const Icon(Icons.chevron_right_rounded, color: kMisonGold, size: 18),
+            ],
+          ),
+          // Intervention en cours / paiement à effectuer : le montant se paie
+          // dans l'app (jamais en espèces).
+          if (order.isInProgress || order.isAwaitingRealizationPayment) ...[
+            8.height,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: kMisonGold.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.phone_iphone_rounded, color: kMisonGold, size: 18),
+                  8.width,
+                  Expanded(
+                    child: Text(
+                      "À payer dans l'app MISON",
+                      style: boldTextStyle(size: 14, color: kMisonGold),
+                    ),
+                  ),
+                  if ((order.clientTotal ?? 0) > 0)
+                    Text(formatFcfa(order.clientTotal!), style: boldTextStyle(size: 16, color: kMisonDark)),
+                ],
+              ),
+            ),
+            4.height,
+            Text('Ne payez jamais en espèces.', style: secondaryTextStyle(size: 11)),
+          ],
             ],
           ),
         ),

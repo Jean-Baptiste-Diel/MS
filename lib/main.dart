@@ -150,7 +150,12 @@ void onNotificationTap(NotificationResponse details) {
       final channel = data['channel']?.toString() ?? '';
       if (orderId.isEmpty) return;
       navigatorKey.currentState?.push(MaterialPageRoute(
-        builder: (_) => MisonIncomingCallScreen(orderId: orderId, channel: channel),
+        builder: (_) => MisonIncomingCallScreen(
+          orderId: orderId,
+          channel: channel,
+          callerName: data['caller_name']?.toString() ?? '',
+          fromStaff: data['from_staff']?.toString() == '1',
+        ),
       ));
       return;
     }
@@ -605,6 +610,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // Android, app en arrière-plan : « Accepter » sur l'écran d'appel du
+      // téléphone ramène l'app, mais l'événement « décroché » pouvait se perdre
+      // (l'appel ne se connectait pas et sonnait toujours chez l'autre). On
+      // rejoint ici tout appel décroché pas encore rejoint (une seule fois par
+      // appel : voir _joinedCallKitIds).
+      // Le module d'appel enregistre le décroché juste après avoir ramené
+      // l'app : deuxième vérification 1,5 s plus tard.
+      if (Platform.isAndroid) {
+        _joinColdStartAcceptedCall();
+        Future.delayed(const Duration(milliseconds: 1500), _joinColdStartAcceptedCall);
+      }
       emitOrderListRefresh(badge: false);
       // Prestataire arrivé chez le client : le panneau « Commencer » revient.
       ArtisanArrivalReporter.promptPendingStart();

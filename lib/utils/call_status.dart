@@ -13,6 +13,11 @@ import 'package:nb_utils/nb_utils.dart';
 /// - "rejected"  : l'appelé a refusé → l'appel se termine chez l'appelant ;
 /// - "cancelled" : l'appelant a raccroché avant la réponse → la sonnerie
 ///   s'arrête chez l'appelé.
+/// Appel au support : identifiant d'appel « support-<discussion> » (pas de
+/// commande). Il sert au signal Firestore et à l'écran d'appel.
+String supportCallId(String conversationId) => 'support-$conversationId';
+bool isSupportCallId(String id) => id.startsWith('support-');
+
 const kCallRejected = 'rejected';
 const kCallCancelled = 'cancelled';
 /// L'appel a sonné sans réponse chez l'appelé (délai dépassé).

@@ -29,6 +29,16 @@ class ArtisanRejectedError {
   String toString() => 'Compte rejeté : $reason';
 }
 
+/// Prestataire bloqué par l'équipe MISON (connexion refusée), avec la raison.
+class ArtisanBlockedError {
+  final String reason;
+
+  ArtisanBlockedError(this.reason);
+
+  @override
+  String toString() => 'Compte bloqué${reason.isNotEmpty ? ' : $reason' : ''}';
+}
+
 // ── Redirect to login ─────────────────────────────────────────────────────────
 
 bool _isRedirectingToLogin = false;
@@ -244,6 +254,9 @@ Future handleResponse(Response response, {HttpResponseType httpResponseType = Ht
     if (response.body.isJson()) {
       final body = jsonDecode(response.body);
       if (body is Map) {
+        if (body['blocked'] == true) {
+          throw ArtisanBlockedError((body['reason'] ?? '').toString().trim());
+        }
         if (body['reason'] != null && body['dossier'] is Map) {
           throw ArtisanRejectedError(body['reason'].toString(), Map<String, dynamic>.from(body['dossier']));
         }

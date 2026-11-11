@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/feature_flags.dart';
 import 'package:booking_system_flutter/component/mison_rate_sheet.dart';
 import 'package:booking_system_flutter/screens/booking/mison_artisan_reviews_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
@@ -102,6 +103,10 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   @override
   void initState() {
     super.initState();
+    // Modes de paiement cochés dans le back-office : relus à l'ouverture.
+    FeatureFlags.refresh().then((_) {
+      if (mounted) setState(() {});
+    });
     MisonOrderDetailScreen._open.update(widget.orderId, (n) => n + 1, ifAbsent: () => 1);
     WidgetsBinding.instance.addObserver(this);
     init();
@@ -469,6 +474,31 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   }
 
   /// Prestation terminée au prix convenu : le client est invité à payer.
+  /// Le client a payé en espèces : la commande est terminée et l'ouvrier
+  /// doit à MISON sa part (frais de service, commission, assurance).
+  Future<void> _declarePaidCash(MisonOrder order) async {
+    final ok = await showMisonConfirmSheet(
+      context,
+      title: 'Payé en espèces ?',
+      subtitle: "Confirmez que le client vous a payé en espèces. Vous devrez régler à MISON sa part "
+          '(frais de service, commission et assurance), à payer dans l\'app.',
+      icon: Icons.payments_outlined,
+      confirmLabel: 'Oui, payé en espèces',
+    );
+    if (!ok) return;
+    appStore.setLoading(true);
+    try {
+      final res = await declarePaidCash(order.id!);
+      TopToast.show(message: res.message ?? 'Commande terminée', type: TopToastType.success);
+      init();
+      if (mounted) setState(() {});
+    } catch (e) {
+      TopToast.show(message: '$e', type: TopToastType.error);
+    } finally {
+      appStore.setLoading(false);
+    }
+  }
+
   Future<void> _finishWithAgreedPrice(MisonOrder order) async {
     appStore.setLoading(true);
     try {
@@ -690,10 +720,11 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                   }
                 },
                 onChat: () => _openChat(order),
+                onPaidCash: () => _declarePaidCash(order),
                 onSetRealizationFee: order.isPriceAgreed
                     ? () => _confirm(
                           title: 'Terminer la prestation ?',
-                          subtitle: 'Le client va payer le prix convenu de ${formatFcfa(order.agreedPrice!)} avec Wave ou Orange Money.',
+                          subtitle: 'Le client va payer le prix convenu de ${formatFcfa(order.agreedPrice!)} avec ${FeatureFlags.paymentMethods}.',
                           onConfirm: () => _finishWithAgreedPrice(order),
                         )
                     : () => _showSetFeeModal(
@@ -773,6 +804,8 @@ class _OrderDetailBody extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onChat;
   final VoidCallback onSetRealizationFee;
+  /// Ouvrier : le client l'a payé en espèces.
+  final VoidCallback? onPaidCash;
   final VoidCallback onPriceChanged;
   final VoidCallback onCancel;
   final VoidCallback onPay;
@@ -797,6 +830,7 @@ class _OrderDetailBody extends StatelessWidget {
     required this.onStart,
     required this.onChat,
     required this.onSetRealizationFee,
+    this.onPaidCash,
     required this.onPriceChanged,
     required this.onCancel,
     required this.onPay,
@@ -843,7 +877,9 @@ class _OrderDetailBody extends StatelessWidget {
     final showGoButton = _isArtisan && order.isBeforeStart && !order.needsArtisanConfirmation && !order.hasArrived;
     final showStartButton = _isArtisan && order.hasArrived && !order.needsArtisanConfirmation;
     final showSetFeeButton = _isArtisan && order.artisan != null && order.isInProgress;
-    final showPrimaryAction = showAcceptButton || showGoButton || showStartButton || showSetFeeButton || _showPayButton || _showPayLocked;
+    // Le client l'a payé en espèces : il le déclare (sa part revient à MISON).
+    final showCashButton = _isArtisan && order.isAwaitingRealizationPayment && FeatureFlags.cashTracking && onPaidCash != null;
+    final showPrimaryAction = showAcceptButton || showGoButton || showStartButton || showSetFeeButton || showCashButton || _showPayButton || _showPayLocked;
     final showBottomBar = showBottomCall || showPrimaryAction || showClientCancel;
 
     late final String primaryActionLabel;
@@ -860,11 +896,17 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionColor = kMisonGold; // Accepter / Confirmer en doré
       primaryActionTap = onAccept;
     } else if (showGoButton) {
-      // Disponible même sans accord sur le prix : il peut se conclure en chemin.
+      // « Accord sur le prix obligatoire » (back-office) : grisé tant que le
+      // client n'a pas validé le prix.
+      final waitPrice = order.priceAgreementRequired && !order.isPriceAgreed;
       primaryActionLabel = 'Aller chez le client';
       primaryActionIcon = Icons.directions_car_rounded;
-      primaryActionColor = kMisonGold;
-      primaryActionTap = onDepart;
+      primaryActionColor = waitPrice ? Colors.grey : kMisonGold;
+      primaryActionTap = waitPrice
+          ? () => TopToast.show(
+                message: "Mettez-vous d'abord d'accord sur le prix avec le client : il doit le valider avant que vous partiez.",
+              )
+          : onDepart;
     } else if (showStartButton) {
       primaryActionLabel = 'Commencer la prestation';
       primaryActionIcon = Icons.play_circle_outline_rounded;
@@ -875,6 +917,11 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionIcon = Icons.receipt_long_rounded;
       primaryActionColor = completed;
       primaryActionTap = onSetRealizationFee;
+    } else if (showCashButton) {
+      primaryActionLabel = "Le client m'a payé en espèces";
+      primaryActionIcon = Icons.payments_outlined;
+      primaryActionColor = Colors.grey.shade700;
+      primaryActionTap = onPaidCash!;
     } else if (_showPayLocked) {
       primaryActionLabel = 'Payer la prestation';
       primaryActionIcon = Icons.lock_clock_rounded;
@@ -972,6 +1019,17 @@ class _OrderDetailBody extends StatelessWidget {
 
                 // ── Client : récapitulatif (prix, prestation, mode de paiement)
                 // une fois les frais de prestation fixés ──────────────────────
+                // ── Client, en attente du paiement : montant à payer dans l'app, en
+                // gros, avec l'avertissement contre les espèces.
+                if (_isClient && order.isAwaitingRealizationPayment && (order.prestationPrice ?? 0) > 0) ...[
+                  MisonPayInAppCard(
+                    price: order.prestationPrice!,
+                    fee: order.serviceFee,
+                    title: 'Prestation terminée : il reste à payer',
+                    awaitingPayment: true,
+                  ),
+                  16.height,
+                ],
                 if (_isClient && (order.isAwaitingRealizationPayment || order.isCompleted)) ...[
                   _ArtisanSummaryCard(order: order, forClient: true),
                   20.height,
@@ -1708,7 +1766,7 @@ class _ArtisanSummaryCard extends StatelessWidget {
         label: forClient ? 'Mode de paiement' : 'Paiement',
         // Client, pas encore payé : formulé pour lui (Wave ou Orange Money)
         value: forClient && order.paymentMethod == null && !order.isCompleted
-            ? 'Wave ou Orange Money · à régler'
+            ? '${FeatureFlags.paymentMethods} · à régler'
             : order.paymentMethodLabel,
       ),
       if (!forClient && (order.serviceAddress ?? '').isNotEmpty) ...[
@@ -1831,7 +1889,10 @@ class _PaymentBottomSheet extends StatefulWidget {
 }
 
 class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
-  String? _selected;
+  // Un seul mode coché dans le back-office : choisi d'office.
+  String? _selected = FeatureFlags.paymentMethodList.length == 1
+      ? (FeatureFlags.paymentMethodList.first == 'Wave' ? 'wave' : 'orange')
+      : null;
 
   @override
   Widget build(BuildContext context) {
@@ -1895,7 +1956,8 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
           Text('Mode de paiement', style: boldTextStyle(size: 16)),
           12.height,
 
-          // Wave
+          // Wave (case « Paiement Wave » du back-office ; toujours proposé si rien n'est coché)
+          if (FeatureFlags.paymentMethodList.contains('Wave'))
           _MethodTile(
             label: 'Wave',
             subtitle: 'Paiement mobile sécurisé',
@@ -1907,16 +1969,17 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
           ),
           10.height,
 
-          // Orange Money
-          _MethodTile(
-            label: 'Orange Money',
-            subtitle: 'Paiement Orange Money ou Max it',
-            logoAsset: 'assets/images/orange_money.jpg',
-            color: const Color(0xFFFF7900),
-            selected: isOrange,
-            enabled: true,
-            onTap: () => setState(() => _selected = 'orange'),
-          ),
+          // Orange Money (activé dans le back-office : Réglages de la plateforme)
+          if (FeatureFlags.orangeMoney)
+            _MethodTile(
+              label: 'Orange Money',
+              subtitle: 'Paiement Orange Money ou Max it',
+              logoAsset: 'assets/images/orange_money.jpg',
+              color: const Color(0xFFFF7900),
+              selected: isOrange,
+              enabled: true,
+              onTap: () => setState(() => _selected = 'orange'),
+            ),
           24.height,
 
           AppButton(

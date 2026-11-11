@@ -218,9 +218,9 @@ class MisonOrder {
 
   /// Accord sur le prix à trouver : commande acceptée, prestation pas encore
   /// commencée. Toujours proposé (le prestataire propose, le client accepte ou
-  /// refuse), avant le départ ou une fois sur place ; il ne bloque pas le
-  /// départ. L'interrupteur du back-office (priceAgreementRequired) ne décide
-  /// plus que du démarrage sans prix validé, côté serveur.
+  /// refuse), avant le départ ou une fois sur place. Interrupteur du
+  /// back-office allumé (priceAgreementRequired) : ni départ (« Aller chez le
+  /// client ») ni démarrage sans prix validé.
   bool get needsPriceAgreement =>
       isBeforeStart &&
       !needsArtisanConfirmation &&

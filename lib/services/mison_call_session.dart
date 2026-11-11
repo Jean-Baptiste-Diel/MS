@@ -166,7 +166,9 @@ class MisonCallSession extends ChangeNotifier {
     await _keepAliveInBackground();
     _listenCallStatus();
     if (isCaller) {
-      _noAnswerTimer = Timer(_noAnswerTimeout, () {
+      // Appel au support : il attend qu'un membre de l'équipe décroche (jamais
+      // refusé), jusqu'à 5 minutes.
+      _noAnswerTimer = Timer(isSupportCallId(orderId) ? const Duration(minutes: 5) : _noAnswerTimeout, () {
         if (!isConnected) _end(message: "$otherPartyName n'a pas répondu", noAnswer: true);
       });
     } else {
@@ -484,7 +486,8 @@ class MisonCallSession extends ChangeNotifier {
 
     // Appelant : l'appel s'affiche dans la conversation de la commande
     // (abouti avec sa durée, refusé, ou sans réponse / annulé).
-    if (isCaller && !micDenied) {
+    // (Appel au support : pas de commande, rien à afficher.)
+    if (isCaller && !micDenied && !isSupportCallId(orderId)) {
       logOrderCall(
         orderId,
         outcome: isConnected ? 'completed' : (rejected ? 'declined' : 'missed'),

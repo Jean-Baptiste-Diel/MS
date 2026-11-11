@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/feature_flags.dart';
+import 'package:booking_system_flutter/screens/cash/cash_debt_screen.dart';
 import 'package:booking_system_flutter/component/mison_favorite_places.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/component/cached_image_widget.dart';
@@ -392,6 +394,15 @@ class ProfileFragmentState extends State<ProfileFragment> {
                             }
                           },
                         ),
+                        // Ouvrier : ce qu'il doit à MISON (commandes payées en espèces),
+                        // à payer avant d'être bloqué. Activé dans le back-office.
+                        if (appStore.userType == USER_TYPE_PROVIDER && FeatureFlags.cashTracking)
+                          _menuItem(
+                            title: 'Dette MISON',
+                            subtitle: "Payer ce que vous devez à MISON (commandes payées en espèces)",
+                            iconData: Icons.account_balance_wallet_outlined,
+                            onTap: () => CashDebtScreen.open(context),
+                          ),
                         if (appStore.userType != USER_TYPE_PROVIDER)
                           _menuItem(
                             title: 'Mes lieux favoris',

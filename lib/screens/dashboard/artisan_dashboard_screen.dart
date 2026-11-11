@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/feature_flags.dart';
+import 'package:booking_system_flutter/screens/cash/cash_debt_screen.dart';
 import 'package:booking_system_flutter/component/mison_start_prestation_sheet.dart';
 import 'package:booking_system_flutter/component/unread_badge.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
@@ -47,12 +49,17 @@ class ArtisanDashboardScreen extends StatefulWidget {
   State<ArtisanDashboardScreen> createState() => _ArtisanDashboardScreenState();
 }
 
-class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
+class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    // Doit encore à MISON (espèces, échéance passée) : écran de paiement bloquant.
+    WidgetsBinding.instance.addObserver(this);
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted && FeatureFlags.cashTracking) CashDebtScreen.checkAndShow(context);
+    });
     ChatUnreadStore.start(); // pastilles « messages non lus »
     openColdStartAcceptedCall(); // appel décroché app fermée (iPhone et Android)
     // App relancée alors qu'il est déjà chez le client : « Commencer la prestation ».
@@ -61,6 +68,17 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) checkAppUpdate(context);
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && FeatureFlags.cashTracking) CashDebtScreen.checkAndShow(context);
   }
 
   final List<Widget> _tabs = [
@@ -186,7 +204,8 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
   bool _presenceInFlight = false;
   AppLifecycleListener? _presenceLifecycle;
 
-  static const double _expandedHeight = 208.0;
+
+  static const double _expandedHeight = 150.0;
   static const double _toolbarHeight = 72.0;
 
   @override
@@ -403,6 +422,48 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
     _key = UniqueKey();
   }
 
+  /// Avatar (photo ou initiales), « Bon après-midi · lun. 5 oct. », nom,
+  /// bouton Disponible et cloche des notifications.
+  Widget _buildHeader() {
+    final name = appStore.userFullName.isNotEmpty
+        ? appStore.userFullName
+        : (appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier');
+    final initials = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2).map((w) => w[0].toUpperCase()).join();
+    final date = DateFormat('EEE d MMM', 'fr_FR').format(DateTime.now());
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: _brandGold.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(10),
+            image: appStore.userProfileImage.isNotEmpty
+                ? DecorationImage(image: CachedNetworkImageProvider(appStore.userProfileImage), fit: BoxFit.cover)
+                : null,
+          ),
+          alignment: Alignment.center,
+          child: appStore.userProfileImage.isNotEmpty
+              ? null
+              : Text(initials, style: boldTextStyle(color: _headerDark, size: 13)),
+        ),
+        12.width,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$_greeting · $date', style: secondaryTextStyle(size: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+              2.height,
+              Text(name, style: boldTextStyle(color: _headerDark, size: 20), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+        8.width,
+        _AvailabilityToggle(value: _isAvailable, onChanged: _setAvailability),
+      ],
+    );
+  }
+
   String get _greeting {
     final h = DateTime.now().hour;
     if (h < 12) return 'Bonjour';
@@ -487,52 +548,10 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
               flexibleSpace: FlexibleSpaceBar(
                 background: Container(
                   color: Colors.transparent,
-                  padding: const EdgeInsets.fromLTRB(20, _toolbarHeight, 20, 16),
-                  child: Observer(
-                    builder: (_) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Salutation, puis le nom en dessous
-                                  Text(
-                                    '$_greeting,',
-                                    style: secondaryTextStyle(size: 17),
-                                  ),
-                                  2.height,
-                                  Text(
-                                    appStore.userFullName.isNotEmpty
-                                        ? appStore.userFullName
-                                        : (appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'),
-                                    style: boldTextStyle(color: _headerDark, size: 24),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  4.height,
-                                  Text(
-                                    DateFormat('EEEE dd MMMM yyyy', 'fr_FR').format(DateTime.now()),
-                                    style: secondaryTextStyle(size: 14),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            12.width,
-                            // Disponibilité : bouton on / off à droite de la salutation
-                            _AvailabilityToggle(
-                              value: _isAvailable,
-                              onChanged: _setAvailability,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  alignment: Alignment.bottomLeft,
+                  // Sous la barre du haut (logo) : barre d'état du téléphone comprise.
+                  padding: EdgeInsets.fromLTRB(20, _toolbarHeight + MediaQuery.of(context).padding.top + 4, 20, 12),
+                  child: Observer(builder: (_) => _buildHeader()),
                 ),
               ),
             ),
@@ -556,7 +575,12 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) _syncLocationBroadcast(orders);
                   });
-                  return _DashboardBody(orders: orders, artisanPosition: _artisanPosition, isAvailable: _isAvailable);
+                  return _DashboardBody(
+                    orders: orders,
+                    artisanPosition: _artisanPosition,
+                    isAvailable: _isAvailable,
+                    onChanged: () => setState(() => _load()),
+                  );
                 },
               ),
             ),
@@ -678,7 +702,9 @@ class _DashboardBody extends StatefulWidget {
   final Position? artisanPosition;
   /// Bouton « Disponible / Indisponible » de l'accueil.
   final bool isAvailable;
-  const _DashboardBody({required this.orders, this.artisanPosition, this.isAvailable = true});
+  /// Commande acceptée / refusée : l'accueil se recharge.
+  final VoidCallback? onChanged;
+  const _DashboardBody({required this.orders, this.artisanPosition, this.isAvailable = true, this.onChanged});
 
   @override
   State<_DashboardBody> createState() => _DashboardBodyState();
@@ -694,6 +720,73 @@ class _DashboardBodyState extends State<_DashboardBody> {
   void _toggleFilter(_StatFilter f) =>
       setState(() => _filter = _filter == f ? null : f);
 
+  Set<String> get _dismissed => dismissedProposedOrders();
+
+  Future<void> _accept(MisonOrder order) async {
+    final ok = await showMisonConfirmSheet(
+      context,
+      title: order.isPendingDirectRequest ? 'Accepter la demande' : 'Accepter la commande',
+      subtitle: order.isPendingDirectRequest
+          ? 'Ce client vous a choisi. Acceptez-vous sa demande ?'
+          : "Confirmez-vous l'acceptation de cette commande ?",
+      icon: Icons.assignment_turned_in_outlined,
+      confirmLabel: "Oui, j'accepte",
+    );
+    if (!ok) return;
+    appStore.setLoading(true);
+    try {
+      final res = await artisanAcceptOrder(order.id!);
+      TopToast.show(message: res.message ?? 'Commande acceptée', type: TopToastType.success);
+      widget.onChanged?.call();
+    } catch (e) {
+      TopToast.show(message: e.toString(), type: TopToastType.error);
+    } finally {
+      appStore.setLoading(false);
+    }
+  }
+
+  Future<void> _refuse(MisonOrder order) async {
+    if (order.isPendingDirectRequest) {
+      // Demande qui lui est adressée : le client est prévenu.
+      final ok = await showMisonConfirmSheet(
+        context,
+        title: 'Refuser la demande',
+        subtitle: "Le client sera prévenu et sa demande sera proposée à d'autres prestataires.",
+        icon: Icons.event_busy_rounded,
+        confirmLabel: 'Oui, refuser',
+        danger: true,
+      );
+      if (!ok) return;
+      appStore.setLoading(true);
+      try {
+        await cancelMisonOrder(order.id!);
+        TopToast.show(message: 'Demande refusée', type: TopToastType.success);
+        widget.onChanged?.call();
+      } catch (e) {
+        TopToast.show(message: e.toString(), type: TopToastType.error);
+      } finally {
+        appStore.setLoading(false);
+      }
+      return;
+    }
+    // Commande proposée à plusieurs ouvriers : on la retire de l'accueil.
+    await dismissProposedOrder(order.id ?? '');
+    if (mounted) setState(() {});
+  }
+
+  /// Gains de la semaine (depuis lundi) : prix des commandes terminées.
+  int _weekEarnings(List<MisonOrder> missions) {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    var total = 0;
+    for (final o in missions.where((o) => o.isCompleted)) {
+      final at = DateTime.tryParse(o.updatedAt ?? o.serviceDate ?? '')?.toLocal();
+      if (at == null || at.isBefore(monday)) continue;
+      total += o.agreedPrice ?? (num.tryParse(o.realizationFee ?? '')?.round() ?? 0);
+    }
+    return total;
+  }
+
   double? _distanceTo(MisonOrder order) {
     if (artisanPosition == null) return null;
     final lat = double.tryParse(order.latitude ?? '');
@@ -707,7 +800,12 @@ class _DashboardBodyState extends State<_DashboardBody> {
   @override
   Widget build(BuildContext context) {
     // Commandes disponibles (PENDING sans artisan) = à traiter
-    final urgentes  = orders.where((o) => o.isPending && o.artisan == null).toList();
+    final dismissed = _dismissed;
+    final urgentesAll = orders.where((o) => o.isPending && o.artisan == null).toList();
+    // La plus récente en grand (« Nouvelle commande »), les autres en dessous.
+    final proposees = urgentesAll.where((o) => !dismissed.contains(o.id)).toList();
+    final newOrder = proposees.isNotEmpty ? proposees.first : null;
+    final urgentes = proposees.skip(1).toList();
     // Missions de cet artisan (déjà acceptées)
     final missions  = orders.where((o) => o.artisan != null).toList();
 
@@ -750,44 +848,38 @@ class _DashboardBodyState extends State<_DashboardBody> {
         break;
       case null:
         history = missions.take(5).toList();
-        historyTitle = 'Historique récent';
+        historyTitle = 'Commandes récentes';
         emptySubtitle = 'Aucune commande ne vous a été assignée pour le moment.';
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Stats
+        // ── Gains de la semaine et compteurs (chaque compteur filtre la liste)
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(title: 'Statistiques'),
-              16.height,
-              // Chaque carte filtre l'historique ci-dessous (re-toucher = annuler)
-              Row(children: [
-                _StatCard(label: 'Total', value: total, color: _brandGold, icon: Icons.receipt_long_rounded,
-                    isSelected: _filter == _StatFilter.total,
-                    onTap: () => _toggleFilter(_StatFilter.total)),
-                12.width,
-                _StatCard(label: 'En cours', value: enCours, color: in_progress, icon: Icons.timelapse_rounded,
-                    isSelected: _filter == _StatFilter.enCours,
-                    onTap: () => _toggleFilter(_StatFilter.enCours)),
-              ]),
-              12.height,
-              Row(children: [
-                _StatCard(label: 'Terminées', value: terminees, color: completed, icon: Icons.check_circle_rounded,
-                    isSelected: _filter == _StatFilter.terminees,
-                    onTap: () => _toggleFilter(_StatFilter.terminees)),
-                12.width,
-                _StatCard(label: 'Annulées', value: annulees, color: rejected, icon: Icons.cancel_rounded,
-                    isSelected: _filter == _StatFilter.annulees,
-                    onTap: () => _toggleFilter(_StatFilter.annulees)),
-              ]),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: _WeekCard(
+            earnings: _weekEarnings(missions),
+            counters: [
+              _Counter('Total', total, _headerDark, _filter == _StatFilter.total, () => _toggleFilter(_StatFilter.total)),
+              _Counter('En cours', enCours, in_progress, _filter == _StatFilter.enCours, () => _toggleFilter(_StatFilter.enCours)),
+              _Counter('Terminées', terminees, completed, _filter == _StatFilter.terminees, () => _toggleFilter(_StatFilter.terminees)),
+              _Counter('Annulées', annulees, rejected, _filter == _StatFilter.annulees, () => _toggleFilter(_StatFilter.annulees)),
             ],
           ),
         ),
+
+        // ── Nouvelle commande (la plus récente proposée), en grand
+        if (newOrder != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: _NewOrderCard(
+              order: newOrder,
+              distanceKm: _distanceTo(newOrder),
+              onAccept: () => _accept(newOrder),
+              onRefuse: () => _refuse(newOrder),
+            ),
+          ),
 
         // ── Indisponible (bouton de l'accueil) : pas de nouvelles commandes
         if (!widget.isAvailable && !isBusy)
@@ -851,7 +943,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
             padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
             child: Row(
               children: [
-                _SectionTitle(title: 'À traiter'),
+                _SectionTitle(title: 'Autres commandes à traiter'),
                 8.width,
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -864,15 +956,12 @@ class _DashboardBodyState extends State<_DashboardBody> {
               ],
             ),
           ),
-          ListView.separated(
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: urgentes.length,
-            separatorBuilder: (_, __) => 10.height,
-            itemBuilder: (ctx, i) => _UrgentOrderTile(
-              order: urgentes[i],
-              distanceKm: _distanceTo(urgentes[i]),
+            child: _GroupedList(
+              children: [
+                for (final o in urgentes) _UrgentOrderTile(order: o, distanceKm: _distanceTo(o)),
+              ],
             ),
           ),
         ],
@@ -892,6 +981,12 @@ class _DashboardBodyState extends State<_DashboardBody> {
                   onTap: () => setState(() => _filter = null),
                   child: Text('Voir récent',
                       style: boldTextStyle(size: 13, color: _brandGold)),
+                )
+              else if (missions.length > history.length)
+                // « Voir tout » : toutes les commandes de l'ouvrier.
+                GestureDetector(
+                  onTap: () => _toggleFilter(_StatFilter.total),
+                  child: Text('Voir tout', style: boldTextStyle(size: 13, color: _kAccent)),
                 ),
             ],
           ),
@@ -904,15 +999,205 @@ class _DashboardBodyState extends State<_DashboardBody> {
             subtitle: emptySubtitle,
           )
         else
-          ListView.separated(
+          Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: history.length,
-            separatorBuilder: (_, __) => 12.height,
-            itemBuilder: (ctx, i) => _RecentOrderTile(order: history[i]),
+            child: _GroupedList(children: [for (final o in history) _RecentOrderTile(order: o)]),
           ),
       ],
+    );
+  }
+}
+
+// Couleur des actions de l'accueil (bordure « Nouvelle commande », Accepter, Voir tout) : le doré MISON.
+const Color _kAccent = _brandGold;
+
+// Commandes proposées (à plusieurs ouvriers) que l'ouvrier a refusées : plus
+// affichées, ni sur l'accueil ni dans « Mes commandes › Missions ».
+const _kDismissedOrdersKey = 'artisan_home_dismissed_orders';
+Set<String> dismissedProposedOrders() => getStringListAsync(_kDismissedOrdersKey)?.toSet() ?? {};
+Future<void> dismissProposedOrder(String id) =>
+    setValue(_kDismissedOrdersKey, {...dismissedProposedOrders(), id}.toList());
+
+/// « Nouvelle commande » : n°, service, adresse, créneau, montant, Refuser / Accepter.
+class _NewOrderCard extends StatelessWidget {
+  final MisonOrder order;
+  final double? distanceKm;
+  final VoidCallback onAccept;
+  final VoidCallback onRefuse;
+  const _NewOrderCard({required this.order, this.distanceKm, required this.onAccept, required this.onRefuse});
+
+  String get _slot {
+    final date = DateTime.tryParse(order.serviceDate ?? '')?.toLocal();
+    if (date == null) return '';
+    if (order.isImmediate) return 'Tout de suite · ${DateFormat('EEE d MMM', 'fr_FR').format(date)}';
+    return DateFormat("EEE d MMM 'à' HH:mm", 'fr_FR').format(date);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = (order.id ?? '').length >= 8 ? order.id!.substring(0, 8).toUpperCase() : (order.id ?? '');
+    return GestureDetector(
+      onTap: () => MisonOrderDetailScreen(orderId: order.id ?? '', distanceKm: distanceKm).launch(context),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kAccent, width: 1.5),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    order.isPendingDirectRequest ? 'DEMANDE POUR VOUS' : 'NOUVELLE COMMANDE',
+                    style: boldTextStyle(size: 12, color: _kAccent, letterSpacing: 0.8),
+                  ),
+                ),
+                Text('#$ref', style: secondaryTextStyle(size: 12)),
+              ],
+            ),
+            10.height,
+            Text(order.service?.name ?? 'Service', style: boldTextStyle(size: 18), maxLines: 1, overflow: TextOverflow.ellipsis),
+            6.height,
+            if (_slot.isNotEmpty)
+              Row(children: [
+                const Icon(Icons.schedule, size: 15, color: Colors.grey),
+                6.width,
+                Expanded(child: Text(_slot, style: secondaryTextStyle(size: 13))),
+              ]),
+            16.height,
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: onRefuse,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFB3261E),
+                      side: const BorderSide(color: Color(0xFFE0E0E0)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('Refuser', style: boldTextStyle(color: const Color(0xFFB3261E))),
+                  ),
+                ),
+                12.width,
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: onAccept,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kAccent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('Accepter', style: boldTextStyle(color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Counter {
+  final String label;
+  final int value;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  const _Counter(this.label, this.value, this.color, this.selected, this.onTap);
+}
+
+/// « Gains cette semaine » et les compteurs Total / En cours / Terminées / Annulées.
+class _WeekCard extends StatelessWidget {
+  final int earnings;
+  final List<_Counter> counters;
+  const _WeekCard({required this.earnings, required this.counters});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(child: Text('Gains cette semaine', style: secondaryTextStyle(size: 14))),
+              Text(NumberFormat.decimalPattern('fr_FR').format(earnings), style: boldTextStyle(size: 22)),
+              6.width,
+              Text('FCFA', style: secondaryTextStyle(size: 13)),
+            ],
+          ),
+          const Divider(height: 24),
+          Row(
+            children: [
+              for (final c in counters)
+                Expanded(
+                  child: GestureDetector(
+                    onTap: c.onTap,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${c.value}', style: boldTextStyle(size: 18, color: c.color)),
+                          // Compteur choisi (liste filtrée) : libellé en gras de sa couleur.
+                          Text(
+                            c.label,
+                            style: c.selected ? boldTextStyle(size: 12, color: c.color) : secondaryTextStyle(size: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Carte blanche qui regroupe des lignes (commandes), séparées par un trait.
+class _GroupedList extends StatelessWidget {
+  final List<Widget> children;
+  const _GroupedList({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const Divider(height: 1, indent: 66, endIndent: 14),
+            children[i],
+          ],
+        ],
+      ),
     );
   }
 }
@@ -923,7 +1208,7 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(title, style: boldTextStyle(size: 16));
+    return Text(title, style: boldTextStyle(size: 17, color: _headerDark));
   }
 }
 
@@ -946,61 +1231,39 @@ class _UrgentOrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: () => MisonOrderDetailScreen(orderId: order.id ?? '', distanceKm: distanceKm).launch(context),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: _brandGold.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _brandGold.withValues(alpha: 0.35)),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             Container(
-              width: 42, height: 42,
-              decoration: BoxDecoration(
-                color: _brandGold.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.assignment_late_rounded, color: _brandGold, size: 22),
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: _brandGold.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.assignment_late_rounded, color: _brandGold, size: 20),
             ),
             12.width,
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(order.service?.name ?? 'Service',
-                      style: boldTextStyle(size: 16),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  4.height,
-                  Row(
-                    children: [
-                      Icon(Icons.person_outline, size: 12, color: Colors.grey),
-                      4.width,
-                      Flexible(child: Text(order.client?.fullName ?? '',
-                          style: secondaryTextStyle(size: 14),
-                          maxLines: 1, overflow: TextOverflow.ellipsis)),
-                      8.width,
-                      Icon(Icons.schedule, size: 12, color: Colors.grey),
-                      4.width,
-                      Flexible(child: Text(_formatDate(order.serviceDate, immediate: order.isImmediate),
-                          style: secondaryTextStyle(size: 14),
-                          maxLines: 1, overflow: TextOverflow.ellipsis)),
-                    ],
+                  Text(order.service?.name ?? 'Service', style: boldTextStyle(size: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  3.height,
+                  Text(
+                    [
+                      _formatDate(order.serviceDate, immediate: order.isImmediate),
+                      if (distanceKm != null) '${distanceKm!.toStringAsFixed(1)} km',
+                    ].where((t) => t.isNotEmpty).join(' · '),
+                    style: secondaryTextStyle(size: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            12.width,
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: _brandGold,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text('Voir', style: boldTextStyle(color: Colors.white, size: 13)),
-            ),
+            8.width,
+            const Icon(Icons.chevron_right_rounded, color: _brandGold),
           ],
         ),
       ),
@@ -1076,7 +1339,10 @@ class _StatCard extends StatelessWidget {
 
 class _RecentOrderTile extends StatelessWidget {
   final MisonOrder order;
-  const _RecentOrderTile({required this.order});
+  /// Action du moment (ex. « Confirmer », « Commencer ») : petit bouton doré.
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const _RecentOrderTile({required this.order, this.actionLabel, this.onAction});
 
   String _formatDate(String? iso) {
     if (iso == null) return '';
@@ -1097,92 +1363,83 @@ class _RecentOrderTile extends StatelessWidget {
     }
   }
 
+  /// Statut vu par l'ouvrier, en court.
   String _statusLabel(String? s) {
     switch (s) {
-      case 'PENDING':                      return 'Recherche d\'ouvrier';
-      case 'ACCEPTED':                     return 'Ouvrier trouvé';
-      case 'AWAITING_TRAVEL_PAYMENT':      return 'En attente de paiement';
-      case 'IN_PROGRESS':                  return 'Intervention en cours';
-      case 'AWAITING_REALIZATION_PAYMENT': return 'En attente du paiement de la prestation';
-      case 'COMPLETED':                    return 'Prestation terminée';
-      case 'CANCELLED':                    return 'Commande annulée';
+      case 'PENDING':                      return 'En attente';
+      case 'ASSIGNED':                     return 'À confirmer';
+      case 'ACCEPTED':                     return 'Acceptée';
+      case 'AWAITING_TRAVEL_PAYMENT':      return 'Paiement en attente';
+      case 'IN_PROGRESS':                  return 'En cours';
+      case 'AWAITING_REALIZATION_PAYMENT': return 'Paiement en attente';
+      case 'COMPLETED':                    return 'Terminée';
+      case 'CANCELLED':                    return 'Annulée';
+      case 'REJECTED':                     return 'Annulée';
       default:                             return s ?? '';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final color = _statusColor(order.status);
+    final client = order.client?.fullName ?? '';
+    return InkWell(
       onTap: () => MisonOrderDetailScreen(orderId: order.id ?? '').launch(context),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: context.cardColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 3)),
-          ],
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(10),
                 color: _brandGold.withValues(alpha: 0.1),
                 image: order.service?.imageUrl != null
                     ? DecorationImage(image: CachedNetworkImageProvider(order.service!.imageUrl!), fit: BoxFit.cover)
                     : null,
               ),
-              child: order.service?.imageUrl == null
-                  ? Icon(Icons.handyman, color: _brandGold, size: 20)
-                  : null,
+              child: order.service?.imageUrl == null ? const Icon(Icons.handyman, color: _brandGold, size: 20) : null,
             ),
             12.width,
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(order.service?.name ?? 'Service',
-                            style: boldTextStyle(size: 16),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ),
-                      4.width,
-                      Text(_formatDate(order.serviceDate),
-                          style: secondaryTextStyle(size: 13),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ],
+                  Text(order.service?.name ?? 'Service', style: boldTextStyle(size: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  3.height,
+                  Text(
+                    [client, _formatDate(order.serviceDate)].where((t) => t.isNotEmpty).join(' · '),
+                    style: secondaryTextStyle(size: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  6.height,
-                  Row(
-                    children: [
-                      Icon(Icons.person_outline, size: 12, color: Colors.grey),
-                      4.width,
-                      Expanded(
-                        child: Text(order.client?.fullName ?? '',
-                            style: secondaryTextStyle(size: 14),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (actionLabel != null && onAction != null) ...[
+                    8.height,
+                    GestureDetector(
+                      onTap: onAction,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(color: _brandGold, borderRadius: BorderRadius.circular(20)),
+                        child: Text(actionLabel!, style: boldTextStyle(size: 13, color: Colors.white)),
                       ),
-                      8.width,
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: _statusColor(order.status).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(_statusLabel(order.status),
-                            style: boldTextStyle(size: 12, color: _statusColor(order.status)),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ),
+            8.width,
+            // Statut : point de couleur + libellé court.
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                5.width,
+                Text(_statusLabel(order.status), style: boldTextStyle(size: 12, color: color)),
+              ],
+            ),
+            4.width,
+            const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
           ],
         ),
       ),
@@ -1337,8 +1594,90 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
     if (ok) _doAction(action);
   }
 
+  // ── Répartition entre les onglets ───────────────────────────────────────
+  bool _isProposed(MisonOrder o) => o.isPending && o.artisan == null && !dismissedProposedOrders().contains(o.id);
+  bool _isFinished(MisonOrder o) => o.isCompleted || o.isCancelled || o.isRejected;
+  bool _isOngoing(MisonOrder o) => o.artisan != null && !_isFinished(o);
+
+  /// Missions : les commandes proposées d'abord, puis ses missions, de la plus
+  /// proche à la plus lointaine.
+  int _missionOrder(MisonOrder a, MisonOrder b) {
+    final pa = _isProposed(a) ? 0 : 1;
+    final pb = _isProposed(b) ? 0 : 1;
+    if (pa != pb) return pa - pb;
+    final da = DateTime.tryParse(a.serviceDate ?? '') ?? DateTime(2100);
+    final db = DateTime.tryParse(b.serviceDate ?? '') ?? DateTime(2100);
+    return pa == 0 ? db.compareTo(da) : da.compareTo(db);
+  }
+
+  /// Onglet Missions : carte « Nouvelle commande » pour une commande proposée,
+  /// sinon sa mission dans une carte (comme les lignes de l'historique).
+  Widget _buildMissionCard(MisonOrder order) {
+    if (_isProposed(order) || (order.isPending && order.artisan == null)) return _buildCard(order);
+    return _GroupedList(children: [_buildCard(order)]);
+  }
+
   Widget _buildCard(MisonOrder order) {
     final distanceKm = _distanceTo(order);
+    // Commande proposée : carte « Nouvelle commande » (bordure dorée, Refuser / Accepter).
+    if (order.isPending && order.artisan == null) {
+      return _NewOrderCard(
+        order: order,
+        distanceKm: distanceKm,
+        onAccept: () => _confirmAction(
+          title: order.isPendingDirectRequest ? 'Accepter la demande' : 'Accepter la commande',
+          subtitle: order.isPendingDirectRequest
+              ? 'Ce client vous a choisi. Acceptez-vous sa demande ?'
+              : "Confirmez-vous l'acceptation de cette commande ?",
+          action: () => artisanAcceptOrder(order.id!),
+          icon: Icons.assignment_turned_in_outlined,
+          confirmLabel: "Oui, j'accepte",
+        ),
+        onRefuse: order.isPendingDirectRequest
+            ? () => _confirmAction(
+                  title: 'Refuser la demande',
+                  subtitle: "Le client sera prévenu et sa demande sera proposée à d'autres prestataires.",
+                  action: () async {
+                    await cancelMisonOrder(order.id!);
+                    return MisonActionResponse(message: 'Demande refusée');
+                  },
+                  icon: Icons.event_busy_rounded,
+                  confirmLabel: 'Oui, refuser',
+                  danger: true,
+                )
+            : () async {
+                await dismissProposedOrder(order.id ?? '');
+                _reload();
+              },
+      );
+    }
+    // Ses commandes : ligne comme « Commandes récentes » de l'accueil ; seule
+    // l'action du moment reste sur la ligne (le reste est dans le détail).
+    if (order.artisan != null) {
+      if (order.needsArtisanConfirmation) {
+        return _RecentOrderTile(
+          order: order,
+          actionLabel: 'Confirmer',
+          onAction: () => _confirmAction(
+            title: 'Confirmer la commande',
+            subtitle: 'Cette commande vous a été affectée par MISON. La confirmez-vous ?',
+            action: () => artisanAcceptOrder(order.id!),
+            icon: Icons.assignment_turned_in_outlined,
+            confirmLabel: 'Oui, je confirme',
+          ),
+        );
+      }
+      if (order.hasArrived) {
+        return _RecentOrderTile(
+          order: order,
+          actionLabel: 'Commencer',
+          onAction: () async {
+            if (await showMisonStartPrestationSheet(context, orderId: order.id!)) _reload();
+          },
+        );
+      }
+      return _RecentOrderTile(order: order);
+    }
     return GestureDetector(
       onTap: () => MisonOrderDetailScreen(orderId: order.id ?? '', distanceKm: distanceKm).launch(context),
       child: _ArtisanOrderCard(
@@ -1417,8 +1756,8 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
           labelStyle: boldTextStyle(size: 14, color: _headerDark),
           unselectedLabelStyle: secondaryTextStyle(size: 13),
           tabs: const [
-            Tab(text: 'À traiter'),
-            Tab(text: 'Mes missions'),
+            Tab(text: 'Missions'),
+            Tab(text: 'Historique'),
           ],
         ),
       ),
@@ -1427,23 +1766,26 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
           TabBarView(
             controller: _tabController,
             children: [
-              // ── Onglet "À traiter" : PENDING sans artisan assigné
+              // ── Onglet « Missions » : commandes proposées, puis ses missions en
+              //    cours et à venir (réservé directement, en attente de paiement…)
               _OrderTab(
                 key: ValueKey('pending_$_key'),
                 future: _allFuture,
-                filter: (o) => o.isPending && o.artisan == null,
-                tabLabel: 'À traiter',
-                buildCard: _buildCard,
+                filter: (o) => _isProposed(o) || _isOngoing(o),
+                sort: _missionOrder,
+                tabLabel: 'Missions',
+                buildCard: _buildMissionCard,
                 onReload: _reload,
               ),
-              // ── Onglet "Mes missions" : artisan assigné
+              // ── Onglet « Historique » : ses commandes terminées ou annulées
               _OrderTab(
                 key: ValueKey('missions_$_key'),
                 future: _allFuture,
-                filter: (o) => o.artisan != null,
-                tabLabel: 'Mes missions',
+                filter: (o) => o.artisan != null && _isFinished(o),
+                tabLabel: 'Historique',
                 buildCard: _buildCard,
                 onReload: _reload,
+                grouped: true,
               ),
             ],
           ),
@@ -1464,6 +1806,10 @@ class _OrderTab extends StatefulWidget {
   final String tabLabel;
   final Widget Function(MisonOrder) buildCard;
   final VoidCallback onReload;
+  /// Lignes regroupées dans une carte, comme « Commandes récentes » de l'accueil.
+  final bool grouped;
+  /// Ordre d'affichage (sinon celui du serveur).
+  final int Function(MisonOrder, MisonOrder)? sort;
 
   const _OrderTab({
     Key? key,
@@ -1472,6 +1818,8 @@ class _OrderTab extends StatefulWidget {
     required this.tabLabel,
     required this.buildCard,
     required this.onReload,
+    this.grouped = false,
+    this.sort,
   }) : super(key: key);
 
   @override
@@ -1500,6 +1848,7 @@ class _OrderTabState extends State<_OrderTab> with AutomaticKeepAliveClientMixin
         }
         final all = snapshot.data?.data ?? [];
         final filtered = all.where(widget.filter).toList();
+        if (widget.sort != null) filtered.sort(widget.sort);
         return RefreshIndicator(
           color: _brandGold,
           onRefresh: () async => widget.onReload(),
@@ -1517,11 +1866,17 @@ class _OrderTabState extends State<_OrderTab> with AutomaticKeepAliveClientMixin
                     ),
                   ],
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                  itemCount: filtered.length,
-                  itemBuilder: (_, i) => widget.buildCard(filtered[i]),
-                ),
+              : widget.grouped
+                  ? ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                      children: [_GroupedList(children: [for (final o in filtered) widget.buildCard(o)])],
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => 12.height,
+                      itemBuilder: (_, i) => widget.buildCard(filtered[i]),
+                    ),
         );
       },
     );

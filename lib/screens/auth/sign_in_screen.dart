@@ -184,6 +184,10 @@ class _SignInScreenState extends State<SignInScreen> {
       onLoginSuccessRedirection();
     } catch (e) {
       appStore.setLoading(false);
+      if (e is ArtisanBlockedError) {
+        _showBlockedSheet(e);
+        return;
+      }
       if (e is ArtisanRejectedError) {
         _showRejectedSheet(identifier, passwordCont.text.trim(), e);
         return;
@@ -281,6 +285,58 @@ class _SignInScreenState extends State<SignInScreen> {
             TextButton(
               onPressed: () => Navigator.pop(sheetContext),
               child: Text('Plus tard', style: secondaryTextStyle(size: 14)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Prestataire bloqué : raison donnée par l'équipe, pas de connexion.
+  void _showBlockedSheet(ArtisanBlockedError blocked) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
+            ),
+            24.height,
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), shape: BoxShape.circle),
+              child: Icon(Icons.block_rounded, color: Colors.red.shade700, size: 36),
+            ),
+            20.height,
+            Text('Compte bloqué', style: boldTextStyle(size: 18)),
+            12.height,
+            Text(
+              "Votre compte prestataire a été bloqué par l'équipe MISON. Vous ne pouvez pas vous connecter tant qu'il est bloqué.",
+              style: secondaryTextStyle(size: 14),
+              textAlign: TextAlign.center,
+            ),
+            if (blocked.reason.isNotEmpty) ...[
+              12.height,
+              Text('Raison : ${blocked.reason}', style: boldTextStyle(size: 14), textAlign: TextAlign.center),
+            ],
+            28.height,
+            AppButton(
+              width: double.infinity,
+              color: _brandGold,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              onTap: () => Navigator.pop(sheetContext),
+              child: Text("J'ai compris", style: boldTextStyle(color: Colors.white, size: 15)),
             ),
           ],
         ),

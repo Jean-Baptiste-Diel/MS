@@ -18,6 +18,7 @@ import 'package:booking_system_flutter/component/loader_widget.dart';
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/services/support_chat_service.dart';
 import 'package:booking_system_flutter/utils/common.dart';
+import 'package:booking_system_flutter/utils/feature_flags.dart';
 import 'package:booking_system_flutter/utils/order_events.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -69,6 +70,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   final Map<String, Timer> _pendingTimers = {};
   StreamSubscription? _historySub;
   StreamSubscription? _newMessageSub;
+  StreamSubscription? _updatedSub;
+  StreamSubscription? _deletedSub;
   StreamSubscription? _connectionSub;
   StreamSubscription? _errorSub;
   StreamSubscription? _closedSub;
@@ -158,6 +161,24 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         });
         _saveCache();
         _scrollToBottom();
+      });
+
+      // Message modifié / réaction, ou supprimé pour tout le monde.
+      _updatedSub?.cancel();
+      _updatedSub = _service.updatedStream.listen((msg) {
+        if (!mounted) return;
+        setState(() {
+          for (final m in _messages) {
+            if (m.id == msg.id) m.applyUpdate(msg);
+          }
+        });
+        _saveCache();
+      });
+      _deletedSub?.cancel();
+      _deletedSub = _service.deletedStream.listen((id) {
+        if (!mounted) return;
+        setState(() => _messages.removeWhere((m) => m.id == id));
+        _saveCache();
       });
 
       _newMessageSub = _service.newMessageStream.listen((msg) {
@@ -343,6 +364,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     _reconnectTimer?.cancel();
     _historySub?.cancel();
     _newMessageSub?.cancel();
+    _updatedSub?.cancel();
+    _deletedSub?.cancel();
     _connectionSub?.cancel();
     _errorSub?.cancel();
     _closedSub?.cancel();
@@ -409,7 +432,19 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             icon: const Icon(Icons.arrow_back, color: kMisonDark),
             onPressed: () => finish(context),
           ),
-          actions: _isOrderChat && !_isConnecting && _error == null && !_offline ? [_buildModerationMenu()] : null,
+          actions: _isOrderChat && !_isConnecting && _error == null && !_offline
+              ? [_buildModerationMenu()]
+              // Support : appeler l'équipe MISON (ça sonne dans le back-office).
+              : (FeatureFlags.supportCall && !_isOrderChat && !_isConnecting && _error == null && !_offline &&
+                      _service.conversationId != null
+                  ? [
+                      IconButton(
+                        tooltip: 'Appeler le support',
+                        icon: const Icon(Icons.call_rounded, color: kMisonDark),
+                        onPressed: () => startSupportCall(context, conversationId: _service.conversationId!),
+                      ),
+                    ]
+                  : null),
         ),
         body: DotGridBackground(
           child: Column(
@@ -599,12 +634,16 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     const Color bubbleOther = Color(0xFF1A1A1A);
     final isFailed = msg.status == MessageStatus.failed;
     final isPending = msg.status == MessageStatus.pending;
+    final hasActions = msg.id.isNotEmpty && !isPending && !isFailed;
     final canReport = _isOrderChat && !isMe && msg.id.isNotEmpty;
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: canReport ? () => _reportMessage(msg) : null,
+        // Appui long : réactions, modifier, supprimer, copier, signaler (comme WhatsApp).
+        onLongPress: FeatureFlags.chatMessageActions
+            ? (hasActions ? () => _showMessageActions(msg) : null)
+            : (canReport ? () => _reportMessage(msg) : null),
         child: Column(
         crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
@@ -643,12 +682,17 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                       )
                     : Text(msg.content, style: primaryTextStyle(color: Colors.white)),
           ),
+          if (FeatureFlags.chatMessageActions && msg.reactions.isNotEmpty) _buildReactions(msg),
           // Heure + indicateur d'état
           Padding(
             padding: const EdgeInsets.only(left: 4, right: 4, bottom: 4),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (msg.editedAt != null) ...[
+                  Text('modifié', style: secondaryTextStyle(size: 12, fontStyle: FontStyle.italic)),
+                  4.width,
+                ],
                 Text(
                   DateFormat('HH:mm').format(msg.createdAt),
                   style: secondaryTextStyle(size: 12),
@@ -818,6 +862,186 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     );
   }
 
+  // ── Comme WhatsApp : réagir, modifier (15 min), supprimer ────────────────
+
+  static const _reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  static const _editWindow = Duration(minutes: 15);
+
+  bool _canEdit(SupportChatMessage m) =>
+      m.isMe && !m.isSystem && m.messageType == MessageType.text && DateTime.now().difference(m.createdAt) < _editWindow;
+
+  bool _canDelete(SupportChatMessage m) => m.isMe && !m.isSystem && !m.isCall;
+
+  String? _myReaction(SupportChatMessage m) =>
+      m.reactions.where((r) => r['user_id'] == appStore.uid).map((r) => r['emoji']).firstOrNull;
+
+  Widget _buildReactions(SupportChatMessage msg) {
+    final counts = <String, int>{};
+    for (final r in msg.reactions) {
+      final e = r['emoji'] ?? '';
+      if (e.isNotEmpty) counts[e] = (counts[e] ?? 0) + 1;
+    }
+    final mine = _myReaction(msg);
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 2),
+      child: Wrap(
+        spacing: 4,
+        children: [
+          for (final entry in counts.entries)
+            GestureDetector(
+              onTap: () => _react(msg, entry.key),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: entry.key == mine ? const Color(0xFFFDF3CF) : Colors.white,
+                  border: Border.all(color: entry.key == mine ? const Color(0xFFC99700) : const Color(0xFFE0E0E0)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(entry.value > 1 ? '${entry.key} ${entry.value}' : entry.key, style: const TextStyle(fontSize: 14)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showMessageActions(SupportChatMessage msg) async {
+    final canReport = _isOrderChat && !msg.isMe;
+    final mine = _myReaction(msg);
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!msg.isCall)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    for (final e in _reactionEmojis)
+                      InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () => Navigator.pop(sheet, 'react:$e'),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: e == mine ? const Color(0xFFFDF3CF) : Colors.transparent,
+                          ),
+                          child: Text(e, style: const TextStyle(fontSize: 26)),
+                        ),
+                      ),
+                  ],
+                ),
+              if (msg.messageType == MessageType.text)
+                ListTile(
+                  leading: const Icon(Icons.copy_rounded),
+                  title: const Text('Copier'),
+                  onTap: () => Navigator.pop(sheet, 'copy'),
+                ),
+              if (_canEdit(msg))
+                ListTile(
+                  leading: const Icon(Icons.edit_rounded),
+                  title: const Text('Modifier'),
+                  onTap: () => Navigator.pop(sheet, 'edit'),
+                ),
+              if (_canDelete(msg))
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFB00020)),
+                  title: const Text('Supprimer pour tout le monde', style: TextStyle(color: Color(0xFFB00020))),
+                  onTap: () => Navigator.pop(sheet, 'delete'),
+                ),
+              if (canReport)
+                ListTile(
+                  leading: const Icon(Icons.flag_outlined),
+                  title: const Text('Signaler'),
+                  onTap: () => Navigator.pop(sheet, 'report'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice.startsWith('react:')) {
+      await _react(msg, choice.substring(6));
+    } else if (choice == 'copy') {
+      await Clipboard.setData(ClipboardData(text: msg.content));
+      TopToast.show(message: 'Message copié');
+    } else if (choice == 'edit') {
+      await _editMessage(msg);
+    } else if (choice == 'delete') {
+      await _deleteMessage(msg);
+    } else if (choice == 'report') {
+      await _reportMessage(msg);
+    }
+  }
+
+  Future<void> _react(SupportChatMessage msg, String emoji) async {
+    try {
+      final updated = await _service.messageAction(msg.id, 'react', {'emoji': emoji});
+      if (!mounted) return;
+      setState(() => msg.applyUpdate(updated));
+      _saveCache();
+    } catch (e) {
+      TopToast.show(message: '$e', type: TopToastType.error);
+    }
+  }
+
+  Future<void> _editMessage(SupportChatMessage msg) async {
+    final ctrl = TextEditingController(text: msg.content);
+    final text = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Modifier le message'),
+        content: TextField(controller: ctrl, autofocus: true, maxLines: 5, minLines: 1),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(dialog, ctrl.text.trim()), child: const Text('Enregistrer')),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty || text == msg.content || !mounted) return;
+    try {
+      final updated = await _service.messageAction(msg.id, 'edit', {'content': text});
+      if (!mounted) return;
+      setState(() => msg.applyUpdate(updated));
+      _saveCache();
+    } catch (e) {
+      TopToast.show(message: '$e', type: TopToastType.error);
+    }
+  }
+
+  Future<void> _deleteMessage(SupportChatMessage msg) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Supprimer ce message ?'),
+        content: const Text('Il sera retiré de la discussion pour tout le monde.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Supprimer', style: TextStyle(color: Color(0xFFB00020))),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _service.messageAction(msg.id, 'delete');
+      if (!mounted) return;
+      setState(() => _messages.removeWhere((m) => m.id == msg.id));
+      _saveCache();
+    } catch (e) {
+      TopToast.show(message: '$e', type: TopToastType.error);
+    }
+  }
+
   Future<void> _reportMessage(SupportChatMessage msg) async {
     final reason = await showMisonReportSheet(
       context,
@@ -868,6 +1092,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     TopToast.show(message: '$_peerName est débloqué.', type: TopToastType.success);
     _historySub?.cancel();
     _newMessageSub?.cancel();
+    _updatedSub?.cancel();
+    _deletedSub?.cancel();
     _initChat(); // ses messages réapparaissent
   }
 

@@ -36,7 +36,7 @@ class LanguageFr extends BaseLanguage {
   String get rememberMe => "Souviens-toi de moi";
 
   @override
-  String get resetPassword => "réinitialiser le mot de passe";
+  String get resetPassword => "Réinitialiser le mot de passe";
 
   @override
   String get editProfile => "Editer le profil";
@@ -242,7 +242,7 @@ class LanguageFr extends BaseLanguage {
   String get add => 'Ajouter';
 
   @override
-  String get save => 'sauvegarder';
+  String get save => 'Sauvegarder';
 
   @override
   String get jobPrice => 'Prix ​​de l\'emploi';
@@ -376,13 +376,13 @@ class LanguageFr extends BaseLanguage {
   String get badRequest => 'Mauvaise demande';
 
   @override
-  String get forbidden => 'interdit';
+  String get forbidden => 'Interdit';
 
   @override
   String get pageNotFound => 'Page non trouvée';
 
   @override
-  String get tooManyRequests => 'trop de demandes';
+  String get tooManyRequests => 'Trop de demandes';
 
   @override
   String get internalServerError => 'Erreur du serveur interne';
@@ -394,7 +394,7 @@ class LanguageFr extends BaseLanguage {
   String get serviceUnavailable => 'Service Indisponible';
 
   @override
-  String get gatewayTimeout => 'portail expiré';
+  String get gatewayTimeout => 'Portail expiré';
 
   @override
   String get userNotFound => 'Utilisateur non trouvé';
@@ -444,7 +444,7 @@ class LanguageFr extends BaseLanguage {
   String get connect => 'Connecter';
 
   @override
-  String get transactionId => 'identifiant de transaction';
+  String get transactionId => 'Identifiant de transaction';
 
   @override
   String get at => 'à';

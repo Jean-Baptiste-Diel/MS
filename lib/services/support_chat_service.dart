@@ -1,5 +1,6 @@
 import 'package:booking_system_flutter/utils/log_redact.dart';
 import 'package:nb_utils/nb_utils.dart' as nb_log show log;
+import 'package:nb_utils/nb_utils.dart' show HttpMethodType;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -20,7 +21,7 @@ enum MessageType { text, image, audio, video, call }
 class SupportChatMessage {
   final String id;
   final String localId;
-  final String content;       // texte ou object_name pour les images
+  String content;             // texte ou object_name pour les images (modifiable par son auteur)
   final String? imageUrl;     // URL pré-signée pour afficher l'image
   final String? audioUrl;     // URL pré-signée pour lire la note vocale
   final String? videoUrl;     // URL pré-signée pour lire la vidéo
@@ -30,6 +31,11 @@ class SupportChatMessage {
   final DateTime createdAt;
   final MessageType messageType;
   MessageStatus status;
+  /// Comme WhatsApp : texte modifié (date), réactions [{emoji, user_id}].
+  String? editedAt;
+  List<Map<String, String>> reactions;
+  /// Message écrit par le serveur (prix, facture, appel) : ni modifiable ni supprimable.
+  final bool isSystem;
 
   SupportChatMessage({
     required this.id,
@@ -44,7 +50,24 @@ class SupportChatMessage {
     required this.createdAt,
     this.messageType = MessageType.text,
     this.status = MessageStatus.sent,
-  });
+    this.editedAt,
+    List<Map<String, String>>? reactions,
+    this.isSystem = false,
+  }) : reactions = reactions ?? [];
+
+  static List<Map<String, String>> _parseReactions(dynamic raw) => raw is List
+      ? [
+          for (final r in raw)
+            if (r is Map) {'emoji': r['emoji']?.toString() ?? '', 'user_id': r['user_id']?.toString() ?? ''},
+        ]
+      : [];
+
+  /// Reprend le contenu modifié et les réactions envoyés par le serveur.
+  void applyUpdate(SupportChatMessage other) {
+    content = other.content;
+    editedAt = other.editedAt;
+    reactions = other.reactions;
+  }
 
   bool get isImage => messageType == MessageType.image;
   bool get isAudio => messageType == MessageType.audio;
@@ -72,6 +95,9 @@ class SupportChatMessage {
           : DateTime.now(),
       messageType: MessageType.values.where((t) => t.name == rawType).firstOrNull ?? MessageType.text,
       status: MessageStatus.sent,
+      editedAt: json['edited_at']?.toString(),
+      reactions: _parseReactions(json['reactions']),
+      isSystem: json['is_system'] == true,
     );
   }
 
@@ -88,6 +114,9 @@ class SupportChatMessage {
         'is_me': isMe,
         'created_at': createdAt.toIso8601String(),
         'message_type': messageType.name,
+        'edited_at': editedAt,
+        'reactions': reactions,
+        'is_system': isSystem,
       };
 
   factory SupportChatMessage.fromCacheJson(Map<String, dynamic> json) => SupportChatMessage(
@@ -101,6 +130,9 @@ class SupportChatMessage {
         isMe: json['is_me'] == true,
         createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
         messageType: MessageType.values.where((t) => t.name == json['message_type']).firstOrNull ?? MessageType.text,
+        editedAt: json['edited_at']?.toString(),
+        reactions: _parseReactions(json['reactions']),
+        isSystem: json['is_system'] == true,
       );
 
   factory SupportChatMessage.optimistic(String content) {
@@ -152,6 +184,18 @@ class SupportChatService {
 
   Stream<List<SupportChatMessage>> get historyStream => _historyController.stream;
   Stream<SupportChatMessage> get newMessageStream => _newMessageController.stream;
+
+  // Message modifié (ou nouvelle réaction) et message supprimé pour tout le monde.
+  final _updatedController = StreamController<SupportChatMessage>.broadcast();
+  final _deletedController = StreamController<String>.broadcast();
+  Stream<SupportChatMessage> get updatedStream => _updatedController.stream;
+  Stream<String> get deletedStream => _deletedController.stream;
+
+  /// Comme WhatsApp : « edit » {content}, « delete », « react » {emoji}.
+  Future<SupportChatMessage> messageAction(String id, String action, [Map<String, dynamic>? body]) async {
+    final response = await buildHttpResponse('chat/messages/$id/$action', method: HttpMethodType.POST, request: body ?? {});
+    return SupportChatMessage.fromJson(await handleResponse(response) as Map<String, dynamic>);
+  }
   Stream<bool> get connectionStream => _connectionController.stream;
   Stream<String> get errorStream => _errorController.stream;
 
@@ -304,6 +348,11 @@ class SupportChatService {
         // Conversation à l'écran : le message de l'autre est lu tout de suite
         // (sinon il resterait compté « non lu » dans les pastilles).
         if (!message.isMe) _channel?.sink.add(jsonEncode({'type': 'read'}));
+      } else if (type == 'message_updated') {
+        if (!_updatedController.isClosed) _updatedController.add(SupportChatMessage.fromJson(json));
+      } else if (type == 'message_deleted') {
+        final id = json['id']?.toString() ?? '';
+        if (id.isNotEmpty && !_deletedController.isClosed) _deletedController.add(id);
       } else if (type == 'error') {
         // Message refusé par le serveur : {"type": "error", "message": "..."}
         final error = json['message']?.toString() ?? 'Message non envoyé, réessayez.';
@@ -502,6 +551,8 @@ class SupportChatService {
     _disposed = true;
     _channel?.sink.close();
     _historyController.close();
+    _updatedController.close();
+    _deletedController.close();
     _newMessageController.close();
     _connectionController.close();
     _errorController.close();

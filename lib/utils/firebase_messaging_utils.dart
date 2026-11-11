@@ -336,7 +336,12 @@ void _openIncomingCall(Map<String, dynamic> data) {
   if (orderId.isEmpty) return;
   navigatorKey.currentState?.push(
     MaterialPageRoute(
-      builder: (_) => MisonIncomingCallScreen(orderId: orderId, channel: channel),
+      builder: (_) => MisonIncomingCallScreen(
+        orderId: orderId,
+        channel: channel,
+        callerName: data['caller_name']?.toString() ?? '',
+        fromStaff: data['from_staff']?.toString() == '1',
+      ),
     ),
   );
 }

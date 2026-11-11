@@ -1,6 +1,8 @@
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
+import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
+import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/pin_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
@@ -359,11 +361,15 @@ Future<Contact?> _pickContact() async {
 
 const _kAndroidAppUrl = 'https://play.google.com/store/apps/details?id=com.mison.serviceuser';
 
-/// Texte partagé sur WhatsApp, Facebook, Messenger, etc.
+const _kAppLinks = 'Android : $_kAndroidAppUrl\niPhone : $IOS_LINK_FOR_USER';
+
+/// Texte partagé sur WhatsApp, Facebook, Messenger, etc., par un client.
 const _kInviteText = "Je te recommande MISON pour trouver des ouvriers qualifiés et vérifiés près de chez toi. "
-    "Télécharge l'application :\n"
-    'Android : $_kAndroidAppUrl\n'
-    'iPhone : $IOS_LINK_FOR_USER';
+    "Télécharge l'application :\n$_kAppLinks";
+
+/// Même partage par un ouvrier : il invite souvent un autre ouvrier.
+const _kArtisanInviteText = "Je travaille avec MISON : l'application qui met en relation les ouvriers et les "
+    'clients près de chez toi. Inscris-toi pour recevoir des chantiers :\n$_kAppLinks';
 
 /// « Inviter un ami » : partage du lien via les applications du téléphone
 /// (WhatsApp, Facebook, Messenger…), ou SMS envoyé par MISON à un contact.
@@ -401,7 +407,7 @@ Future<String?> showMisonInviteFriendSheet(BuildContext context) async {
     // Feuille de partage du téléphone : WhatsApp, Facebook, Messenger, SMS…
     final box = context.findRenderObject() as RenderBox?;
     await SharePlus.instance.share(ShareParams(
-      text: _kInviteText,
+      text: appStore.userType == USER_TYPE_PROVIDER ? _kArtisanInviteText : _kInviteText,
       subject: 'Découvre MISON',
       sharePositionOrigin: box != null && box.hasSize ? box.localToGlobal(Offset.zero) & box.size : null,
     ));

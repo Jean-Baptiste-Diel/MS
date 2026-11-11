@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/model/mison_notification_model.dart';
 import 'package:booking_system_flutter/main.dart';
+import 'package:booking_system_flutter/utils/app_review_prompt.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:booking_system_flutter/model/base_response_model.dart';
@@ -26,6 +27,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
+import 'package:geolocator/geolocator.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../model/wallet_response.dart';
@@ -908,6 +910,8 @@ Future<MisonOrderResponse> getMisonOrders({String? status, bool offlineFallback 
       StartReminder.syncOrders(result.data ?? []);
       setValue(_ordersCacheKey, jsonEncode(body));
       _forgetClosedChats(result.data ?? []);
+      // 3 commandes passées (client) ou terminées (ouvrier) : noter l'app.
+      AppReviewPrompt.maybeAsk(result.data ?? []);
     }
     return result;
   } catch (e) {
@@ -1187,9 +1191,28 @@ Future<MisonActionResponse> artisanDepart(String orderId) async {
     return result;
 }
 
+/// Position de l'ouvrier envoyée avec les étapes sur place (arrivée, début,
+/// fin) : le serveur vérifie qu'il est à 50 m au plus du client. Vide si la
+/// localisation est indisponible.
+Future<Map<String, dynamic>> _stepPosition() async {
+  try {
+    Position? p;
+    try {
+      p = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 8)),
+      );
+    } catch (_) {}
+    p ??= await Geolocator.getLastKnownPosition();
+    if (p == null) return {};
+    return {'latitude': p.latitude, 'longitude': p.longitude, 'accuracy': p.accuracy};
+  } catch (_) {
+    return {};
+  }
+}
+
 /// POST /api/orders/{id}/arrive - L'ouvrier est arrivé chez le client
 Future<MisonActionResponse> artisanArrive(String orderId) async {
-  final response = await buildHttpResponse('orders/$orderId/arrive', method: HttpMethodType.POST);
+  final response = await buildHttpResponse('orders/$orderId/arrive', method: HttpMethodType.POST, request: await _stepPosition());
   final result = MisonActionResponse.fromJson(await handleResponse(response));
     _orderChanged(orderId);
     return result;
@@ -1201,6 +1224,7 @@ Future<MisonActionResponse> artisanStartOrder(String orderId) async {
     final response = await buildHttpResponse(
       'orders/$orderId/start',
       method: HttpMethodType.POST,
+      request: await _stepPosition(),
     );
     final result = MisonActionResponse.fromJson(await handleResponse(response));
     StartReminder.cancel(orderId); // prestation commencée : plus de rappel
@@ -1217,6 +1241,7 @@ Future<MisonActionResponse> artisanCompleteOrder(String orderId) async {
     final response = await buildHttpResponse(
       'orders/$orderId/complete',
       method: HttpMethodType.POST,
+      request: await _stepPosition(),
     );
     final result = MisonActionResponse.fromJson(await handleResponse(response));
     _orderChanged(orderId);
@@ -1242,7 +1267,7 @@ Future<MisonActionResponse> setRealizationFee(String orderId, num amount) async 
     final response = await buildHttpResponse(
       'orders/$orderId/set-realization-fee',
       method: HttpMethodType.POST,
-      request: {'realization_fee': amount},
+      request: {'realization_fee': amount, ...await _stepPosition()},
     );
     final result = MisonActionResponse.fromJson(await handleResponse(response));
     _orderChanged(orderId);
@@ -1308,6 +1333,13 @@ Future<MisonCallTokenResponse> getCallToken(String orderId, {bool notify = true}
   }
 }
 
+/// POST /api/chat/conversations/{id}/call - Appeler le support MISON depuis
+/// la discussion : ça sonne dans le back-office.
+Future<MisonCallTokenResponse> getSupportCallToken(String conversationId) async {
+  final response = await buildHttpResponse('chat/conversations/$conversationId/call', method: HttpMethodType.POST);
+  return MisonCallTokenResponse.fromJson(await handleResponse(response));
+}
+
 /// Renvoie le token FCM courant au backend.
 /// Appelé au démarrage : un token régénéré (réinstallation, restauration,
 /// mise à jour système) rend l'ancien inutilisable côté serveur.
@@ -1339,3 +1371,59 @@ Future<void> saveVoipTokenToBackend(String voipToken) async {
 /// Journaux de ce fichier : données sensibles toujours masquées (jetons,
 /// codes, noms, numéros), voir log_redact.dart.
 void _log(Object? value) => nb_log.log(redactForLog(value));
+
+
+// ── Commandes payées en espèces : ce que l'ouvrier doit à MISON ─────────────
+
+class CashDebtItem {
+  final String orderId;
+  final String reference;
+  final String service;
+  final int amount;
+  final String date;
+  final bool due;
+  CashDebtItem.fromJson(Map json)
+      : orderId = json['order_id']?.toString() ?? '',
+        reference = json['reference']?.toString() ?? '',
+        service = json['service']?.toString() ?? '',
+        amount = int.tryParse('${json['amount']}') ?? 0,
+        date = json['date']?.toString() ?? '',
+        due = json['due'] == true;
+}
+
+class CashBalance {
+  final int owed;
+  final int due;
+  final bool blocked;
+  final int deadlineHour;
+  final List<CashDebtItem> debts;
+  CashBalance.fromJson(Map json)
+      : owed = int.tryParse('${json['owed']}') ?? 0,
+        due = int.tryParse('${json['due']}') ?? 0,
+        blocked = json['blocked'] == true,
+        deadlineHour = int.tryParse('${json['deadline_hour']}') ?? 18,
+        debts = [for (final d in (json['debts'] as List? ?? [])) if (d is Map) CashDebtItem.fromJson(d)];
+}
+
+/// GET /api/payments/cash-balance
+Future<CashBalance> getCashBalance() async {
+  final response = await buildHttpResponse('payments/cash-balance', method: HttpMethodType.GET);
+  return CashBalance.fromJson(await handleResponse(response) as Map);
+}
+
+/// POST /api/payments/cash-balance : lien de paiement du règlement
+/// ([provider] : 'wave' ou 'orange').
+Future<String> payCashBalance({String provider = 'wave'}) async {
+  final response = await buildHttpResponse('payments/cash-balance', method: HttpMethodType.POST, request: {'provider': provider});
+  final body = await handleResponse(response);
+  if (body is! Map) return '';
+  return (body['wave_launch_url'] ?? body['deeplink'])?.toString() ?? '';
+}
+
+/// POST /api/orders/{id}/paid-cash : le client a payé l'ouvrier en espèces.
+Future<MisonActionResponse> declarePaidCash(String orderId) async {
+  final response = await buildHttpResponse('orders/$orderId/paid-cash', method: HttpMethodType.POST);
+  final result = MisonActionResponse.fromJson(await handleResponse(response));
+  _orderChanged(orderId);
+  return result;
+}

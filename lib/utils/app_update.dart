@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:booking_system_flutter/network/network_utils.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
+import 'package:booking_system_flutter/utils/feature_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:in_app_update/in_app_update.dart';
@@ -52,7 +53,10 @@ Future<void> checkAppUpdate(BuildContext context) async {
     final platform = Platform.isIOS ? 'ios' : 'android';
     final res = await buildHttpResponse('app/version?platform=$platform', method: HttpMethodType.GET);
     if (res.statusCode != 200) return;
-    final info = _VersionInfo(await handleResponse(res));
+    final body = await handleResponse(res);
+    // Nouveautés activées dans le back-office (Réglages de la plateforme).
+    if (body is Map) await FeatureFlags.apply(body['features']);
+    final info = _VersionInfo(body);
     if (!context.mounted) return;
 
     if (build < info.minBuild) {

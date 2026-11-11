@@ -75,3 +75,55 @@ Future<void> startMisonOrderCall(
     );
   }
 }
+
+/// Appeler le support MISON depuis la discussion : ça sonne dans le
+/// back-office, le premier membre de l'équipe qui décroche répond.
+Future<void> startSupportCall(BuildContext context, {required String conversationId}) async {
+  final callId = supportCallId(conversationId);
+  final active = MisonCallSession.current.value;
+  if (active != null && active.orderId == callId) {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => MisonCallScreen(
+        orderId: active.orderId,
+        otherPartyName: active.otherPartyName,
+        appId: active.appId,
+        channel: active.channel,
+        token: active.token,
+        uid: active.uid,
+        isCaller: active.isCaller,
+      ),
+    ));
+    return;
+  }
+  await resetCallStatus(callId);
+  await MisonCallScreen.markOutgoing(callId);
+  appStore.setLoading(true);
+  try {
+    final tokenData = await getSupportCallToken(conversationId);
+    appStore.setLoading(false);
+    if (tokenData.appId == null || tokenData.appId!.isEmpty || (tokenData.token ?? '').isEmpty) {
+      MisonCallScreen.clearOutgoing(callId);
+      TopToast.show(message: "Service d'appel indisponible pour le moment");
+      return;
+    }
+    if (!context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MisonCallScreen(
+          orderId: callId,
+          otherPartyName: 'Support MISON',
+          appId: tokenData.appId ?? '',
+          channel: tokenData.channel ?? '',
+          token: tokenData.token ?? '',
+          uid: tokenData.uid ?? 2,
+          isCaller: true,
+        ),
+      ),
+    );
+  } catch (e) {
+    MisonCallScreen.clearOutgoing(callId);
+    appStore.setLoading(false);
+    TopToast.show(message: "Impossible d'appeler le support : $e", type: TopToastType.error);
+  }
+}

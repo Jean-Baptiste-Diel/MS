@@ -20,11 +20,18 @@ import '../../main.dart';
 class MisonIncomingCallScreen extends StatefulWidget {
   final String orderId;
   final String channel;
+  /// Nom envoyé avec l'appel (« Support MISON » pour un appel de l'équipe).
+  final String callerName;
+  /// Appel de l'équipe MISON : on affiche [callerName], pas le nom lu sur la
+  /// commande (qui serait celui du client ou de l'ouvrier).
+  final bool fromStaff;
 
   const MisonIncomingCallScreen({
     Key? key,
     required this.orderId,
     required this.channel,
+    this.callerName = '',
+    this.fromStaff = false,
   }) : super(key: key);
 
   @override
@@ -55,7 +62,11 @@ class _MisonIncomingCallScreenState extends State<MisonIncomingCallScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     FlutterRingtonePlayer().playRingtone(looping: true, volume: 1.0);
-    _loadCallerName();
+    if (widget.fromStaff) {
+      _callerName = widget.callerName.isNotEmpty ? widget.callerName : 'Support MISON';
+    } else {
+      _loadCallerName();
+    }
     _statusSub = callStatusStream(widget.orderId).listen(_onCallStatus);
   }
 

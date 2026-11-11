@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/feature_flags.dart';
 import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold, kMisonDark;
 import 'package:booking_system_flutter/model/mison_order_model.dart';
@@ -77,7 +78,7 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
       title: 'Valider ${_fcfa(price)} ?',
       subtitle: widget.isArtisan
           ? 'Ce prix est ferme : c\'est celui que le client paiera à la fin de la prestation.'
-          : "Ce prix est ferme : vous le paierez avec Wave ou Orange Money, dans l'application MISON, à la fin de la prestation "
+          : "Ce prix est ferme : vous le paierez avec ${FeatureFlags.paymentMethods}, dans l'application MISON, à la fin de la prestation "
               '(+ ${_fcfa(order.serviceFee)} de frais de service). Ne payez jamais le prestataire en espèces.',
       icon: Icons.handshake_outlined,
       confirmLabel: 'Oui, je valide',
@@ -125,10 +126,6 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
                     'l\'accepter ou le refuser. Vous le paierez à la fin de la prestation.',
             style: secondaryTextStyle(size: 13),
           ),
-          if (!widget.isArtisan) ...[
-            12.height,
-            const MisonWavePaymentNotice(),
-          ],
           14.height,
           if (_proposedByOther) ..._otherProposal()
           else if (_proposedByMe) ..._myProposal()
@@ -145,13 +142,42 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
   List<Widget> _otherProposal() {
     final price = order.priceProposal!;
     return [
-      _priceLine('$_otherName propose', price),
-      if (!widget.isArtisan)
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            'Total à payer à la fin : ${_fcfa(price + order.serviceFee)} (frais de service inclus)',
-            style: secondaryTextStyle(size: 12),
+      if (widget.isArtisan)
+        _priceLine('$_otherName propose', price)
+      else
+        // Client : le montant qu'il paiera dans l'app, en gros (pas d'espèces).
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: kMisonGold.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${_otherName.split(' ').first} propose ${_fcfa(price)}', style: primaryTextStyle(size: 14, color: kMisonDark)),
+              10.height,
+              Text("À payer dans l'app MISON", style: boldTextStyle(size: 22, color: kMisonGold)),
+              2.height,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(_fcfa(price + order.serviceFee), style: boldTextStyle(size: 30, color: kMisonDark)),
+              ),
+              2.height,
+              Text(
+                'Prestation ${_fcfa(price)} + frais de service ${_fcfa(order.serviceFee)}, à la fin de la prestation',
+                style: secondaryTextStyle(size: 12),
+              ),
+              10.height,
+              // Avis de paiement (avant : encadré bleu au-dessus).
+              Text(
+                "Ne payez jamais le prestataire en espèces : sans paiement dans l'app, "
+                'MISON ne peut pas vous protéger en cas de litige.',
+                style: secondaryTextStyle(size: 13, color: kMisonDark),
+              ),
+            ],
           ),
         ),
       14.height,
@@ -195,6 +221,7 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
 
   Widget _buildAgreed() {
     final price = order.agreedPrice!;
+    if (!widget.isArtisan) return _buildClientToPay(price);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -212,9 +239,9 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
             4.height,
             Text(
               widget.isArtisan
-                  ? "Prix ferme, payé par le client avec Wave ou Orange Money dans l'application MISON à la fin "
+                  ? "Prix ferme, payé par le client avec ${FeatureFlags.paymentMethods} dans l'application MISON à la fin "
                       "de la prestation. N'acceptez pas de paiement en espèces."
-                  : "Prix ferme, à payer avec Wave ou Orange Money dans l'application MISON à la fin de la prestation "
+                  : "Prix ferme, à payer avec ${FeatureFlags.paymentMethods} dans l'application MISON à la fin de la prestation "
                       '(${_fcfa(price + order.serviceFee)} avec les frais de service). '
                       'Ne payez jamais le prestataire en espèces.',
               style: secondaryTextStyle(size: 13),
@@ -224,6 +251,10 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
       ]),
     );
   }
+
+  /// Client : montant à payer dans l'app, en gros, pour qu'il ne paie pas
+  /// l'ouvrier en espèces.
+  Widget _buildClientToPay(int price) => MisonPayInAppCard(price: price, fee: order.serviceFee);
 
   Widget _priceLine(String label, int price) {
     return Row(
@@ -383,10 +414,13 @@ class MisonWavePaymentNotice extends StatelessWidget {
             child: Text.rich(
               TextSpan(
                 style: secondaryTextStyle(size: 13, color: kMisonDark),
-                children: const [
-                  TextSpan(text: 'La prestation se paie '),
-                  TextSpan(text: "uniquement par Wave ou Orange Money, dans l'application MISON", style: TextStyle(fontWeight: FontWeight.bold)),
-                  TextSpan(text: ", à la fin de l'intervention. Ne payez jamais le prestataire en espèces : "
+                children: [
+                  const TextSpan(text: 'La prestation se paie '),
+                  TextSpan(
+                    text: "uniquement par ${FeatureFlags.paymentMethods}, dans l'application MISON",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const TextSpan(text: ", à la fin de l'intervention. Ne payez jamais le prestataire en espèces : "
                       "sans paiement dans l'app, MISON ne peut pas vous protéger en cas de litige."),
                 ],
               ),
@@ -396,4 +430,88 @@ class MisonWavePaymentNotice extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// Montant à payer dans l'app MISON, en gros, avec l'avertissement contre les
+/// espèces (prix convenu, puis commande en attente de paiement).
+class MisonPayInAppCard extends StatelessWidget {
+  final int price;
+  final int fee;
+  final String title;
+  /// Prestation terminée : le client paie maintenant.
+  final bool awaitingPayment;
+
+  const MisonPayInAppCard({
+    Key? key,
+    required this.price,
+    required this.fee,
+    this.title = 'Prix convenu avec votre ouvrier',
+    this.awaitingPayment = false,
+  }) : super(key: key);
+
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: kMisonGold.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kMisonGold, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.verified_rounded, color: Colors.green, size: 20),
+            6.width,
+            Expanded(child: Text(title, style: boldTextStyle(size: 13, color: Colors.green))),
+          ]),
+          12.height,
+          Text("À payer dans l'app MISON", style: boldTextStyle(size: 22, color: kMisonGold)),
+          4.height,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(_fcfa(price + fee), style: boldTextStyle(size: 30, color: kMisonDark)),
+          ),
+          4.height,
+          Text('Prestation ${_fcfa(price)} + frais de service ${_fcfa(fee)}', style: secondaryTextStyle(size: 13)),
+          6.height,
+          Text(
+            awaitingPayment
+                ? "Avec ${FeatureFlags.paymentMethods}, maintenant, avec le bouton « Payer la prestation »."
+                : "Avec ${FeatureFlags.paymentMethods}, à la fin de la prestation.",
+            style: primaryTextStyle(size: 14, color: kMisonDark),
+          ),
+          14.height,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE53935).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.money_off_rounded, color: Color(0xFFE53935), size: 20),
+                8.width,
+                Expanded(
+                  child: Text(
+                    "Ne payez jamais l'ouvrier en espèces : sans paiement dans l'app, MISON ne peut pas "
+                    'vous protéger en cas de litige.',
+                    style: boldTextStyle(size: 13, color: const Color(0xFFB3261E)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 }
