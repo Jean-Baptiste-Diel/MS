@@ -115,13 +115,12 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
 
     return Container(
       padding: const EdgeInsets.only(bottom: 16),
-      margin: const EdgeInsets.only(top: 16),
+      // Peu d'espace sous la barre de recherche de l'accueil.
       width: context.width(),
       // Pas de fond : la section repose directement sur le fond de la page
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          16.height,
           ViewAllLabel(
             label: language.services,
             labelSize: 17,
@@ -136,7 +135,8 @@ class MisonServiceListComponentState extends State<MisonServiceListComponent> {
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+            // Un peu d'espace sous le titre « Services ».
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
             itemCount: services.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,

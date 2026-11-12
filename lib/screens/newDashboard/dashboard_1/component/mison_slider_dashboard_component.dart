@@ -260,7 +260,8 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
         // Vraie barre de recherche (comme dans « Rechercher un service ») :
         // on tape ici, la validation ouvre les résultats.
         Padding(
-          padding: const EdgeInsets.all(16),
+          // Peu d'espace dessous : le titre « Services » suit de près.
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
           child: TextField(
             controller: _searchCont,
             textInputAction: TextInputAction.search,

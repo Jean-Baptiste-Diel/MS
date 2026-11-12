@@ -160,7 +160,6 @@ class _DashboardFragmentState extends State<DashboardFragment> {
                           ? MisonActiveOrdersSection(refreshTick: _refreshTick)
                           : const SizedBox.shrink(),
                     ),
-                    16.height,
                     // Liste des services avec détails (image, description, prix)
                     const MisonServiceListComponent(),
                     // Espace pour que le bouton « Nouvelle commande » ne cache
