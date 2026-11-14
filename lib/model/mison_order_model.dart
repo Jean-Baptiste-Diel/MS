@@ -226,6 +226,12 @@ class MisonOrder {
       !needsArtisanConfirmation &&
       !isPriceAgreed;
 
+  /// Client : l'ouvrier attend sa réponse au prix proposé, ou la prestation est
+  /// terminée et à payer. L'écran reste sur la commande (ClientOrderLock).
+  bool get clientMustAct =>
+      (needsPriceAgreement && priceProposal != null && priceProposedBy == 'artisan') ||
+      isAwaitingRealizationPayment;
+
   /// Montant payé par le client : prestation + frais de service.
   int? get clientTotal {
     if (serverClientTotal != null) return serverClientTotal;

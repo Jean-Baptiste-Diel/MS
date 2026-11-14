@@ -237,6 +237,13 @@ import flutter_callkit_incoming
     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
   ) {
+    // L'appelant a raccroché avant la réponse : on arrête la sonnerie ici, en
+    // natif. App fermée, le code Flutter qui écoute l'annulation ne tourne pas
+    // et l'écran d'appel continuait de sonner.
+    if let type = userInfo["type"] as? String, type == "CALL_CANCELLED",
+       let orderId = userInfo["order_id"] as? String, !orderId.isEmpty {
+      DispatchQueue.main.async { AppDelegate.endRingingCalls(orderId: orderId) }
+    }
     if let type = userInfo["type"] as? String, type == "INCOMING_CALL",
        let orderId = userInfo["order_id"] as? String, !orderId.isEmpty,
        let callerName = userInfo["caller_name"] as? String {
@@ -264,6 +271,18 @@ import flutter_callkit_incoming
     }
     // Always call super so Firebase can run the Dart background handler
     super.application(application, didReceiveRemoteNotification: userInfo, fetchCompletionHandler: completionHandler)
+  }
+
+  /// Termine les écrans d'appel qui sonnent encore (pas décrochés) pour cette commande.
+  static func endRingingCalls(orderId: String) {
+    guard let plugin = SwiftFlutterCallkitIncomingPlugin.sharedInstance else { return }
+    for call in plugin.activeCalls() {
+      if (call["accepted"] as? Bool) == true { continue }
+      let extra = call["extra"] as? [String: Any]
+      let callOrder = (extra?["order_id"] as? String) ?? (call["handle"] as? String) ?? ""
+      guard callOrder == orderId, let id = call["id"] as? String, !id.isEmpty else { continue }
+      plugin.endCall(Data(id: id, nameCaller: "", handle: orderId, type: 0))
+    }
   }
 }
 

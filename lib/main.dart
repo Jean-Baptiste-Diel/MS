@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:booking_system_flutter/utils/artisan_arrival_reporter.dart';
+import 'package:booking_system_flutter/utils/client_order_lock.dart';
 import 'dart:io' show Platform;
 
 import 'package:flutter/services.dart' show MethodChannel;
 import 'package:booking_system_flutter/component/ongoing_call_banner.dart';
 import 'package:booking_system_flutter/services/mison_call_session.dart';
+import 'package:booking_system_flutter/utils/app_device.dart';
 import 'package:booking_system_flutter/utils/call_status.dart';
 import 'package:booking_system_flutter/app_theme.dart';
 import 'package:booking_system_flutter/firebase_options.dart';
@@ -69,6 +71,13 @@ import 'model/shop_model.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try { await Firebase.initializeApp(); } catch (_) {}
+  // L'appelant a raccroché avant la réponse : arrêter la sonnerie (Android ;
+  // sur iPhone, AppDelegate le fait en natif).
+  if (message.data['type'] == 'CALL_CANCELLED') {
+    final orderId = message.data['order_id']?.toString() ?? '';
+    if (orderId.isNotEmpty && !Platform.isIOS) await endCallKitForOrder(orderId);
+    return;
+  }
   if (message.data['type'] == 'INCOMING_CALL') {
     final orderId  = message.data['order_id']?.toString()  ?? '';
     final channel  = message.data['channel']?.toString()   ?? '';
@@ -494,6 +503,7 @@ UserData? cachedUserDetail;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await loadAppDeviceHeaders();
   if (kIsWeb) {
     // je vais les configurer apres : ch sall
     await Firebase.initializeApp(
@@ -624,6 +634,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       emitOrderListRefresh(badge: false);
       // Prestataire arrivé chez le client : le panneau « Commencer » revient.
       ArtisanArrivalReporter.promptPendingStart();
+      // Client : prix à valider ou prestation à payer → la commande s'ouvre.
+      ClientOrderLock.check();
     }
   }
 

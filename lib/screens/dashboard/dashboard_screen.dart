@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/client_order_lock.dart';
 import 'package:booking_system_flutter/component/unread_badge.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
@@ -40,6 +41,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     ChatUnreadStore.start(); // pastilles « messages non lus »
     openColdStartAcceptedCall(); // appel décroché app fermée (iPhone et Android)
+    // Prix proposé par l'ouvrier ou prestation à payer : la commande s'ouvre.
+    Future.delayed(const Duration(seconds: 1), ClientOrderLock.start);
     if (widget.redirectToBooking.validate(value: false)) {
       currentIndex = 1;
     }

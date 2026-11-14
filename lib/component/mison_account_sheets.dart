@@ -364,12 +364,15 @@ const _kAndroidAppUrl = 'https://play.google.com/store/apps/details?id=com.mison
 const _kAppLinks = 'Android : $_kAndroidAppUrl\niPhone : $IOS_LINK_FOR_USER';
 
 /// Texte partagé sur WhatsApp, Facebook, Messenger, etc., par un client.
-const _kInviteText = "Je te recommande MISON pour trouver des ouvriers qualifiés et vérifiés près de chez toi. "
+const _kInviteText = "Bonjour\n\n"
+    "Je te recommande l'application MISON pour trouver des ouvriers (menuisiers, électriciens, plombiers, "
+    "techniciens clim…) qualifiés et vérifiés près de chez toi.\n\n"
     "Télécharge l'application :\n$_kAppLinks";
 
 /// Même partage par un ouvrier : il invite souvent un autre ouvrier.
-const _kArtisanInviteText = "Je travaille avec MISON : l'application qui met en relation les ouvriers et les "
-    'clients près de chez toi. Inscris-toi pour recevoir des chantiers :\n$_kAppLinks';
+const _kArtisanInviteText = "Bonjour\n\n"
+    "Je travaille avec MISON : l'application qui met en relation les ouvriers et les clients près de chez toi.\n\n"
+    'Inscris-toi pour recevoir des chantiers :\n$_kAppLinks';
 
 /// « Inviter un ami » : partage du lien via les applications du téléphone
 /// (WhatsApp, Facebook, Messenger…), ou SMS envoyé par MISON à un contact.

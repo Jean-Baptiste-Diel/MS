@@ -624,6 +624,9 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   /// Prestation terminée : le retour (bouton du bas ou flèche) ramène à
   /// l'accueil, pas aux écrans de suivi ou de paiement ouverts avant.
   bool _completed = false;
+  /// Client : prix à valider/refuser ou prestation à payer → pas de retour.
+  bool _locked = false;
+  MisonOrder? _lastOrder;
 
   /// Commandes pour lesquelles le panneau « Noter » s'est déjà ouvert tout seul
   /// (une fois par commande et par session : « Plus tard » ne le rouvre pas).
@@ -651,9 +654,19 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_completed,
+      canPop: !_completed && !_locked,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _goHome();
+        if (didPop) return;
+        if (_locked) {
+          final order = _lastOrder;
+          TopToast.show(
+            message: order != null && order.isAwaitingRealizationPayment
+                ? 'Payez la prestation pour continuer.'
+                : "Validez ou refusez le prix proposé par l'ouvrier pour continuer.",
+          );
+          return;
+        }
+        _goHome();
       },
       child: Scaffold(
       backgroundColor: Colors.transparent,
@@ -686,6 +699,13 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
               if (completed != _completed) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted) setState(() => _completed = completed);
+                });
+              }
+              _lastOrder = order;
+              final locked = appStore.userType != USER_TYPE_PROVIDER && (order?.clientMustAct ?? false);
+              if (locked != _locked) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _locked = locked);
                 });
               }
               if (order == null) {

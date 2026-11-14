@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/call_status.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/utils/log_redact.dart';
 import 'package:nb_utils/nb_utils.dart' as nb_log show log;
@@ -250,6 +251,13 @@ void _handleForegroundMessage(RemoteMessage message) {
       _openIncomingCall(message.data);
     }
     return; // un appel entrant ne modifie pas les données de commande
+  }
+
+  // L'appelant a raccroché avant la réponse : la sonnerie s'arrête (notification invisible).
+  if (message.data['type'] == 'CALL_CANCELLED') {
+    final orderId = message.data['order_id']?.toString() ?? '';
+    if (orderId.isNotEmpty) endCallKitForOrder(orderId);
+    return;
   }
 
   // Message du chat de commande : la notification suffit, l'écran de chat

@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
+import 'package:booking_system_flutter/utils/app_device.dart';
 import 'package:booking_system_flutter/utils/common.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
@@ -133,6 +134,8 @@ Map<String, String> buildHeaderTokens() {
   header.putIfAbsent(HttpHeaders.acceptHeader, () => 'application/json');
   header.putIfAbsent(CustomHeader.LanguageCode, () => appStore.selectedLanguageCode);
   header.addAll(defaultHeaders());
+  // Téléphone et version de l'app (visibles par l'équipe dans le back-office).
+  header.addAll(appDeviceHeaders);
 
   _log(jsonEncode(header));
   return header;
