@@ -45,6 +45,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:booking_system_flutter/component/mison_audio_sheet.dart';
+import 'package:booking_system_flutter/screens/support_chat/voice_note_player.dart';
 import 'package:booking_system_flutter/utils/mison_call_utils.dart';
 import '../chat/mison_order_chat_screen.dart';
 import '../map/mison_artisan_navigation_screen.dart';
@@ -741,16 +743,32 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 },
                 onChat: () => _openChat(order),
                 onPaidCash: () => _declarePaidCash(order),
-                onSetRealizationFee: order.isPriceAgreed
-                    ? () => _confirm(
+                // Ouvrier, « Terminer la prestation » : rappel audio du processus
+                // de paiement, puis la suite habituelle.
+                onSetRealizationFee: () async {
+                  final go = await showMisonAudioSheet(
+                    context,
+                    asset: kAudioWorkerPaymentReminder,
+                    icon: Icons.receipt_long_rounded,
+                    title: 'Prestation terminée',
+                    subtitle: 'Rappel : comment se passe le paiement.',
+                    continueLabel: 'Continuer',
+                    laterLabel: 'Plus tard',
+                  );
+                  if (!go || !mounted) return;
+                  if (order.isPriceAgreed) {
+                    _confirm(
                           title: 'Terminer la prestation ?',
                           subtitle: 'Le client va payer le prix convenu de ${formatFcfa(order.agreedPrice!)} avec ${FeatureFlags.paymentMethods}.',
                           onConfirm: () => _finishWithAgreedPrice(order),
-                        )
-                    : () => _showSetFeeModal(
+                        );
+                  } else {
+                    _showSetFeeModal(
                           title: 'Frais de prestation',
                           apiCall: (amount) => setRealizationFee(order.id!, amount),
-                        ),
+                        );
+                  }
+                },
                 onPriceChanged: () { init(); setState(() {}); },
                 // Client : panneau d'annulation Mison (motif, chargement) ;
                 // ouvrier : confirmation de désistement inchangée
@@ -779,7 +797,19 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                           ));
                         }
                       },
-                onPay: () => _showPaymentModal(order),
+                // Message audio de MISON (même panneau que l'annulation), puis paiement.
+                onPay: () async {
+                  final go = await showMisonAudioSheet(
+                    context,
+                    asset: kAudioBeforePayment,
+                    icon: Icons.payment_rounded,
+                    title: 'Avant de payer',
+                    subtitle: 'Écoutez ce message de MISON.',
+                    continueLabel: 'Continuer vers le paiement',
+                    laterLabel: 'Plus tard',
+                  );
+                  if (go && mounted) _showPaymentModal(order);
+                },
                 paymentVerifying: _paymentVerifying,
                 onRated: () { init(); setState(() {}); },
                 onShareInvoice: () => _shareInvoice(order),
@@ -886,7 +916,9 @@ class _OrderDetailBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final sColor = statusColor(order.status);
     // Récapitulatif prestataire : plus d'appel ni de message
-    final showBottomCall = order.canCall && !_artisanSummary;
+    // En attente de paiement : plus besoin d'appel ni de message, le bouton
+    // principal (Payer / payé en espèces) prend toute la largeur.
+    final showBottomCall = order.canCall && !_artisanSummary && !order.isAwaitingRealizationPayment;
     // Client : l'annulation prend la place de « Suivre en direct » (déplacé
     // dans la carte de l'ouvrier, après le statut « En route »).
     final showClientCancel = _isClient && _canCancel;
@@ -1260,7 +1292,26 @@ class _OrderDetailBody extends StatelessWidget {
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Client : message audio de MISON à écouter avant de payer.
+                if (_showPayButton || _showPayLocked) ...[
+                  const _PaymentAudioMessage(
+                    asset: kAudioBeforePayment,
+                    title: 'Écoutez avant de payer',
+                  ),
+                  12.height,
+                ],
+                // Ouvrier : rappel du processus de paiement avant de terminer.
+                if (showSetFeeButton || showCashButton) ...[
+                  const _PaymentAudioMessage(
+                    asset: kAudioWorkerPaymentReminder,
+                    title: 'Rappel : le processus de paiement',
+                  ),
+                  12.height,
+                ],
+                Row(
               children: [
                 if (showPrimaryAction) ...[
                   Expanded(
@@ -1302,7 +1353,14 @@ class _OrderDetailBody extends StatelessWidget {
                   if (showBottomCall) 12.width,
                 ],
                 if (showBottomCall) ...[
-                  SizedBox(
+                  ValueListenableBuilder<bool>(
+                    // Désactivé pendant le lancement de l'appel (un seul appel par appui).
+                    valueListenable: isStartingCall,
+                    builder: (_, starting, __) => Opacity(
+                    opacity: starting ? 0.4 : 1,
+                    child: IgnorePointer(
+                    ignoring: starting,
+                    child: SizedBox(
                     width: 52,
                     height: 52,
                     child: AppButton(
@@ -1317,6 +1375,9 @@ class _OrderDetailBody extends StatelessWidget {
                       onTap: onCall,
                       // Bouton appel : bordure et icône dorées
                       child: const Icon(Icons.call_rounded, color: kMisonGold, size: 20),
+                    ),
+                  ),
+                    ),
                     ),
                   ),
                   if (order.canChat) ...[
@@ -1336,6 +1397,8 @@ class _OrderDetailBody extends StatelessWidget {
                     ),
                   ],
                 ],
+              ],
+            ),
               ],
             ),
           ),
@@ -1815,71 +1878,99 @@ class _FeeBottomSheet extends StatelessWidget {
     required this.onConfirm,
   });
 
+  /// Même présentation que « Annuler la commande » : poignée, rond doré,
+  /// titre centré, champ sur fond gris clair, gros bouton, « Annuler ».
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.fromLTRB(
-          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Poignée
-          Center(
-            child: Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               ),
-            ),
+              20.height,
+              Center(
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: kMisonGold.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded, color: kMisonGold, size: 32),
+                ),
+              ),
+              16.height,
+              Text(title, textAlign: TextAlign.center, style: boldTextStyle(size: 20, color: kMisonDark)),
+              8.height,
+              Text('Indiquez le montant de la prestation réalisée :',
+                  textAlign: TextAlign.center, style: secondaryTextStyle(size: 14)),
+              16.height,
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                textAlign: TextAlign.center,
+                onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                style: boldTextStyle(size: 18),
+                decoration: InputDecoration(
+                  hintText: 'Montant en FCFA',
+                  hintStyle: secondaryTextStyle(size: 14),
+                  filled: true,
+                  fillColor: kMisonFieldBg,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: kMisonGold, width: 1.5),
+                  ),
+                ),
+              ),
+              20.height,
+              SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: onConfirm,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kMisonGold,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: Text('Confirmer', style: boldTextStyle(color: Colors.white, size: 15)),
+                ),
+              ),
+              10.height,
+              SizedBox(
+                height: 48,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Annuler', style: boldTextStyle(color: kMisonDark, size: 15)),
+                ),
+              ),
+            ],
           ),
-          20.height,
-          Text(title, style: boldTextStyle(size: 18)),
-          20.height,
-          TextField(
-            controller: ctrl,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => FocusScope.of(context).unfocus(),
-            style: boldTextStyle(size: 16),
-            decoration: InputDecoration(
-              hintText: 'Montant en FCFA',
-              hintStyle: secondaryTextStyle(size: 14),
-              suffixIcon: IconButton(
-                icon: Icon(Icons.check_circle_outline, color: kMisonGold),
-                onPressed: () => FocusScope.of(context).unfocus(),
-                tooltip: 'Fermer le clavier',
-              ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: kMisonGold, width: 1.5),
-              ),
-            ),
-          ),
-          20.height,
-          AppButton(
-            text: 'Confirmer',
-            color: kMisonGold,
-            textColor: Colors.white,
-            width: double.infinity,
-            height: 50,
-            shapeBorder:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            onTap: onConfirm,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2799,6 +2890,42 @@ class _LiveTrackingCardState extends State<_LiveTrackingCard> {
         ],
       ),
     ),
+    );
+  }
+}
+
+
+/// Message audio de MISON affiché dans la fiche commande, au-dessus du bouton
+/// d'action (client : avant « Payer » ; ouvrier : avant « Terminer »).
+class _PaymentAudioMessage extends StatelessWidget {
+  final String asset;
+  final String title;
+
+  const _PaymentAudioMessage({required this.asset, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kMisonGold.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.headphones_rounded, color: kMisonGold, size: 18),
+              6.width,
+              Expanded(child: Text(title, style: boldTextStyle(size: 14))),
+            ],
+          ),
+          VoiceNotePlayer(asset: asset, color: kMisonGold, expand: true),
+        ],
+      ),
     );
   }
 }

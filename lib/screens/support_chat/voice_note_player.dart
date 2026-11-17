@@ -11,7 +11,32 @@ import 'package:nb_utils/nb_utils.dart';
 class VoiceNotePlayer extends StatefulWidget {
   final String url;
 
-  const VoiceNotePlayer({Key? key, required this.url}) : super(key: key);
+  /// Son intégré à l'app (chemin sous assets/, ex. 'sounds/avant_paiement.m4a')
+  /// à la place d'une note téléchargée.
+  final String? asset;
+
+  /// Appelé quand l'audio a été écouté jusqu'au bout.
+  final VoidCallback? onCompleted;
+
+  /// Couleur du bouton et de la barre (blanc dans les bulles du chat, doré
+  /// sur fond clair).
+  final Color color;
+
+  /// Lecture dès l'affichage.
+  final bool autoPlay;
+
+  /// Prend toute la largeur disponible (sinon 220, taille d'une bulle).
+  final bool expand;
+
+  const VoiceNotePlayer({
+    Key? key,
+    this.url = '',
+    this.asset,
+    this.onCompleted,
+    this.color = Colors.white,
+    this.autoPlay = false,
+    this.expand = false,
+  }) : super(key: key);
 
   @override
   State<VoiceNotePlayer> createState() => _VoiceNotePlayerState();
@@ -50,6 +75,7 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
       }),
       // Fin de la note : retour au début, prête à être réécoutée (bouton lecture).
       _player.onPlayerComplete.listen((_) {
+        widget.onCompleted?.call();
         if (mounted) {
           setState(() {
             _position = Duration.zero;
@@ -63,10 +89,17 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
     _player.setReleaseMode(ReleaseMode.stop).catchError((e) => log('VoiceNotePlayer release: $e'));
     _player.setAudioContext(_speakerContext).catchError((e) => log('VoiceNotePlayer context: $e'));
     // Charge la source sans jouer, pour afficher la durée tout de suite.
-    _player.setSourceUrl(widget.url).catchError((e) {
+    _player.setSource(_source).catchError((e) {
       log('VoiceNotePlayer setSource: $e');
     });
+    if (widget.autoPlay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _state != PlayerState.playing) _toggle();
+      });
+    }
   }
+
+  Source get _source => widget.asset != null ? AssetSource(widget.asset!) : UrlSource(widget.url);
 
   Future<void> _toggle() async {
     try {
@@ -85,7 +118,7 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
       // Note déjà écoutée jusqu'au bout : on repart du début.
       final atEnd = _duration > Duration.zero && _position >= _duration - const Duration(milliseconds: 300);
       if (atEnd || _state == PlayerState.completed) _position = Duration.zero;
-      await _player.play(UrlSource(widget.url), position: _position);
+      await _player.play(_source, position: _position);
     } catch (e) {
       log('VoiceNotePlayer play: $e');
       if (mounted) setState(() => _error = true);
@@ -134,17 +167,18 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
     // Pendant la lecture : temps écoulé ; sinon : durée totale.
     final label = isPlaying || _position > Duration.zero ? _fmt(_position) : _fmt(_duration);
 
+    final color = widget.color;
     return SizedBox(
-      width: 220,
+      width: widget.expand ? double.infinity : 220,
       child: Row(
         children: [
           SizedBox(
-            width: 36,
-            height: 36,
+            width: widget.expand ? 44 : 36,
+            height: widget.expand ? 44 : 36,
             child: _loading
-                ? const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ? Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: color),
                   )
                 : IconButton(
                     padding: EdgeInsets.zero,
@@ -154,8 +188,8 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
                           : isPlaying
                               ? Icons.pause_rounded
                               : Icons.play_arrow_rounded,
-                      color: Colors.white,
-                      size: 30,
+                      color: color,
+                      size: widget.expand ? 36 : 30,
                     ),
                     onPressed: _toggle,
                   ),
@@ -166,9 +200,9 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
                 trackHeight: 3,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                 overlayShape: SliderComponentShape.noOverlay,
-                activeTrackColor: Colors.white,
-                inactiveTrackColor: Colors.white.withValues(alpha: 0.35),
-                thumbColor: Colors.white,
+                activeTrackColor: color,
+                inactiveTrackColor: color.withValues(alpha: 0.3),
+                thumbColor: color,
               ),
               child: Slider(
                 value: progress,
@@ -177,7 +211,7 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
             ),
           ),
           6.width,
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+          Text(label, style: TextStyle(color: widget.color == Colors.white ? Colors.white : Colors.grey.shade700, fontSize: 12)),
         ],
       ),
     );

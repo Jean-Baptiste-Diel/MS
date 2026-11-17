@@ -187,6 +187,15 @@ void onNotificationTap(NotificationResponse details) {
 /// peut arriver par l'événement ET par la vérification au démarrage.
 final Set<String> _joinedCallKitIds = {};
 
+/// Commandes dont l'appel est en train d'être rejoint (jeton demandé) : le
+/// décroché arrive parfois deux fois en même temps (événement + reprise de l'app).
+final Set<String> _joiningOrders = {};
+
+/// Appel système créé par ce téléphone pour SON appel sortant (voir
+/// MisonCallSession._keepAliveInBackground) : il apparaît lui aussi comme
+/// « accepté » une fois l'appel établi, mais ce n'est pas un décroché.
+bool _isOwnOutgoingCall(Map extra) => extra['outgoing']?.toString() == '1';
+
 /// Écran d'appel à ouvrir dès que la navigation est prête.
 MisonCallSession? _pendingCallScreen;
 
@@ -199,7 +208,34 @@ Future<void> _joinAcceptedCall({
   if (orderId.isEmpty) return;
   // Ce téléphone a lancé l'appel : ce n'est pas lui qui décroche.
   if (MisonCallScreen.isOutgoing(orderId)) return;
+  // Un seul joinChannel par participant et par appel. L'appelant est dans le
+  // canal depuis le lancement : il ne le rejoint jamais une deuxième fois
+  // (même identifiant → Agora éjectait sa connexion et l'audio était perdu).
+  final active = MisonCallSession.current.value;
+  if (active != null && !active.ended && active.orderId == orderId) {
+    if (active.isCaller) return;
+    final ownId = active.callKitId?.toLowerCase();
+    if (callKitId.isEmpty || ownId == null || ownId == callKitId.toLowerCase()) {
+      _showCallScreen(active); // déjà rejoint : on affiche seulement l'écran
+      return;
+    }
+  }
+  if (MisonCallSession.isOwnCallKitId(callKitId)) return;
   if (callKitId.isNotEmpty && !_joinedCallKitIds.add(callKitId)) return;
+  if (!_joiningOrders.add(orderId)) return;
+  try {
+    await _joinAcceptedCallNow(callKitId: callKitId, orderId: orderId, channel: channel, callerName: callerName);
+  } finally {
+    _joiningOrders.remove(orderId);
+  }
+}
+
+Future<void> _joinAcceptedCallNow({
+  required String callKitId,
+  required String orderId,
+  required String channel,
+  required String callerName,
+}) async {
   // Reste d'un appel précédent sur la même commande : on repart à neuf.
   MisonCallSession.dropStaleFor(orderId);
 
@@ -271,6 +307,7 @@ Future<void> _joinColdStartAcceptedCall() async {
       final active = await FlutterCallkitIncoming.activeCalls();
       if (active is List && !active.any((c) => c is Map && c['id']?.toString() == id)) return;
       final extra = (data['extra'] as Map?)?.cast<String, dynamic>() ?? {};
+      if (_isOwnOutgoingCall(extra)) return;
       await _joinAcceptedCall(
         callKitId: id,
         orderId: extra['order_id']?.toString() ?? '',
@@ -284,6 +321,7 @@ Future<void> _joinColdStartAcceptedCall() async {
     for (final call in calls) {
       if (call is! Map || call['isAccepted'] != true) continue;
       final extra = (call['extra'] as Map?)?.cast<String, dynamic>() ?? {};
+      if (_isOwnOutgoingCall(extra)) continue;
       final orderId = extra['order_id']?.toString() ?? '';
       if (orderId.isEmpty) continue;
       await _joinAcceptedCall(
@@ -386,7 +424,7 @@ void _listenCallKitEvents() {
       final data = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
       final extra = (data['extra'] as Map?)?.cast<String, dynamic>() ?? {};
       final orderId = extra['order_id']?.toString() ?? '';
-      if (orderId.isEmpty) return;
+      if (orderId.isEmpty || _isOwnOutgoingCall(extra)) return;
       if (call.method == 'accepted') {
         await _joinAcceptedCall(
           callKitId: data['id']?.toString() ?? '',
@@ -423,6 +461,7 @@ void _listenCallKitEvents() {
         watchIncomingCall(orderId);
       case Event.actionCallAccept:
         if (Platform.isIOS) return; // voir mison/accepted_call ci-dessus
+        if (_isOwnOutgoingCall(extra)) return;
         _joinAcceptedCall(
           callKitId: event.body['id']?.toString() ?? '',
           orderId: orderId,
@@ -586,6 +625,9 @@ void main() async {
   // Décroché pendant que l'app était fermée : on rejoint l'appel tout de
   // suite, sans attendre l'interface (iPhone verrouillé : rien ne s'affiche).
   _joinColdStartAcceptedCall();
+  // Appel interrompu (app fermée ou tuée en plein appel) : sa fin est envoyée
+  // maintenant, ainsi que les fins d'appel qui n'avaient pas pu partir.
+  MisonCallSession.recoverUnfinishedCall().then((_) => flushPendingCallLogs());
   // Android 14+ : sans cette autorisation, l'écran d'appel plein écran ne
   // s'affiche pas quand le téléphone est verrouillé.
   await _ensureFullScreenCallPermission();
@@ -619,7 +661,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   /// de commandes (ouvrier et client) sont rafraîchies automatiquement.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      // App fermée en plein appel : on raccroche proprement (fin d'appel
+      // envoyée). Si le système ne laisse pas le temps, elle part au prochain
+      // lancement (voir MisonCallSession.recoverUnfinishedCall).
+      MisonCallSession.current.value?.hangUp();
+    }
     if (state == AppLifecycleState.resumed) {
+      // Fins d'appel qui n'ont pas pu partir (réseau) : nouvel essai.
+      flushPendingCallLogs();
       // Android, app en arrière-plan : « Accepter » sur l'écran d'appel du
       // téléphone ramène l'app, mais l'événement « décroché » pouvait se perdre
       // (l'appel ne se connectait pas et sonnait toujours chez l'autre). On

@@ -388,7 +388,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           // Bouton d'appel en face du nom (chat d'une commande uniquement)
           titleTrailing: _canCall
               ? GestureDetector(
-                  onTap: () => startMisonOrderCall(
+                  onTap: () => isStartingCall.value ? null : startMisonOrderCall(
                     context,
                     orderId: widget.orderId!,
                     otherPartyName: widget.callPeerName!,
@@ -441,7 +441,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                       IconButton(
                         tooltip: 'Appeler le support',
                         icon: const Icon(Icons.call_rounded, color: kMisonDark),
-                        onPressed: () => startSupportCall(context, conversationId: _service.conversationId!),
+                        onPressed: () => isStartingCall.value ? null : startSupportCall(context, conversationId: _service.conversationId!),
                       ),
                     ]
                   : null),
@@ -551,7 +551,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: canCallBack
-                ? () => startMisonOrderCall(
+                ? () => isStartingCall.value ? null : startMisonOrderCall(
                       context,
                       orderId: widget.orderId!,
                       otherPartyName: widget.callPeerName!,

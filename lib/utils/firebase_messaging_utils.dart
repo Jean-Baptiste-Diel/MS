@@ -34,6 +34,49 @@ const _kChannelName = 'Notifications MISON';
 const _kOldChannelId = 'notification';
 const _kSound = RawResourceAndroidNotificationSound('mison_notification');
 const _kIosSound = 'mison_notification.wav';
+
+/// Son par type de notification (même table que le serveur :
+/// push_service.TYPE_SOUNDS). Fichier : Android res/raw/<nom>.wav, iOS
+/// Runner/<nom>.wav ; canal Android « mison_<nom> » (un canal = un son).
+/// Les autres types gardent le son MISON.
+const Map<String, String> _kTypeSounds = {
+  'NEW_ORDER_AVAILABLE': 'nouvelle_commande',
+  'ORDER_ASSIGNED': 'nouvelle_commande',
+};
+const Map<String, String> _kSoundChannelNames = {
+  'nouvelle_commande': 'Nouvelles commandes',
+};
+
+/// Canal Android et sons à utiliser pour une notification de ce type.
+({String channelId, String channelName, AndroidNotificationSound sound, String iosSound}) _soundFor(String? type) {
+  final name = _kTypeSounds[type ?? ''];
+  if (name == null) {
+    return (channelId: _kChannelId, channelName: _kChannelName, sound: _kSound, iosSound: _kIosSound);
+  }
+  return (
+    channelId: 'mison_$name',
+    channelName: _kSoundChannelNames[name] ?? _kChannelName,
+    sound: RawResourceAndroidNotificationSound(name),
+    iosSound: '$name.wav',
+  );
+}
+
+/// Crée les canaux Android des sons par type (ex. « Nouvelles commandes »).
+Future<void> _createTypeSoundChannels(FlutterLocalNotificationsPlugin plugin) async {
+  final android = plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  if (android == null) return;
+  for (final name in _kTypeSounds.values.toSet()) {
+    await android.createNotificationChannel(AndroidNotificationChannel(
+      'mison_$name',
+      _kSoundChannelNames[name] ?? _kChannelName,
+      importance: Importance.max,
+      enableLights: true,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound(name),
+      showBadge: true,
+    ));
+  }
+}
 const _kCallChannelId = 'incoming_calls';
 const _kCallChannelName = 'Appels entrants';
 const _kCallNotifId = 9999;
@@ -159,6 +202,7 @@ Future<void> createNotificationChannel() async {
         sound: _kSound,
         showBadge: true,
       ));
+  await _createTypeSoundChannels(plugin).catchError((_) {});
 }
 
 Future<void> initFirebaseMessaging() async {
@@ -494,21 +538,23 @@ void showNotification(int id, String title, String message, RemoteMessage remote
       : null;
   // endregion
 
+  final typeSound = _soundFor(remoteMessage.data['type']?.toString());
+  await _createTypeSoundChannels(flutterLocalNotificationsPlugin).catchError((_) {});
   var androidPlatformChannelSpecifics = AndroidNotificationDetails(
-    _kChannelId,
-    _kChannelName,
+    typeSound.channelId,
+    typeSound.channelName,
     importance: Importance.max,
     visibility: NotificationVisibility.public,
     autoCancel: true,
     playSound: true,
-    sound: _kSound,
+    sound: typeSound.sound,
     priority: Priority.high,
     icon: '@drawable/ic_stat_ic_notification',
     largeIcon: remoteMessage.data.containsKey("image_url") ? FilePathAndroidBitmap(await _downloadAndSaveFile(remoteMessage.data["image_url"], 'largeIcon')) : null,
     styleInformation: remoteMessage.data.containsKey("image_url") ? bigPictureStyleInformation : null,
   );
 
-  var darwinPlatformChannelSpecifics = const DarwinNotificationDetails(sound: _kIosSound);
+  var darwinPlatformChannelSpecifics = DarwinNotificationDetails(sound: typeSound.iosSound);
 
   var platformChannelSpecifics = NotificationDetails(
     android: androidPlatformChannelSpecifics,

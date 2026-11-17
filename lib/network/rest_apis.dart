@@ -3,6 +3,8 @@ import 'package:booking_system_flutter/utils/log_redact.dart';
 import 'package:nb_utils/nb_utils.dart' as nb_log show log;
 import 'dart:async';
 import 'dart:convert';
+
+import 'package:booking_system_flutter/component/mandatory_audio_dialog.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -1061,6 +1063,8 @@ Future<MisonActionResponse> artisanAcceptOrder(String orderId) async {
     );
     final result = MisonActionResponse.fromJson(await handleResponse(response));
     _orderChanged(orderId);
+    // Message audio à écouter obligatoirement juste après l'acceptation.
+    Future.delayed(const Duration(milliseconds: 300), showAfterAcceptAudio);
     return result;
   } catch (e) {
     throw e;
@@ -1152,14 +1156,62 @@ Future<MisonActionResponse> requestOrderInvoice(String orderId) async {
 
 /// POST /api/orders/{id}/call-log - Fin d'un appel (envoyée par l'appelant) :
 /// l'appel s'affiche dans la conversation. [outcome] : completed / missed / declined.
+/// Si l'envoi échoue (réseau coupé…), la fin d'appel est gardée sur le
+/// téléphone et renvoyée plus tard ([flushPendingCallLogs]).
 Future<void> logOrderCall(String orderId, {required String outcome, int durationSeconds = 0}) async {
+  if (!await _sendCallLog(orderId, outcome, durationSeconds)) {
+    await _queueCallLog({'order_id': orderId, 'outcome': outcome, 'duration_seconds': durationSeconds});
+  }
+}
+
+const _kPendingCallLogs = 'pending_call_logs';
+
+/// true = envoyée (ou refusée définitivement par le serveur : inutile de réessayer).
+Future<bool> _sendCallLog(String orderId, String outcome, int durationSeconds) async {
   try {
     final response = await buildHttpResponse('orders/$orderId/call-log',
         method: HttpMethodType.POST,
         request: {'outcome': outcome, 'duration_seconds': durationSeconds});
+    if (response.statusCode >= 400 && response.statusCode < 500) return true;
     await handleResponse(response);
+    return true;
   } catch (e) {
     _log('logOrderCall: $e');
+    return false;
+  }
+}
+
+Future<void> _queueCallLog(Map<String, dynamic> entry) async {
+  try {
+    final p = await SharedPreferences.getInstance();
+    final list = p.getStringList(_kPendingCallLogs) ?? [];
+    list.add(jsonEncode(entry));
+    await p.setStringList(_kPendingCallLogs, list.length > 20 ? list.sublist(list.length - 20) : list);
+  } catch (_) {}
+}
+
+bool _flushingCallLogs = false;
+
+/// Renvoie les fins d'appel restées sur le téléphone (démarrage, retour dans l'app).
+Future<void> flushPendingCallLogs() async {
+  if (_flushingCallLogs) return;
+  _flushingCallLogs = true;
+  try {
+    final p = await SharedPreferences.getInstance();
+    final list = p.getStringList(_kPendingCallLogs) ?? [];
+    if (list.isEmpty) return;
+    await p.remove(_kPendingCallLogs);
+    for (final raw in list) {
+      try {
+        final e = jsonDecode(raw) as Map<String, dynamic>;
+        final ok = await _sendCallLog(
+          e['order_id'].toString(), e['outcome'].toString(), (e['duration_seconds'] as num?)?.toInt() ?? 0);
+        if (!ok) await _queueCallLog(e);
+      } catch (_) {}
+    }
+  } catch (_) {
+  } finally {
+    _flushingCallLogs = false;
   }
 }
 

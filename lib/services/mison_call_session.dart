@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -50,6 +51,15 @@ class MisonCallSession extends ChangeNotifier {
     required this.uid,
     required this.isCaller,
   });
+
+  /// Appels système (CallKit / service Android) créés par ce téléphone pour
+  /// ses appels sortants : ce ne sont jamais des appels « décrochés ».
+  static final Set<String> _ownCallKitIds = {};
+  static bool isOwnCallKitId(String id) => id.isNotEmpty && _ownCallKitIds.contains(id.toLowerCase());
+
+  /// Appel en cours enregistré sur le téléphone (appelant) : si l'app est
+  /// fermée ou tuée en plein appel, sa fin est envoyée au prochain lancement.
+  static const _kOngoingCall = 'mison_ongoing_call';
 
   /// Tests : une session sans moteur d'appel (ni micro, ni Agora).
   @visibleForTesting
@@ -129,6 +139,11 @@ class MisonCallSession extends ChangeNotifier {
       // Un nouveau jeton = nouvel appel : l'ancienne session, restée ouverte
       // sans personne en face, était réutilisée et l'appel ne se connectait pas.
       if (existing.orderId == orderId && existing.token == token) return existing;
+      // L'appelant est dans le canal depuis le lancement : une session
+      // « appelé » pour le même appel ne doit jamais remplacer la sienne
+      // (elle refaisait joinChannel avec le même identifiant, l'audio était
+      // perdu et la fin d'appel n'était pas envoyée).
+      if (existing.orderId == orderId && existing.isCaller && !isCaller) return existing;
       existing._discard();
     }
     final session = MisonCallSession._(
@@ -209,6 +224,9 @@ class MisonCallSession extends ChangeNotifier {
         await refreshAudioRoutes();
         await setAudioRoute(bluetoothAvailable ? kRouteBluetooth : kRouteEarpiece);
         engineReady = true;
+        // Micro publié dès l'entrée dans l'appel (sauf s'il a été coupé).
+        await _engine?.muteLocalAudioStream(isMuted);
+        _saveOngoing();
         notifyListeners();
         // Appelé : il est dans l'appel parce qu'il a décroché → l'appelant
         // peut passer en « appel en cours ».
@@ -245,10 +263,31 @@ class MisonCallSession extends ChangeNotifier {
       },
       // La sortie audio peut changer seule (casque, Bluetooth) : on reflète l'état réel.
       onAudioRoutingChanged: (_) => refreshAudioRoutes(),
+      // Réseau coupé : Agora signale la perte de connexion au bout d'environ
+      // 10 s. Sans retour sous 20 s, l'appel se termine et sa fin est envoyée.
+      onConnectionLost: (_) {
+        _offlineTimer?.cancel();
+        _offlineTimer = Timer(const Duration(seconds: 20), () => _end(message: 'Connexion perdue'));
+      },
+      onConnectionStateChanged: (_, state, reason) {
+        if (state == ConnectionStateType.connectionStateConnected) {
+          if (_remoteUids.isNotEmpty || !isConnected) _offlineTimer?.cancel();
+        } else if (state == ConnectionStateType.connectionStateFailed ||
+            reason == ConnectionChangedReasonType.connectionChangedBannedByServer ||
+            reason == ConnectionChangedReasonType.connectionChangedSameUidLogin) {
+          // Même identifiant connecté ailleurs : ce téléphone a été éjecté.
+          _end(message: 'Connexion perdue');
+        }
+      },
       onError: (err, msg) => log('Agora error: $err $msg'),
     ));
 
+    // Les deux parties parlent : rôle « broadcaster », micro activé et publié
+    // (l'appelé restait parfois muet après le décroché).
     await engine.enableAudio();
+    await engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+    await engine.enableLocalAudio(true);
+    await engine.muteLocalAudioStream(false);
     await engine.muteAllRemoteAudioStreams(false);
     await engine.setDefaultAudioRouteToSpeakerphone(false);
     await engine.joinChannel(
@@ -284,12 +323,13 @@ class MisonCallSession extends ChangeNotifier {
     }
     try {
       await FlutterCallkitIncoming.startCall(CallKitParams(
-        id: callKitId = newCallKitId(),
+        id: callKitId = _ownCallKit(newCallKitId()),
         nameCaller: otherPartyName,
         appName: 'MISON',
         handle: otherPartyName,
         type: 0, // audio
-        extra: {'order_id': orderId, 'channel': channel},
+        // « outgoing » : main.dart ne le prend jamais pour un décroché.
+        extra: {'order_id': orderId, 'channel': channel, 'outgoing': isCaller ? '1' : '0'},
         callingNotification: const NotificationParams(
           showNotification: true,
           subtitle: 'Appel en cours…',
@@ -317,6 +357,11 @@ class MisonCallSession extends ChangeNotifier {
     } catch (e) {
       log('MisonCallSession startCall: $e');
     }
+  }
+
+  String _ownCallKit(String id) {
+    if (isCaller) _ownCallKitIds.add(id.toLowerCase());
+    return id;
   }
 
   /// « Raccrocher » depuis la notification Android ou l'interface CallKit iOS.
@@ -386,8 +431,10 @@ class MisonCallSession extends ChangeNotifier {
     isConnected = true;
     _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
       seconds++;
+      if (seconds % 5 == 0) _saveOngoing();
       notifyListeners();
     });
+    _saveOngoing();
     notifyListeners();
   }
 
@@ -474,6 +521,17 @@ class MisonCallSession extends ChangeNotifier {
     _timer?.cancel();
     _noAnswerTimer?.cancel();
     _offlineTimer?.cancel();
+    // Appelant : la fin d'appel part dans tous les cas (raccroché, l'autre a
+    // raccroché, réseau coupé, session remplacée). Avant, une session
+    // remplacée se fermait sans rien envoyer.
+    if (isCaller && !micDenied && !isSupportCallId(orderId)) {
+      logOrderCall(
+        orderId,
+        outcome: isConnected ? 'completed' : (rejected ? 'declined' : 'missed'),
+        durationSeconds: seconds,
+      );
+    }
+    _clearOngoing();
     if (silent) {
       _callStatusSub?.cancel();
       await _stopRingback();
@@ -484,16 +542,6 @@ class MisonCallSession extends ChangeNotifier {
       return;
     }
 
-    // Appelant : l'appel s'affiche dans la conversation de la commande
-    // (abouti avec sa durée, refusé, ou sans réponse / annulé).
-    // (Appel au support : pas de commande, rien à afficher.)
-    if (isCaller && !micDenied && !isSupportCallId(orderId)) {
-      logOrderCall(
-        orderId,
-        outcome: isConnected ? 'completed' : (rejected ? 'declined' : 'missed'),
-        durationSeconds: seconds,
-      );
-    }
     _callStatusSub?.cancel();
     await _stopRingback();
     notifyListeners();
@@ -520,6 +568,52 @@ class MisonCallSession extends ChangeNotifier {
         title: rejected ? 'Appel refusé' : 'Pas de réponse',
         body: message ?? '',
       );
+    }
+  }
+
+  void _saveOngoing() {
+    if (!isCaller || ended || isSupportCallId(orderId)) return;
+    final data = jsonEncode({
+      'order_id': orderId,
+      'token': token,
+      'connected': isConnected,
+      'seconds': seconds,
+    });
+    SharedPreferences.getInstance()
+        .then((p) => p.setString(_kOngoingCall, data))
+        .catchError((_) => false);
+  }
+
+  void _clearOngoing() {
+    if (!isCaller) return;
+    SharedPreferences.getInstance().then((p) async {
+      final raw = p.getString(_kOngoingCall);
+      if (raw == null) return;
+      final saved = jsonDecode(raw) as Map<String, dynamic>;
+      if (saved['token'] == token) await p.remove(_kOngoingCall);
+    }).catchError((_) {});
+  }
+
+  /// Au lancement de l'app : un appel resté « en cours » sur le téléphone a été
+  /// interrompu (app fermée, tuée, téléphone éteint). Sa fin est envoyée.
+  static Future<void> recoverUnfinishedCall() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kOngoingCall);
+      if (raw == null) return;
+      await p.remove(_kOngoingCall);
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final orderId = data['order_id']?.toString() ?? '';
+      if (orderId.isEmpty || current.value?.orderId == orderId) return;
+      final connected = data['connected'] == true;
+      await logOrderCall(
+        orderId,
+        outcome: connected ? 'completed' : 'missed',
+        durationSeconds: (data['seconds'] as num?)?.toInt() ?? 0,
+      );
+      if (!connected) markCallCancelled(orderId);
+    } catch (e) {
+      log('recoverUnfinishedCall: $e');
     }
   }
 

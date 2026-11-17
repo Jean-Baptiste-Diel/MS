@@ -2,4 +2,4 @@
 <!-- Son des notifications : utilisé seulement par nom (serveur, canal), à ne
      pas supprimer lors de la réduction des ressources de la version publiée. -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/mison_notification" />
+    tools:keep="@raw/mison_notification,@raw/nouvelle_commande" />
