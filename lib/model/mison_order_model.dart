@@ -72,6 +72,10 @@ class MisonOrder {
   int? priceProposal;
   String priceProposedBy = ''; // 'client' ou 'artisan'
 
+  /// Client et ouvrier ont discuté (messages des deux côtés ou appel décroché) :
+  /// l'ouvrier peut alors proposer un prix. Ancien serveur sans ce champ : true.
+  bool hasDiscussed = true;
+
   /// Commande passée depuis la carte à ce prestataire, en attente de sa réponse.
   bool directRequest = false;
   int? agreedPrice;
@@ -152,6 +156,7 @@ class MisonOrder {
       ..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null
       ..priceProposal = num.tryParse(json['price_proposal']?.toString() ?? '')?.round()
       ..priceProposedBy = json['price_proposed_by']?.toString() ?? ''
+      ..hasDiscussed = json['has_discussed'] != false
       ..directRequest = json['direct_request'] == true
       ..agreedPrice = num.tryParse(json['agreed_price']?.toString() ?? '')?.round()
       ..priceAgreementRequired = json['price_agreement_required'] == true;

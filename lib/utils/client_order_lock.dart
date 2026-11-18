@@ -30,12 +30,15 @@ class ClientOrderLock {
 
   static Future<void> check() async {
     if (_checking) return;
-    if (!appStore.isLoggedIn || appStore.userType == USER_TYPE_PROVIDER) return;
+    if (!appStore.isLoggedIn) return;
+    final isArtisan = appStore.userType == USER_TYPE_PROVIDER;
     if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) return;
     _checking = true;
     try {
       final orders = (await getMisonOrders()).data ?? [];
-      final pending = orders.where((o) => o.clientMustAct && o.id != null);
+      // Client : prix à valider / prestation à payer.
+      // Ouvrier : prestation en cours (il reste dessus jusqu'à la terminer).
+      final pending = orders.where((o) => o.id != null && (isArtisan ? o.isInProgress : o.clientMustAct));
       if (pending.isEmpty) return;
       final id = pending.first.id!;
       if (MisonOrderDetailScreen.isOpen(id)) return; // déjà à l'écran (et bloquée)

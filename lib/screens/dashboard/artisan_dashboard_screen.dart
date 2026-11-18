@@ -25,6 +25,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:booking_system_flutter/utils/auto_refresh_mixin.dart';
+import 'package:booking_system_flutter/utils/client_order_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -61,6 +62,8 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> with Wi
       if (mounted && FeatureFlags.cashTracking) CashDebtScreen.checkAndShow(context);
     });
     ChatUnreadStore.start(); // pastilles « messages non lus »
+    // Prestation en cours : la commande s'ouvre et l'ouvrier y reste jusqu'à la terminer.
+    Future.delayed(const Duration(seconds: 1), ClientOrderLock.start);
     openColdStartAcceptedCall(); // appel décroché app fermée (iPhone et Android)
     // App relancée alors qu'il est déjà chez le client : « Commencer la prestation ».
     Future.delayed(const Duration(seconds: 1), ArtisanArrivalReporter.promptPendingStart);
@@ -205,8 +208,9 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
   AppLifecycleListener? _presenceLifecycle;
 
 
-  static const double _expandedHeight = 150.0;
-  static const double _toolbarHeight = 72.0;
+  // Même barre du haut que les autres pages (MisonAppBar : 84, logo 12 plus bas).
+  static const double _expandedHeight = 162.0;
+  static const double _toolbarHeight = 84.0;
 
   @override
   void initState() {
@@ -429,7 +433,6 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
         ? appStore.userFullName
         : (appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier');
     final initials = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2).map((w) => w[0].toUpperCase()).join();
-    final date = DateFormat('EEE d MMM', 'fr_FR').format(DateTime.now());
     return Row(
       children: [
         Container(
@@ -452,7 +455,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$_greeting · $date', style: secondaryTextStyle(size: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(_greeting, style: secondaryTextStyle(size: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
               2.height,
               Text(name, style: boldTextStyle(color: _headerDark, size: 20), maxLines: 1, overflow: TextOverflow.ellipsis),
             ],
@@ -496,7 +499,11 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
               // Logo centré en haut (salutation à gauche une fois replié)
               centerTitle: !_isCollapsed,
               title: !_isCollapsed
-                  ? Image.asset('assets/logo/logo_transparent.png', height: 58)
+                  ? Padding(
+                      // Logo au même niveau que sur les autres pages (MisonAppBar)
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Image.asset('assets/logo/logo_transparent.png', height: 58),
+                    )
                   : Observer(
                       builder: (_) => Text(
                         '$_greeting, ${appStore.userFirstName.isNotEmpty ? appStore.userFirstName : 'Ouvrier'}',

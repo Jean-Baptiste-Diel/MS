@@ -46,6 +46,9 @@ import 'package:booking_system_flutter/utils/firebase_messaging_utils.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:booking_system_flutter/component/mison_audio_sheet.dart';
+import 'package:booking_system_flutter/component/mison_price_validation_sheet.dart';
+import 'package:booking_system_flutter/component/mison_price_first_sheet.dart';
+import 'package:booking_system_flutter/component/mandatory_audio_dialog.dart' show isAfterAcceptAudioOpen;
 import 'package:booking_system_flutter/screens/support_chat/voice_note_player.dart';
 import 'package:booking_system_flutter/utils/mison_call_utils.dart';
 import '../chat/mison_order_chat_screen.dart';
@@ -82,7 +85,26 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   StreamSubscription<String?>? _orderEventsSub;
   StreamSubscription<(String, bool)>? _paymentReturnSub;
   Timer? _paymentPollTimer;
-  bool _paymentLaunched = false;
+  bool _paymentLaunchedFlag = false;
+  Timer? _paymentLaunchTimeout;
+
+  /// App Wave / Orange Money ouverte pour payer. Délai de sécurité : si le
+  /// retour dans l'app n'est pas détecté, l'état « vérification » s'arrête
+  /// tout seul au bout de 2 minutes et le bouton « Payer » revient.
+  bool get _paymentLaunched => _paymentLaunchedFlag;
+  set _paymentLaunched(bool value) {
+    _paymentLaunchedFlag = value;
+    _paymentLaunchTimeout?.cancel();
+    _paymentLaunchTimeout = null;
+    if (value) {
+      _paymentLaunchTimeout = Timer(const Duration(minutes: 2), () {
+        if (!mounted || !_paymentLaunchedFlag) return;
+        _paymentLaunchedFlag = false;
+        _startPaymentPolling();
+        setState(() {});
+      });
+    }
+  }
   bool _paymentRequestInFlight = false;
 
   /// Vérifications du statut depuis le retour dans l'app.
@@ -138,6 +160,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
 
   @override
   void dispose() {
+    _paymentLaunchTimeout?.cancel();
     stopAutoRefresh();
     _locationTimer?.cancel();
     _paymentPollTimer?.cancel();
@@ -447,12 +470,12 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     );
   }
 
-  void _showSetFeeModal({
+  Future<void> _showSetFeeModal({
     required String title,
     required Future<MisonActionResponse> Function(num) apiCall,
   }) {
     final ctrl = TextEditingController();
-    showModalBottomSheet(
+    return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -473,6 +496,64 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         },
       ),
     );
+  }
+
+  /// Page « Prestation terminée » à l'écran (évite de l'ouvrir deux fois).
+  bool _finishOpen = false;
+
+  /// Ouvrier, « Terminer la prestation » : page au style des autres, avec la
+  /// note vocale du processus de paiement (à écouter jusqu'au bout), puis fin
+  /// au prix convenu ou saisie du montant.
+  /// [locked] : prestation en cours, la page reste affichée (ni croix, ni
+  /// « Plus tard », ni retour) jusqu'à ce qu'il termine.
+  Future<void> _finishPrestation(MisonOrder order, {bool locked = false}) async {
+    if (_finishOpen) return;
+    _finishOpen = true;
+    try {
+      final agreed = order.isPriceAgreed;
+      final go = await showMisonAudioSheet(
+        context,
+        asset: kAudioWorkerPaymentReminder,
+        icon: Icons.verified_user_outlined,
+        caption: locked ? 'Prestation en cours' : 'Prestation terminée',
+        title: agreed ? formatFcfa(order.agreedPrice!) : 'Montant à fixer',
+        subtitle: agreed
+            ? 'Prix convenu avec le client. Terminez quand le travail est fini.'
+            : 'Indiquez le montant quand le travail est fini.',
+        continueLabel: agreed ? 'Terminer la prestation' : 'Saisir le montant',
+        laterLabel: locked ? null : 'Plus tard',
+        footnote: 'Rappel : écoutez comment se passe le paiement.',
+        warning: "Le client paie dans l'application MISON avec ${FeatureFlags.paymentMethods}.",
+        mustListen: true,
+        listenKey: 'finish-${order.id}',
+        locked: locked,
+      );
+      if (!go || !mounted) return;
+      if (agreed) {
+        await _finishWithAgreedPrice(order);
+      } else {
+        await _showSetFeeModal(
+          title: 'Frais de prestation',
+          apiCall: (amount) => setRealizationFee(order.id!, amount),
+        );
+      }
+    } finally {
+      _finishOpen = false;
+    }
+  }
+
+  /// Ouvrier, prestation en cours : il reste sur « Terminer la prestation ».
+  /// La page se rouvre d'elle-même tant que la prestation n'est pas terminée
+  /// (saisie du montant fermée sans valider, erreur…).
+  void _maybeOpenFinish(MisonOrder order) {
+    if (appStore.userType != USER_TYPE_PROVIDER || _finishOpen) return;
+    if (!order.isInProgress || order.artisan == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _finishOpen) return;
+      await _finishPrestation(order, locked: true);
+      // Toujours en cours (montant pas validé) : la page revient.
+      if (mounted) await _reloadSilently();
+    });
   }
 
   /// Prestation terminée au prix convenu : le client est invité à payer.
@@ -545,11 +626,155 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   }
 
 
-  void _showPaymentModal(MisonOrder order) {
+  /// Commandes pour lesquelles la page « Prix de la prestation » s'est déjà
+  /// ouverte d'elle-même (une seule fois par commande).
+  static final Set<String> _priceFirstShown = {};
+  bool _priceFirstOpen = false;
+
+  /// Ouvrier, commande acceptée, prix pas encore convenu ni proposé : la page
+  /// « Prix de la prestation » s'ouvre d'elle-même (après la note obligatoire
+  /// de l'acceptation).
+  void _maybeOpenPriceFirst(MisonOrder order) {
+    if (appStore.userType != USER_TYPE_PROVIDER || _priceFirstOpen) return;
+    if (!order.isBeforeStart || order.needsArtisanConfirmation || order.hasArrived) return;
+    if (order.isPriceAgreed || order.priceProposal != null) return;
+    if (_priceFirstShown.contains(order.id)) return;
+    _priceFirstShown.add(order.id!);
+    _priceFirstOpen = true;
+    Future<void> open() async {
+      // Attend la fin de la note obligatoire d'après l'acceptation.
+      while (mounted && isAfterAcceptAudioOpen) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      if (!mounted) return;
+      await _priceFirst(order);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => open().whenComplete(() => _priceFirstOpen = false));
+  }
+
+  /// Page « Prix de la prestation » : discuter, appeler, entrer le prix convenu,
+  /// ou partir sans prix convenu (si ce n'est pas obligatoire).
+  Future<void> _priceFirst(MisonOrder order) async {
+    final action = await showPriceFirstSheet(context, order: order);
+    if (!mounted || action == null) return;
+    switch (action) {
+      case PriceFirstAction.chat:
+        await _openChat(order);
+      case PriceFirstAction.call:
+        await _startCall(order);
+      case PriceFirstAction.enterPrice:
+        final sent = await proposeAgreedPrice(context, order);
+        if (sent && mounted) {
+          init();
+          setState(() {});
+        }
+      case PriceFirstAction.goAnyway:
+        await _departTo(order);
+    }
+  }
+
+  bool _goSheetOpen = false;
+
+  /// Ouvrier, prix validé par le client, pas encore parti : page « Aller chez
+  /// le client » (même style que les autres), verrouillée jusqu'au départ.
+  void _maybeOpenGoToClient(MisonOrder order) {
+    if (appStore.userType != USER_TYPE_PROVIDER || _goSheetOpen) return;
+    if (!order.isBeforeStart || order.needsArtisanConfirmation || order.hasArrived) return;
+    if (!order.isPriceAgreed || order.isEnRoute) return;
+    _goSheetOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Attend la fin de la note obligatoire d'après l'acceptation.
+      while (mounted && isAfterAcceptAudioOpen) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      if (!mounted) {
+        _goSheetOpen = false;
+        return;
+      }
+      final name = order.client?.fullName ?? '';
+      final go = await showMisonAudioSheet(
+        context,
+        icon: Icons.verified_user_outlined,
+        caption: 'Prix validé',
+        title: formatFcfa(order.agreedPrice!),
+        subtitle: name.isNotEmpty
+            ? '${name.split(' ').first} a validé le prix. Vous pouvez y aller.'
+            : 'Le client a validé le prix. Vous pouvez y aller.',
+        continueLabel: 'Aller chez le client',
+        // Tant qu'il n'est pas sur place, il peut consulter la carte.
+        laterLabel: 'Voir la carte',
+        footnote: 'Le client voit votre trajet en direct',
+        warning: "Le client paiera ce prix dans l'application MISON à la fin de la prestation.",
+        locked: true,
+      );
+      if (go && mounted) {
+        _goSheetOpen = false;
+        await _departTo(order);
+        return;
+      }
+      // « Voir la carte » : la carte du trajet, puis retour sur la page.
+      if (mounted) {
+        await Navigator.push(context, MaterialPageRoute(
+          builder: (_) => MisonTrackingScreen(
+            orderId: order.id!,
+            serviceAddress: order.serviceAddress ?? '',
+            artisanName: order.artisan?.fullName ?? 'Ouvrier',
+            serviceLat: double.tryParse(order.latitude ?? ''),
+            serviceLng: double.tryParse(order.longitude ?? ''),
+          ),
+        ));
+      }
+      _goSheetOpen = false;
+      if (mounted) await _reloadSilently();
+    });
+  }
+
+  /// Page « valider le prix » à l'écran (évite de l'ouvrir deux fois).
+  bool _priceSheetOpen = false;
+
+  /// Client : l'ouvrier a proposé un prix. La page de validation s'ouvre
+  /// d'elle-même et reste affichée tant que le client n'a ni validé ni refusé.
+  void _maybeOpenPriceValidation(MisonOrder order) {
+    if (_priceSheetOpen || appStore.userType == USER_TYPE_PROVIDER) return;
+    if (!(order.needsPriceAgreement && order.priceProposal != null && order.priceProposedBy == 'artisan')) return;
+    _priceSheetOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _priceSheetOpen = false;
+        return;
+      }
+      final answered = await showPriceValidationSheet(context, order);
+      _priceSheetOpen = false;
+      if (answered && mounted) await _reloadSilently();
+    });
+  }
+
+  /// Page de paiement à l'écran (évite de l'ouvrir deux fois).
+  bool _paySheetOpen = false;
+
+  /// Client, prestation en attente de paiement : la page de paiement s'ouvre
+  /// d'elle-même et reste affichée (pas de croix, ni retour) jusqu'au paiement.
+  /// Elle se rouvre au retour de Wave / Orange Money si le paiement n'a pas abouti.
+  void _maybeOpenPayment(MisonOrder order) {
+    if (_paySheetOpen || _paymentVerifying) return;
+    if (appStore.userType == USER_TYPE_PROVIDER || !order.isAwaitingRealizationPayment) return;
+    _paySheetOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _paymentVerifying) {
+        _paySheetOpen = false;
+        return;
+      }
+      _showPaymentModal(order, locked: true);
+    });
+  }
+
+  void _showPaymentModal(MisonOrder order, {bool locked = false}) {
     if (_paymentVerifying) {
+      _paySheetOpen = false;
       TopToast.show(message: 'Paiement en cours de vérification, patientez quelques secondes.');
       return;
     }
+    _paySheetOpen = true;
     const title = 'Frais de prestation';
     final total = order.clientTotal;
     final price = order.prestationPrice;
@@ -561,11 +786,22 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: !locked,
+      enableDrag: !locked,
       backgroundColor: Colors.transparent,
       builder: (_) => _PaymentBottomSheet(
+        orderId: order.id ?? '',
+        locked: locked,
         title: title,
         desc: desc,
         feeLabel: feeLabel,
+        serviceName: order.service?.name?.isNotEmpty == true ? order.service!.name! : 'Prestation',
+        artisanName: order.artisan?.fullName ?? '',
+        serviceImageUrl: order.service?.imageUrl,
+        priceLabel: price != null ? formatFcfa(price) : '—',
+        priceCaption: order.agreedPrice != null ? 'Prix convenu' : 'Prestation',
+        agreedPriceLabel: order.agreedPrice != null ? formatFcfa(order.agreedPrice!) : null,
+        serviceFeeLabel: formatFcfa(order.serviceFee),
         onPayWave: () async {
           Navigator.pop(context);
           if (_paymentVerifying) return;
@@ -576,7 +812,12 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
             final res = await paymentCheckout(order.id ?? '');
             if (res.waveLaunchUrl != null && res.waveLaunchUrl!.isNotEmpty) {
               _paymentLaunched = true;
-              await launchUrl(Uri.parse(res.waveLaunchUrl!), mode: LaunchMode.externalApplication);
+              final opened = await launchUrl(Uri.parse(res.waveLaunchUrl!), mode: LaunchMode.externalApplication)
+                  .catchError((_) => false);
+              if (!opened) {
+                _paymentLaunched = false;
+                TopToast.show(message: "Impossible d'ouvrir Wave. Vérifiez que l'application est installée.", type: TopToastType.error);
+              }
             } else {
               TopToast.show(message: res.message ?? 'Paiement Wave initié');
             }
@@ -597,7 +838,12 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
             final res = await paymentCheckoutOrange(order.id ?? '');
             if (res.deeplink != null && res.deeplink!.isNotEmpty) {
               _paymentLaunched = true;
-              await launchUrl(Uri.parse(res.deeplink!), mode: LaunchMode.externalApplication);
+              final opened = await launchUrl(Uri.parse(res.deeplink!), mode: LaunchMode.externalApplication)
+                  .catchError((_) => false);
+              if (!opened) {
+                _paymentLaunched = false;
+                TopToast.show(message: "Impossible d'ouvrir Orange Money / Max it.", type: TopToastType.error);
+              }
             } else {
               TopToast.show(message: res.message ?? 'Paiement Orange Money initié');
             }
@@ -609,7 +855,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
           }
         },
       ),
-    );
+    ).whenComplete(() => _paySheetOpen = false);
   }
 
   Future<void> _startCall(MisonOrder order) async {
@@ -662,9 +908,11 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         if (_locked) {
           final order = _lastOrder;
           TopToast.show(
-            message: order != null && order.isAwaitingRealizationPayment
-                ? 'Payez la prestation pour continuer.'
-                : "Validez ou refusez le prix proposé par l'ouvrier pour continuer.",
+            message: appStore.userType == USER_TYPE_PROVIDER
+                ? 'Terminez la prestation pour continuer.'
+                : order != null && order.isAwaitingRealizationPayment
+                    ? 'Payez la prestation pour continuer.'
+                    : "Validez ou refusez le prix proposé par l'ouvrier pour continuer.",
           );
           return;
         }
@@ -698,13 +946,22 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
               final order = response.data;
               final completed = order?.isCompleted ?? false;
               if (order != null) _maybePromptRating(order);
+              if (order != null) _maybeOpenPayment(order);
+              if (order != null) _maybeOpenPriceValidation(order);
+              if (order != null) _maybeOpenPriceFirst(order);
+              if (order != null) _maybeOpenGoToClient(order);
+              if (order != null) _maybeOpenFinish(order);
               if (completed != _completed) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted) setState(() => _completed = completed);
                 });
               }
               _lastOrder = order;
-              final locked = appStore.userType != USER_TYPE_PROVIDER && (order?.clientMustAct ?? false);
+              // Client : prix à valider ou prestation à payer.
+              // Ouvrier : prestation en cours, il reste sur la commande jusqu'à la terminer.
+              final locked = appStore.userType != USER_TYPE_PROVIDER
+                  ? (order?.clientMustAct ?? false)
+                  : (order?.isInProgress ?? false);
               if (locked != _locked) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted) setState(() => _locked = locked);
@@ -732,7 +989,19 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 statusColor: _statusColor,
                 statusLabel: _statusLabel,
                 statusIcon: _statusIcon,
-                onAccept: () => _confirm(title: 'Accepter la commande', subtitle: 'Confirmez-vous l\'acceptation ?', onConfirm: () => _acceptOrder(order.id!)),
+                onAccept: () async {
+                  final ok = await showMisonAudioSheet(
+                    context,
+                    icon: Icons.info_outline_rounded,
+                    caption: 'Nouvelle commande',
+                    title: order.service?.name?.isNotEmpty == true ? order.service!.name! : 'Accepter la commande',
+                    subtitle: order.serviceAddress?.isNotEmpty == true ? order.serviceAddress! : 'Confirmez-vous l\'acceptation ?',
+                    continueLabel: 'Accepter la commande',
+                    laterLabel: 'Plus tard',
+                    footnote: 'Le client est prévenu dès que vous acceptez.',
+                  );
+                  if (ok && mounted) _acceptOrder(order.id!);
+                },
                 // Même panneau que l'annulation : vérifications puis démarrage.
                 onStart: () async {
                   final started = await showMisonStartPrestationSheet(context, orderId: order.id!);
@@ -745,30 +1014,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 onPaidCash: () => _declarePaidCash(order),
                 // Ouvrier, « Terminer la prestation » : rappel audio du processus
                 // de paiement, puis la suite habituelle.
-                onSetRealizationFee: () async {
-                  final go = await showMisonAudioSheet(
-                    context,
-                    asset: kAudioWorkerPaymentReminder,
-                    icon: Icons.receipt_long_rounded,
-                    title: 'Prestation terminée',
-                    subtitle: 'Rappel : comment se passe le paiement.',
-                    continueLabel: 'Continuer',
-                    laterLabel: 'Plus tard',
-                  );
-                  if (!go || !mounted) return;
-                  if (order.isPriceAgreed) {
-                    _confirm(
-                          title: 'Terminer la prestation ?',
-                          subtitle: 'Le client va payer le prix convenu de ${formatFcfa(order.agreedPrice!)} avec ${FeatureFlags.paymentMethods}.',
-                          onConfirm: () => _finishWithAgreedPrice(order),
-                        );
-                  } else {
-                    _showSetFeeModal(
-                          title: 'Frais de prestation',
-                          apiCall: (amount) => setRealizationFee(order.id!, amount),
-                        );
-                  }
-                },
+                onSetRealizationFee: () => _finishPrestation(order),
                 onPriceChanged: () { init(); setState(() {}); },
                 // Client : panneau d'annulation Mison (motif, chargement) ;
                 // ouvrier : confirmation de désistement inchangée
@@ -798,18 +1044,8 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                         }
                       },
                 // Message audio de MISON (même panneau que l'annulation), puis paiement.
-                onPay: () async {
-                  final go = await showMisonAudioSheet(
-                    context,
-                    asset: kAudioBeforePayment,
-                    icon: Icons.payment_rounded,
-                    title: 'Avant de payer',
-                    subtitle: 'Écoutez ce message de MISON.',
-                    continueLabel: 'Continuer vers le paiement',
-                    laterLabel: 'Plus tard',
-                  );
-                  if (go && mounted) _showPaymentModal(order);
-                },
+                // Une seule page : prix, note vocale de MISON, bouton de paiement.
+                onPay: () => _showPaymentModal(order),
                 paymentVerifying: _paymentVerifying,
                 onRated: () { init(); setState(() {}); },
                 onShareInvoice: () => _shareInvoice(order),
@@ -826,6 +1062,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 onNavigate: () => _openNavigation(order),
                 onDepart: () => _departTo(order),
                 onArrive: () => _markArrived(order),
+                onPriceFirst: () => _priceFirst(order),
               );
             },
           ),
@@ -866,6 +1103,8 @@ class _OrderDetailBody extends StatelessWidget {
   final VoidCallback onTrack;
   final VoidCallback onNavigate;
   final VoidCallback onDepart;
+  /// Ouvrier, prix pas encore convenu : page « Prix de la prestation ».
+  final VoidCallback onPriceFirst;
   final VoidCallback onArrive;
 
   const _OrderDetailBody({
@@ -892,6 +1131,7 @@ class _OrderDetailBody extends StatelessWidget {
     required this.onNavigate,
     required this.onDepart,
     required this.onArrive,
+    required this.onPriceFirst,
   });
 
   bool get _isArtisan => appStore.userType == USER_TYPE_PROVIDER;
@@ -947,6 +1187,12 @@ class _OrderDetailBody extends StatelessWidget {
       primaryActionIcon = Icons.check_circle_outline_rounded;
       primaryActionColor = kMisonGold; // Accepter / Confirmer en doré
       primaryActionTap = onAccept;
+    } else if (showGoButton && !order.isPriceAgreed) {
+      // Avant « Aller chez le client » : se mettre d'accord sur le prix.
+      primaryActionLabel = 'Prix de la prestation';
+      primaryActionIcon = Icons.handshake_outlined;
+      primaryActionColor = kMisonGold;
+      primaryActionTap = onPriceFirst;
     } else if (showGoButton) {
       // « Accord sur le prix obligatoire » (back-office) : grisé tant que le
       // client n'a pas validé le prix.
@@ -1071,17 +1317,8 @@ class _OrderDetailBody extends StatelessWidget {
 
                 // ── Client : récapitulatif (prix, prestation, mode de paiement)
                 // une fois les frais de prestation fixés ──────────────────────
-                // ── Client, en attente du paiement : montant à payer dans l'app, en
-                // gros, avec l'avertissement contre les espèces.
-                if (_isClient && order.isAwaitingRealizationPayment && (order.prestationPrice ?? 0) > 0) ...[
-                  MisonPayInAppCard(
-                    price: order.prestationPrice!,
-                    fee: order.serviceFee,
-                    title: 'Prestation terminée : il reste à payer',
-                    awaitingPayment: true,
-                  ),
-                  16.height,
-                ],
+                // (Client, en attente du paiement : le montant et l'avertissement
+                // sont sur la page de paiement, qui s'ouvre d'elle-même.)
                 if (_isClient && (order.isAwaitingRealizationPayment || order.isCompleted)) ...[
                   _ArtisanSummaryCard(order: order, forClient: true),
                   20.height,
@@ -1878,8 +2115,8 @@ class _FeeBottomSheet extends StatelessWidget {
     required this.onConfirm,
   });
 
-  /// Même présentation que « Annuler la commande » : poignée, rond doré,
-  /// titre centré, champ sur fond gris clair, gros bouton, « Annuler ».
+  /// Même présentation que les autres pages (fiche Google Play) : logo, petit
+  /// libellé doré, montant saisi en grand, bouton, avertissement.
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1887,85 +2124,89 @@ class _FeeBottomSheet extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: context.cardColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 20),
+        padding: EdgeInsets.fromLTRB(24, 14, 16, MediaQuery.of(context).padding.bottom + 20),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
+              Row(
+                children: [
+                  Image.asset('assets/logo/logo_transparent.png', height: 30,
+                      errorBuilder: (_, __, ___) => Text('MISON', style: boldTextStyle(size: 20, color: kMisonDark))),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 26),
+                    color: kMisonDark,
+                    onPressed: () => Navigator.pop(context),
+                    tooltip: 'Fermer',
                   ),
-                ),
+                ],
               ),
-              20.height,
-              Center(
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: kMisonGold.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.receipt_long_rounded, color: kMisonGold, size: 32),
-                ),
-              ),
-              16.height,
-              Text(title, textAlign: TextAlign.center, style: boldTextStyle(size: 20, color: kMisonDark)),
-              8.height,
-              Text('Indiquez le montant de la prestation réalisée :',
-                  textAlign: TextAlign.center, style: secondaryTextStyle(size: 14)),
-              16.height,
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
-                textAlign: TextAlign.center,
-                onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                style: boldTextStyle(size: 18),
-                decoration: InputDecoration(
-                  hintText: 'Montant en FCFA',
-                  hintStyle: secondaryTextStyle(size: 14),
-                  filled: true,
-                  fillColor: kMisonFieldBg,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kMisonGold, width: 1.5),
-                  ),
-                ),
-              ),
-              20.height,
-              SizedBox(
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: onConfirm,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kMisonGold,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Text('Confirmer', style: boldTextStyle(color: Colors.white, size: 15)),
-                ),
-              ),
-              10.height,
-              SizedBox(
-                height: 48,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Annuler', style: boldTextStyle(color: kMisonDark, size: 15)),
+              14.height,
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title.toUpperCase(), style: boldTextStyle(size: 15, color: kMisonGold, letterSpacing: 0.3)),
+                    6.height,
+                    TextField(
+                      controller: ctrl,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                      style: primaryTextStyle(size: 36, color: kMisonDark, weight: FontWeight.w600),
+                      decoration: InputDecoration(
+                        hintText: '0',
+                        hintStyle: primaryTextStyle(size: 36, color: Colors.grey.shade400, weight: FontWeight.w600),
+                        suffixText: 'FCFA',
+                        suffixStyle: boldTextStyle(size: 18, color: kMisonDark.withValues(alpha: 0.6)),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
+                        ),
+                        focusedBorder: const UnderlineInputBorder(
+                          borderSide: BorderSide(color: kMisonGold, width: 1.5),
+                        ),
+                      ),
+                    ),
+                    22.height,
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: onConfirm,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kMisonGold,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: Text('Terminer la prestation', style: boldTextStyle(color: Colors.white, size: 16)),
+                      ),
+                    ),
+                    8.height,
+                    Text('Montant de la prestation réalisée',
+                        style: secondaryTextStyle(size: 13, color: kMisonDark.withValues(alpha: 0.75))),
+                    22.height,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.verified_user_outlined, color: kMisonGold, size: 24),
+                        14.width,
+                        Expanded(
+                          child: Text(
+                            "Le client paiera ce montant dans l'application MISON.",
+                            style: primaryTextStyle(size: 15, color: kMisonDark.withValues(alpha: 0.85)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1981,16 +2222,35 @@ class _FeeBottomSheet extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PaymentBottomSheet extends StatefulWidget {
+  /// Ouverte d'office (prestation à payer) : ne se ferme pas avant le paiement.
+  final bool locked;
+  final String orderId;
   final String title;
   final String desc;
   final String feeLabel;
+  final String serviceName;
+  final String artisanName;
+  final String? serviceImageUrl;
+  final String priceLabel;
+  final String priceCaption;
+  final String? agreedPriceLabel;
+  final String serviceFeeLabel;
   final VoidCallback onPayWave;
   final VoidCallback onPayOrange;
 
   const _PaymentBottomSheet({
+    required this.orderId,
+    this.locked = false,
     required this.title,
     required this.desc,
     required this.feeLabel,
+    required this.serviceName,
+    required this.artisanName,
+    this.serviceImageUrl,
+    required this.priceLabel,
+    this.priceCaption = 'Prestation',
+    this.agreedPriceLabel,
+    required this.serviceFeeLabel,
     required this.onPayWave,
     required this.onPayOrange,
   });
@@ -1999,184 +2259,237 @@ class _PaymentBottomSheet extends StatefulWidget {
   State<_PaymentBottomSheet> createState() => _PaymentBottomSheetState();
 }
 
+/// Panneau « Payer la prestation », présenté comme une fiche Google Play :
+/// en-tête (logo, fermer), ouvrier en couleur, grand titre (le service),
+/// chiffres en colonnes, gros bouton arrondi, mentions, encart d'information.
 class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
   // Un seul mode coché dans le back-office : choisi d'office.
   String? _selected = FeatureFlags.paymentMethodList.length == 1
       ? (FeatureFlags.paymentMethodList.first == 'Wave' ? 'wave' : 'orange')
       : null;
 
+  static const _wave = Color(0xFF1BA1F1);
+  static const _orange = Color(0xFFFF7900);
+
+  /// Commandes dont la note vocale a été écoutée jusqu'au bout : la page qui
+  /// se rouvre (paiement abandonné) ne la réimpose pas.
+  static final Set<String> _listenedOrders = {};
+  bool get _audioDone => _listenedOrders.contains(widget.orderId);
+
   @override
   Widget build(BuildContext context) {
     final isWave   = _selected == 'wave';
     final isOrange = _selected == 'orange';
-    final canPay   = isWave || isOrange;
+    // Modes de paiement indisponibles tant que la note vocale n'est pas finie.
+    final canPay   = (isWave || isOrange) && _audioDone;
+    final showWave = FeatureFlags.paymentMethodList.contains('Wave');
+    final showOrange = FeatureFlags.orangeMoney;
+    final btnColor = isWave ? _wave : isOrange ? _orange : kMisonGold;
+    final btnLabel = isOrange
+        ? 'Payer avec Orange Money'
+        : isWave
+            ? 'Payer avec Wave'
+            : 'Choisissez un moyen de paiement';
 
-    final btnColor = isWave
-        ? const Color(0xFF1BA1F1)
-        : isOrange
-            ? const Color(0xFFFF7900)
-            : Colors.grey.shade300;
-    final btnLabel = isOrange ? 'Payer avec Orange Money' : 'Payer avec Wave';
-
-    return Container(
+    return PopScope(
+      canPop: !widget.locked,
+      child: Container(
       decoration: BoxDecoration(
-        color: context.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: context.cardColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Poignée
-          Center(
-            child: Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          20.height,
-
-          Text(widget.title, style: boldTextStyle(size: 18)),
-          16.height,
-
-          // Montant
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: kMisonGold.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kMisonGold.withValues(alpha: 0.25)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      padding: EdgeInsets.fromLTRB(24, 14, 16, MediaQuery.of(context).padding.bottom + 20),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // En-tête : logo MISON, fermer
+            Row(
               children: [
-                Text(widget.desc, style: secondaryTextStyle(size: 14)),
-                8.height,
-                Text(widget.feeLabel,
-                    style: boldTextStyle(size: 20, color: kMisonGold)),
+                Image.asset('assets/logo/logo_transparent.png', height: 30, errorBuilder: (_, __, ___) =>
+                    Text('MISON', style: boldTextStyle(size: 20, color: kMisonDark))),
+                const Spacer(),
+                if (!widget.locked)
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 26),
+                    color: kMisonDark,
+                    onPressed: () => Navigator.pop(context),
+                    tooltip: 'Fermer',
+                  )
+                else
+                  const SizedBox(height: 48),
               ],
             ),
-          ),
-          20.height,
+            14.height,
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Petit libellé en couleur, puis le prix en grand
+                  Text(widget.priceCaption == 'Prix convenu' ? 'PRIX CONVENU' : 'À PAYER',
+                      style: boldTextStyle(size: 15, color: kMisonGold, letterSpacing: 0.3)),
+                  6.height,
+                  Text(widget.feeLabel,
+                      style: primaryTextStyle(size: 36, color: kMisonDark, weight: FontWeight.w600)),
+                  16.height,
 
-          Text('Mode de paiement', style: boldTextStyle(size: 16)),
-          12.height,
+                  // Note vocale de MISON à écouter avant de payer (démarre seule)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: kMisonFieldBg,
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                    child: VoiceNotePlayer(
+                      asset: kAudioBeforePayment,
+                      color: kMisonGold,
+                      autoPlay: !_audioDone,
+                      expand: true,
+                      onCompleted: () {
+                        if (!mounted) return;
+                        setState(() => _listenedOrders.add(widget.orderId));
+                      },
+                    ),
+                  ),
+                  if (!_audioDone) ...[
+                    8.height,
+                    Text('Écoutez le message jusqu’au bout pour pouvoir payer.',
+                        style: secondaryTextStyle(size: 13)),
+                  ],
+                  20.height,
 
-          // Wave (case « Paiement Wave » du back-office ; toujours proposé si rien n'est coché)
-          if (FeatureFlags.paymentMethodList.contains('Wave'))
-          _MethodTile(
-            label: 'Wave',
-            subtitle: 'Paiement mobile sécurisé',
-            logoAsset: 'assets/images/wave_logo.png',
-            color: const Color(0xFF1BA1F1),
-            selected: isWave,
-            enabled: true,
-            onTap: () => setState(() => _selected = 'wave'),
-          ),
-          10.height,
+                  // Moyen de paiement (si plusieurs) : pastilles
+                  if (showWave && showOrange) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _MethodPill(
+                            label: 'Wave',
+                            logoAsset: 'assets/images/wave_logo.png',
+                            color: _wave,
+                            selected: isWave,
+                            enabled: _audioDone,
+                            onTap: () => setState(() => _selected = 'wave'),
+                          ),
+                        ),
+                        10.width,
+                        Expanded(
+                          child: _MethodPill(
+                            label: 'Orange Money',
+                            logoAsset: 'assets/images/orange_money.jpg',
+                            color: _orange,
+                            selected: isOrange,
+                            enabled: _audioDone,
+                            onTap: () => setState(() => _selected = 'orange'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    14.height,
+                  ],
 
-          // Orange Money (activé dans le back-office : Réglages de la plateforme)
-          if (FeatureFlags.orangeMoney)
-            _MethodTile(
-              label: 'Orange Money',
-              subtitle: 'Paiement Orange Money ou Max it',
-              logoAsset: 'assets/images/orange_money.jpg',
-              color: const Color(0xFFFF7900),
-              selected: isOrange,
-              enabled: true,
-              onTap: () => setState(() => _selected = 'orange'),
+                  // Gros bouton arrondi
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: canPay ? (isOrange ? widget.onPayOrange : widget.onPayWave) : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: btnColor,
+                        disabledBackgroundColor: Colors.grey.shade300,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: Text(
+                        btnLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: boldTextStyle(color: canPay ? Colors.white : Colors.grey.shade600, size: 16),
+                      ),
+                    ),
+                  ),
+                  // Note sous le bouton
+                  8.height,
+                  Text('Paiement sécurisé • Reçu disponible après le paiement',
+                      style: secondaryTextStyle(size: 13, color: kMisonDark.withValues(alpha: 0.75))),
+                  22.height,
+
+                  // Avertissement
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.verified_user_outlined, color: kMisonGold, size: 24),
+                      14.width,
+                      Expanded(
+                        child: Text(
+                          widget.desc,
+                          style: primaryTextStyle(size: 15, color: kMisonDark.withValues(alpha: 0.85)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          24.height,
-
-          AppButton(
-            text: btnLabel,
-            color: canPay ? btnColor : Colors.grey.shade300,
-            textColor: canPay ? Colors.white : Colors.grey,
-            width: double.infinity,
-            height: 50,
-            shapeBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            onTap: canPay
-                ? (isOrange ? widget.onPayOrange : widget.onPayWave)
-                : null,
-          ),
-        ],
+          ],
+        ),
       ),
+    ),
     );
   }
 }
 
-class _MethodTile extends StatelessWidget {
+
+/// Choix Wave / Orange Money : pastille avec logo.
+class _MethodPill extends StatelessWidget {
   final String label;
-  final String subtitle;
-  final String? logoAsset;
+  final String logoAsset;
   final Color color;
   final bool selected;
   final bool enabled;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
-  const _MethodTile({
+  const _MethodPill({
     required this.label,
-    required this.subtitle,
-    this.logoAsset,
+    required this.logoAsset,
     required this.color,
     required this.selected,
-    required this.enabled,
+    this.enabled = true,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Opacity(
-      opacity: enabled ? 1.0 : 0.4,
+      opacity: enabled ? 1 : 0.4,
       child: GestureDetector(
-        onTap: enabled ? onTap : null,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: selected ? color.withValues(alpha: 0.07) : context.cardColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? color : Colors.grey.withValues(alpha: 0.2),
-              width: selected ? 1.5 : 1,
+      onTap: enabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.08) : context.cardColor,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: selected ? color : Colors.grey.withValues(alpha: 0.3), width: selected ? 1.6 : 1),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset(logoAsset, width: 22, height: 22, fit: BoxFit.cover),
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: logoAsset != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.asset(logoAsset!, fit: BoxFit.cover),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              12.width,
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label, style: boldTextStyle(size: 16)),
-                    2.height,
-                    Text(subtitle, style: secondaryTextStyle(size: 13)),
-                  ],
-                ),
-              ),
-              if (selected)
-                Icon(Icons.check_circle_rounded, color: color, size: 22),
-            ],
-          ),
+            8.width,
+            Flexible(
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: boldTextStyle(size: 14, color: selected ? color : kMisonDark)),
+            ),
+          ],
         ),
       ),
+    ),
     );
   }
 }

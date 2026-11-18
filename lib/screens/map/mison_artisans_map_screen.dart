@@ -40,6 +40,15 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
   static const int _radiusKm = 10;
 
   GoogleMapController? _map;
+
+  /// Zoom actuel de la carte (pour zoomer « comme sur Snap Map »).
+  double _zoom = 12;
+
+  /// Appui sur une zone : zoom en douceur sur cet endroit (2 niveaux de plus).
+  void _zoomInto(LatLng point) {
+    final target = math.min(_zoom + 2, 17.5);
+    _map?.animateCamera(CameraUpdate.newLatLngZoom(point, target));
+  }
   bool _hasLocation = false;
   bool _loading = true;
 
@@ -307,7 +316,14 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
               icon: _icons[_iconKey(a)] ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
               anchor: const Offset(0.5, 1),
               zIndexInt: a['is_available'] == true ? 1 : 0,
-              onTap: () => _showCard(a),
+              onTap: () {
+                // Comme sur Snap Map : la carte se centre et zoome sur le prestataire.
+                _map?.animateCamera(CameraUpdate.newLatLngZoom(
+                  LatLng((a['latitude'] as num).toDouble(), (a['longitude'] as num).toDouble()),
+                  math.max(_zoom, 15),
+                ));
+                _showCard(a);
+              },
             ),
       };
 
@@ -365,10 +381,18 @@ class _MisonArtisansMapScreenState extends State<MisonArtisansMapScreen> {
             compassEnabled: false,
             rotateGesturesEnabled: false,
             tiltGesturesEnabled: false,
-            onCameraMove: (p) => _cameraTarget = p.target,
+            onCameraMove: (p) {
+              _cameraTarget = p.target;
+              _zoom = p.zoom;
+            },
             onCameraIdle: _onCameraIdle,
-            onTap: (_) {
-              if (_selected != null) setState(() => _selected = null);
+            onTap: (point) {
+              // Fiche ouverte : l'appui la ferme. Sinon, zoom sur la zone touchée.
+              if (_selected != null) {
+                setState(() => _selected = null);
+                return;
+              }
+              _zoomInto(point);
             },
           ),
           // En-tête : recherche de service + filtres.

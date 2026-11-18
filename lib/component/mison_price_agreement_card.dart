@@ -1,6 +1,7 @@
 import 'package:booking_system_flutter/utils/feature_flags.dart';
 import 'package:booking_system_flutter/component/mison_account_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold, kMisonDark;
+import 'package:booking_system_flutter/component/mison_audio_sheet.dart';
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
@@ -62,6 +63,28 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
     }
   }
 
+  /// Ouvrier : « Êtes-vous tombés d'accord sur le prix ? » — Oui : il entre
+  /// le prix (envoyé au client pour validation) ; Non : il discute d'abord.
+  Future<void> _askAgreed() async {
+    final yes = await showMisonAudioSheet(
+      context,
+      icon: Icons.handshake_outlined,
+      caption: 'Prix de la prestation',
+      title: 'Êtes-vous tombés d\u2019accord sur le prix ?',
+      subtitle: 'Avec ${_otherName.split(' ').first}, par message ou par appel.',
+      continueLabel: 'Oui, j\u2019entre le prix',
+      laterLabel: 'Non, pas encore',
+      warning: 'Le client devra valider ce prix dans l\u2019application. '
+          'Il ne pourra plus changer ensuite.',
+    );
+    if (!mounted) return;
+    if (yes) {
+      await _propose();
+    } else {
+      TopToast.show(message: 'Discutez du prix avec le client, puis revenez entrer le prix convenu.');
+    }
+  }
+
   Future<void> _propose({bool counter = false}) async {
     final price = await _askPrice(context, order: order, counter: counter);
     if (price == null) return;
@@ -117,20 +140,43 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
             10.width,
             Expanded(child: Text('Prix de la prestation', style: boldTextStyle(size: 16, color: kMisonDark))),
           ]),
-          8.height,
-          Text(
-            widget.isArtisan
-                ? 'Mettez-vous d\'accord avec le client sur le prix (par message ou par appel), '
-                    'avant de partir ou une fois sur place. Il doit le valider avant le début de la prestation.'
-                : 'Le prestataire vous propose son prix, avant de partir ou une fois sur place. Vous pouvez '
-                    'l\'accepter ou le refuser. Vous le paierez à la fin de la prestation.',
-            style: secondaryTextStyle(size: 13),
-          ),
+          // Ouvrier : explication ; client : juste le prix (pas de texte).
+          if (widget.isArtisan) ...[
+            8.height,
+            Text(
+              'Mettez-vous d\'accord avec le client sur le prix (par message ou par appel), '
+              'avant de partir ou une fois sur place. Il doit le valider avant le début de la prestation.',
+              style: secondaryTextStyle(size: 13),
+            ),
+          ],
           14.height,
           if (_proposedByOther) ..._otherProposal()
           else if (_proposedByMe) ..._myProposal()
+          else if (widget.isArtisan && !order.hasDiscussed) ...[
+            // Un prix se propose après avoir discuté avec le client.
+            Opacity(
+              opacity: 0.45,
+              child: IgnorePointer(
+                child: _button('Êtes-vous d\u2019accord sur le prix ?', Icons.handshake_outlined, () {}, filled: true),
+              ),
+            ),
+            8.height,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.forum_outlined, size: 16, color: kMisonGold),
+                6.width,
+                Expanded(
+                  child: Text(
+                    'Discutez d\'abord avec le client (message ou appel) pour vous mettre d\'accord sur le prix.',
+                    style: secondaryTextStyle(size: 13),
+                  ),
+                ),
+              ],
+            ),
+          ]
           else if (widget.isArtisan)
-            _button('Proposer un prix', Icons.edit_rounded, () => _propose(), filled: true)
+            _button('Êtes-vous d\u2019accord sur le prix ?', Icons.handshake_outlined, () => _askAgreed(), filled: true)
           else
             // Le client ne propose pas en premier : il attend le prix du prestataire.
             _waitingLine('En attente du prix de ${_otherName.split(' ').first}'),
@@ -145,48 +191,17 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
       if (widget.isArtisan)
         _priceLine('$_otherName propose', price)
       else
-        // Client : le montant qu'il paiera dans l'app, en gros (pas d'espèces).
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: kMisonGold.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${_otherName.split(' ').first} propose ${_fcfa(price)}', style: primaryTextStyle(size: 14, color: kMisonDark)),
-              10.height,
-              Text("À payer dans l'app MISON", style: boldTextStyle(size: 22, color: kMisonGold)),
-              2.height,
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(_fcfa(price + order.serviceFee), style: boldTextStyle(size: 30, color: kMisonDark)),
-              ),
-              2.height,
-              Text(
-                'Prestation ${_fcfa(price)} + frais de service ${_fcfa(order.serviceFee)}, à la fin de la prestation',
-                style: secondaryTextStyle(size: 12),
-              ),
-              10.height,
-              // Avis de paiement (avant : encadré bleu au-dessus).
-              Text(
-                "Ne payez jamais le prestataire en espèces : sans paiement dans l'app, "
-                'MISON ne peut pas vous protéger en cas de litige.',
-                style: secondaryTextStyle(size: 13, color: kMisonDark),
-              ),
-            ],
-          ),
-        ),
+        // Client : juste le prix proposé, sans les frais de service ni texte.
+        _clientPriceCard('Prix proposé', price),
       14.height,
-      // Le client accepte ou refuse : il ne fait pas de contre-proposition.
-      Row(children: [
-        Expanded(child: _button('Refuser', Icons.close_rounded, _decline, danger: true)),
-        8.width,
-        Expanded(child: _button('Accepter', Icons.check_rounded, _accept, filled: true)),
-      ]),
+      // Client : il valide ou refuse dans la page « Prix proposé » qui s'ouvre
+      // d'elle-même (plus de boutons ici). Ouvrier : accepter / refuser.
+      if (widget.isArtisan)
+        Row(children: [
+          Expanded(child: _button('Refuser', Icons.close_rounded, _decline, danger: true)),
+          8.width,
+          Expanded(child: _button('Accepter', Icons.check_rounded, _accept, filled: true)),
+        ]),
       if (widget.isArtisan) ...[
         8.height,
         _button('Contre-proposer', Icons.swap_horiz_rounded, () => _propose(counter: true)),
@@ -254,7 +269,32 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
 
   /// Client : montant à payer dans l'app, en gros, pour qu'il ne paie pas
   /// l'ouvrier en espèces.
-  Widget _buildClientToPay(int price) => MisonPayInAppCard(price: price, fee: order.serviceFee);
+  /// Client : juste le prix convenu, sans les frais de service ni texte.
+  Widget _buildClientToPay(int price) => _clientPriceCard('Prix convenu', price);
+
+  Widget _clientPriceCard(String label, int price) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kMisonGold.withValues(alpha: 0.45), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label.toUpperCase(), style: boldTextStyle(size: 13, color: kMisonGold, letterSpacing: 0.3)),
+          4.height,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(_fcfa(price), style: boldTextStyle(size: 30, color: kMisonDark)),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _priceLine(String label, int price) {
     return Row(
@@ -319,71 +359,102 @@ Future<int?> _askPrice(BuildContext context, {required MisonOrder order, bool co
         Navigator.pop(sheetContext, value);
       }
 
-      return Container(
-        decoration: BoxDecoration(
-          color: sheetContext.scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(sheetContext).viewInsets.bottom + 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
+      // Même présentation que la page de paiement (fiche Google Play) :
+      // logo, petit libellé en couleur, prix en grand, bouton, mention, avertissement.
+      return Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+        child: Container(
+          decoration: BoxDecoration(
+            color: sheetContext.cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.fromLTRB(24, 14, 16, MediaQuery.of(sheetContext).padding.bottom + 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Image.asset('assets/logo/logo_transparent.png', height: 30,
+                        errorBuilder: (_, __, ___) => Text('MISON', style: boldTextStyle(size: 20, color: kMisonDark))),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 26),
+                      color: kMisonDark,
+                      onPressed: () => Navigator.pop(sheetContext),
+                      tooltip: 'Fermer',
+                    ),
+                  ],
                 ),
-              ),
-            ),
-            20.height,
-            Text(counter ? 'Votre contre-proposition' : 'Proposer un prix', style: boldTextStyle(size: 18)),
-            6.height,
-            Text(
-              'Prix de la prestation, en FCFA. Une fois validé par les deux, il ne pourra plus changer.',
-              style: secondaryTextStyle(size: 13),
-            ),
-            16.height,
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => submit(),
-              style: boldTextStyle(size: 18),
-              decoration: InputDecoration(
-                hintText: 'Montant',
-                suffixText: 'FCFA',
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
+                14.height,
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(counter ? 'VOTRE CONTRE-PROPOSITION' : 'PRIX CONVENU AVEC LE CLIENT',
+                          style: boldTextStyle(size: 15, color: kMisonGold, letterSpacing: 0.3)),
+                      6.height,
+                      // Le prix, saisi en grand
+                      TextField(
+                        controller: ctrl,
+                        autofocus: true,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => submit(),
+                        style: primaryTextStyle(size: 36, color: kMisonDark, weight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          hintText: '0',
+                          hintStyle: primaryTextStyle(size: 36, color: Colors.grey.shade400, weight: FontWeight.w600),
+                          suffixText: 'FCFA',
+                          suffixStyle: boldTextStyle(size: 18, color: kMisonDark.withValues(alpha: 0.6)),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                          border: InputBorder.none,
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
+                          ),
+                          focusedBorder: const UnderlineInputBorder(
+                            borderSide: BorderSide(color: kMisonGold, width: 1.5),
+                          ),
+                        ),
+                      ),
+                      22.height,
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kMisonGold,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: Text('Envoyer au client', style: boldTextStyle(color: Colors.white, size: 16)),
+                        ),
+                      ),
+                      22.height,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.verified_user_outlined, color: kMisonGold, size: 24),
+                          14.width,
+                          Expanded(
+                            child: Text(
+                              'Le client doit valider ce prix dans l\u2019application. Une fois validé, il ne pourra plus changer.',
+                              style: primaryTextStyle(size: 15, color: kMisonDark.withValues(alpha: 0.85)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: kMisonGold, width: 1.5),
-                ),
-              ),
+              ],
             ),
-            20.height,
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kMisonGold,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text('Envoyer la proposition', style: boldTextStyle(color: Colors.white, size: 15)),
-              ),
-            ),
-          ],
+          ),
         ),
       );
     },
@@ -514,4 +585,20 @@ class MisonPayInAppCard extends StatelessWidget {
     );
   }
 
+}
+
+/// Ouvrier : saisit le prix convenu avec le client et l'envoie pour validation.
+/// Utilisé hors de la carte du prix (page « Prix de la prestation » avant le
+/// départ). Renvoie true si le prix a été envoyé.
+Future<bool> proposeAgreedPrice(BuildContext context, MisonOrder order) async {
+  final price = await _askPrice(context, order: order);
+  if (price == null) return false;
+  try {
+    await proposeOrderPrice(order.id!, price);
+    TopToast.show(message: 'Prix de ${_fcfa(price)} envoyé au client pour validation.', type: TopToastType.success);
+    return true;
+  } catch (e) {
+    TopToast.show(message: e.toString(), type: TopToastType.error);
+    return false;
+  }
 }

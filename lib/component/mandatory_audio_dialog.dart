@@ -6,6 +6,9 @@ export 'package:booking_system_flutter/component/mison_audio_sheet.dart' show kA
 
 bool _mandatoryAudioOpen = false;
 
+/// La note obligatoire d'après l'acceptation est à l'écran.
+bool get isAfterAcceptAudioOpen => _mandatoryAudioOpen;
+
 /// Ouvrier, juste après avoir accepté une commande : message audio à écouter
 /// en entier (le panneau ne se ferme pas avant la fin).
 Future<void> showAfterAcceptAudio() async {
@@ -17,10 +20,13 @@ Future<void> showAfterAcceptAudio() async {
       context,
       asset: kAudioAfterAccept,
       icon: Icons.check_circle_rounded,
-      title: 'Commande acceptée',
+      caption: 'Commande acceptée',
+      title: 'Message de MISON',
       subtitle: 'Écoutez ce message en entier avant de continuer.',
       continueLabel: "J'ai écouté",
       mustListen: true,
+      // À écouter à chaque commande acceptée.
+      listenKey: 'accept-${DateTime.now().microsecondsSinceEpoch}',
     );
   } finally {
     _mandatoryAudioOpen = false;
