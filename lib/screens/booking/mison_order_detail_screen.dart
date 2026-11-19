@@ -67,6 +67,15 @@ class MisonOrderDetailScreen extends StatefulWidget {
   static final Map<String, int> _open = {};
   static bool isOpen(String orderId) => (_open[orderId] ?? 0) > 0;
 
+  /// Ouvre la commande, sauf si elle est déjà à l'écran (ou sous un autre
+  /// écran) : jamais deux pages de la même commande empilées — il fallait
+  /// sinon faire « retour » deux fois pour la quitter. Déjà ouverte : elle se
+  /// met à jour d'elle-même (notifications, retour de paiement).
+  static Future<void> openOnce(NavigatorState? navigator, String orderId) async {
+    if (navigator == null || orderId.isEmpty || isOpen(orderId)) return;
+    await navigator.push(MaterialPageRoute(builder: (_) => MisonOrderDetailScreen(orderId: orderId)));
+  }
+
   static final StreamController<(String, bool)> _paymentReturns = StreamController<(String, bool)>.broadcast();
 
   /// Retour dans l'app après un paiement : la page ouverte vérifie le statut
@@ -178,6 +187,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     }
     WidgetsBinding.instance.removeObserver(this);
     StepSheets.changes.removeListener(_onStepSheetsChanged);
+    _stepReload?.cancel();
     super.dispose();
   }
 
@@ -196,10 +206,19 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
 
   void init() => future = getMisonOrderDetail(widget.orderId);
 
-  /// Une page d'étape s'est fermée : bouton de secours et réouverture à jour.
+  /// Une page d'étape s'est fermée (ici ou sur un autre écran de la même
+  /// commande) : la commande est rechargée, pour ne jamais rester sur un
+  /// statut dépassé (ex. « Prix proposé » alors qu'il vient d'être validé).
   void _onStepSheetsChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    _stepReload?.cancel();
+    _stepReload = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _reloadSilently();
+    });
   }
+
+  Timer? _stepReload;
 
   /// Ferme les pages d'étape dont l'étape est passée (commande payée, prix
   /// validé, prestation terminée, ouvrier parti), même ouvertes par un autre
@@ -490,12 +509,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     final peerName = appStore.userType == USER_TYPE_PROVIDER
         ? (order.client?.fullName.isNotEmpty == true ? order.client!.fullName : 'Client')
         : (order.artisan?.fullName.isNotEmpty == true ? order.artisan!.fullName : 'Ouvrier');
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MisonOrderChatScreen(orderId: order.id!, peerName: peerName),
-      ),
-    );
+    await MisonOrderChatScreen.openOnce(Navigator.of(context), order.id!, peerName: peerName);
   }
 
   Future<void> _showSetFeeModal({
@@ -948,6 +962,9 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_locked) {
+          // Statut peut-être dépassé : rechargé. S'il n'y a plus rien à faire,
+          // la page se libère ; sinon la page d'étape se rouvre.
+          _reloadSilently();
           final order = _lastOrder;
           TopToast.show(
             message: appStore.userType == USER_TYPE_PROVIDER

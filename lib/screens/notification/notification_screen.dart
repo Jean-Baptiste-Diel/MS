@@ -91,7 +91,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
     // Ouvre la commande concernée
     if (n.orderId != null && n.orderId!.isNotEmpty) {
-      await MisonOrderDetailScreen(orderId: n.orderId!).launch(context);
+      if (MisonOrderDetailScreen.isOpen(n.orderId!)) {
+        // Déjà ouverte en dessous : on y revient.
+        Navigator.of(context).pop();
+      } else {
+        await MisonOrderDetailScreen(orderId: n.orderId!).launch(context);
+      }
     }
   }
 

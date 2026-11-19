@@ -5,7 +5,6 @@ import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/order_events.dart';
-import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
 import '../utils/configs.dart';
@@ -174,9 +173,8 @@ class DeepLinkService {
           Future.delayed(const Duration(milliseconds: 800),
               () => MisonOrderDetailScreen.notifyPaymentReturn(orderId, success: true));
         }
-        navigatorKey.currentState?.push(MaterialPageRoute(
-          builder: (_) => MisonOrderDetailScreen(orderId: orderId),
-        ));
+        // Retour de Wave / Orange Money : la commande est souvent déjà ouverte.
+        MisonOrderDetailScreen.openOnce(navigatorKey.currentState, orderId);
       }
     });
   }

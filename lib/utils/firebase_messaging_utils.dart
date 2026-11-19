@@ -420,16 +420,12 @@ void handleNotificationClick(RemoteMessage message) {
   // Chat de commande — ouvre directement la discussion
   if (message.data['type'] == 'ORDER_CHAT_MESSAGE') {
     final orderId = message.data['order_id']?.toString() ?? '';
-    if (orderId.isNotEmpty) {
-      navigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (_) => MisonOrderChatScreen(
-            orderId: orderId,
-            peerName: message.data['sender_name']?.toString() ?? '',
-          ),
-        ),
-      );
-    }
+    // Déjà ouverte : pas de deuxième discussion empilée.
+    MisonOrderChatScreen.openOnce(
+      navigatorKey.currentState,
+      orderId,
+      peerName: message.data['sender_name']?.toString() ?? '',
+    );
     return;
   }
 
@@ -442,11 +438,7 @@ void handleNotificationClick(RemoteMessage message) {
   // Appel manqué : la conversation de la commande, où l'appel est affiché
   if (message.data['type'] == 'MISSED_CALL') {
     final orderId = message.data['order_id']?.toString() ?? '';
-    if (orderId.isNotEmpty) {
-      navigatorKey.currentState?.push(MaterialPageRoute(
-        builder: (_) => MisonOrderChatScreen(orderId: orderId, peerName: ''),
-      ));
-    }
+    MisonOrderChatScreen.openOnce(navigatorKey.currentState, orderId);
     return;
   }
 
@@ -481,13 +473,8 @@ void handleNotificationClick(RemoteMessage message) {
   // (mison_order_id : ancien format, conservé.)
   if (message.data.containsKey('order_id') || message.data.containsKey('mison_order_id')) {
     final orderId = (message.data['order_id'] ?? message.data['mison_order_id'])?.toString() ?? '';
-    if (orderId.isNotEmpty) {
-      navigatorKey.currentState!.push(
-        MaterialPageRoute(
-          builder: (_) => MisonOrderDetailScreen(orderId: orderId),
-        ),
-      );
-    }
+    // Déjà ouverte : pas de deuxième page de la même commande.
+    MisonOrderDetailScreen.openOnce(navigatorKey.currentState, orderId);
     return;
   }
 

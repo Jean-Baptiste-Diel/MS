@@ -390,13 +390,25 @@ class _MisonOrderSearchingScreenState extends State<MisonOrderSearchingScreen>
       final name = order.artisan?.firstName?.trim() ?? '';
       TopToast.show(message: name.isEmpty ? 'Un prestataire a accepté votre commande.' : '$name a accepté votre commande.');
     }
+    // Recherche ouverte depuis la commande : on y revient (sinon deux pages
+    // de la même commande, et deux « retour » pour la quitter).
+    if (MisonOrderDetailScreen.isOpen(widget.orderId)) {
+      Navigator.of(context).pop();
+      return;
+    }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => MisonOrderDetailScreen(orderId: widget.orderId)),
     );
   }
 
   /// Détail (appel, discussion, paiement…) par-dessus : le retour revient ici.
-  void _openDetail() => MisonOrderDetailScreen(orderId: widget.orderId).launch(context);
+  void _openDetail() {
+    if (MisonOrderDetailScreen.isOpen(widget.orderId)) {
+      Navigator.of(context).pop(); // déjà ouverte en dessous
+      return;
+    }
+    MisonOrderDetailScreen(orderId: widget.orderId).launch(context);
+  }
 
   Future<void> _cancel() async {
     final result = await showMisonCancelOrderSheet(

@@ -200,8 +200,13 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
         _priceLine('$_otherName propose', price)
       else
         // Client : juste le prix proposé, sans les frais de service ni texte.
-        // (le titre de la carte dit déjà « Prix proposé »).
-        _clientPriceCard('', price),
+        // (le titre de la carte dit déjà « Prix proposé ») : le prix seul,
+        // sans second cadre.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(_fcfa(price), style: boldTextStyle(size: 30, color: kMisonDark)),
+        ),
       14.height,
       // Client : il valide ou refuse dans la page « Prix proposé » qui s'ouvre
       // d'elle-même (plus de boutons ici). Ouvrier : accepter / refuser.
