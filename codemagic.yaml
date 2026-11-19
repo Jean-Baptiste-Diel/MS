@@ -1,3 +1,50 @@
+definitions:
+  # Étapes communes aux builds iPhone (TestFlight classique et Shorebird).
+  ios_env: &ios_env
+    groups:
+      - firebase_config
+      - code_signing
+    vars:
+      BUNDLE_ID: "com.mison.serviceuser"
+      APP_STORE_APPLE_ID: 6777843890
+    flutter: stable
+    xcode: latest
+    cocoapods: default
+  ios_prepare: &ios_prepare
+    - &restore_firebase
+      name: Restore firebase_options.dart
+      script: |
+        echo "$FIREBASE_OPTIONS_B64" | base64 --decode > lib/firebase_options.dart
+    - name: Set up keychain
+      script: keychain initialize
+    - name: Fetch signing files
+      script: |
+        app-store-connect fetch-signing-files "$BUNDLE_ID" \
+          --type IOS_APP_STORE \
+          --create
+    - name: Add certificates to keychain
+      script: keychain add-certificates
+    - name: Set up code signing settings on Xcode project
+      script: xcode-project use-profiles
+    - name: Disable Swift Package Manager
+      script: flutter config --no-enable-swift-package-manager
+  # Shorebird : une version ou un correctif part chez TOUS les utilisateurs.
+  # Il doit viser le serveur de prod, jamais dev-api.
+  check_prod_api: &check_prod_api
+    name: Vérifier l'adresse de l'API (prod)
+    script: |
+      if ! grep -q "DOMAIN_URL = 'https://api.mison.app'" lib/utils/configs.dart; then
+        echo "lib/utils/configs.dart ne pointe pas vers https://api.mison.app : build arrêté." >&2
+        exit 1
+      fi
+  install_shorebird: &install_shorebird
+    name: Installer Shorebird
+    script: |
+      # Jeton créé avec « shorebird login:ci », dans le groupe « shorebird »
+      # (variable SHOREBIRD_TOKEN) de Codemagic.
+      curl --proto '=https' --tlsv1.2 https://raw.githubusercontent.com/shorebirdtech/install/main/install.sh -sSf | bash
+      echo "PATH=$HOME/.shorebird/bin:$PATH" >> $CM_ENV
+
 workflows:
   ios-testflight:
     name: iOS TestFlight
@@ -5,16 +52,7 @@ workflows:
     instance_type: mac_mini_m2
     integrations:
       app_store_connect: test jean1
-    environment:
-      groups:
-        - firebase_config
-        - code_signing
-      vars:
-        BUNDLE_ID: "com.mison.serviceuser"
-        APP_STORE_APPLE_ID: 6777843890
-      flutter: stable
-      xcode: latest
-      cocoapods: default
+    environment: *ios_env
     triggering:
       events:
         - push
@@ -23,9 +61,7 @@ workflows:
           include: true
           source: true
     scripts:
-      - name: Restore firebase_options.dart
-        script: |
-          echo "$FIREBASE_OPTIONS_B64" | base64 --decode > lib/firebase_options.dart
+      - *restore_firebase
       - name: Set up keychain
         script: keychain initialize
       - name: Fetch signing files
@@ -69,3 +105,109 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+
+  # Version App Store « corrigeable » : à utiliser pour les versions publiées.
+  # Lancement à la main (Start new build), sur la branche voulue.
+  ios-shorebird-release:
+    name: iOS Shorebird release (App Store)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: test jean1
+    environment:
+      <<: *ios_env
+      groups:
+        - firebase_config
+        - code_signing
+        - shorebird
+    scripts:
+      - *check_prod_api
+      - *install_shorebird
+      - *restore_firebase
+      - name: Set up keychain
+        script: keychain initialize
+      - name: Fetch signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+      - name: Disable Swift Package Manager
+        script: flutter config --no-enable-swift-package-manager
+      - name: Increment build number
+        script: |
+          #!/usr/bin/env bash
+          set -e
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID")
+          if [ -z "$LATEST_BUILD_NUMBER" ]; then
+            echo "Could not determine latest TestFlight build number" >&2
+            exit 1
+          fi
+          cd ios
+          agvtool new-version -all $(($LATEST_BUILD_NUMBER + 1))
+      - name: Install CocoaPods dependencies
+        script: |
+          flutter pub get
+          find . -name "Podfile" -execdir pod install \;
+      - name: Shorebird release ios
+        script: |
+          shorebird release ios -- --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      email:
+        recipients:
+          - jeanbaptistedielinang@gmail.com
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+  # Correctif Shorebird pour la dernière version iPhone publiée avec
+  # « ios-shorebird-release ». Lancement à la main.
+  ios-shorebird-patch:
+    name: iOS Shorebird patch
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: test jean1
+    environment:
+      <<: *ios_env
+      groups:
+        - firebase_config
+        - code_signing
+        - shorebird
+    scripts:
+      - *check_prod_api
+      - *install_shorebird
+      - *restore_firebase
+      - name: Set up keychain
+        script: keychain initialize
+      - name: Fetch signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+      - name: Disable Swift Package Manager
+        script: flutter config --no-enable-swift-package-manager
+      - name: Install CocoaPods dependencies
+        script: |
+          flutter pub get
+          find . -name "Podfile" -execdir pod install \;
+      - name: Shorebird patch ios
+        script: |
+          # Correctif d'abord en « staging » : à tester sur un iPhone, puis à
+          # publier depuis la console Shorebird (Promote).
+          shorebird patch ios --release-version=latest --track=staging -- \
+            --export-options-plist=/Users/builder/export_options.plist
+    publishing:
+      email:
+        recipients:
+          - jeanbaptistedielinang@gmail.com

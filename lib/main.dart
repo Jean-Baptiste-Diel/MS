@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/remote_media.dart';
 import 'dart:convert';
 import 'package:booking_system_flutter/utils/artisan_arrival_reporter.dart';
 import 'package:booking_system_flutter/utils/client_order_lock.dart';
@@ -634,6 +635,10 @@ void main() async {
 
   // Initialize deep link service
   DeepLinkService().init();
+
+  // Sons et images remplacés dans le back-office : téléchargés en arrière-plan
+  // (utilisés dès qu'ils sont là, sinon ceux de l'app).
+  RemoteMedia.sync();
 
   runApp(MyApp());
 }

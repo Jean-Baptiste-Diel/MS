@@ -424,6 +424,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final bool hasImage = profileImageBytes != null;
     return Column(children: [
       GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: pickImage,
         child: Stack(children: [
           // Outer glow ring
@@ -567,6 +568,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () => setState(() {
             showPromoCodeField = !showPromoCodeField;
             if (!showPromoCodeField) {
@@ -637,6 +639,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Widget _buildTcAcceptWidget() {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => setState(() => isAcceptedTc = !isAcceptedTc),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -743,6 +746,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       padding: const EdgeInsets.only(top: 20, bottom: 32),
       child: Center(
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () => SignInScreen().launch(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -969,7 +973,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     RichText(
                       text: TextSpan(children: [
                         TextSpan(
-                          text: 'Mi',
+                          text: 'MI',
                           style: TextStyle(
                               color: _brandDark,
                               fontSize: 21,
@@ -977,7 +981,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               letterSpacing: -0.5),
                         ),
                         TextSpan(
-                          text: 'son',
+                          text: 'SON',
                           style: TextStyle(
                               color: _brandGold,
                               fontSize: 21,

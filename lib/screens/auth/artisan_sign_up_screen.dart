@@ -886,7 +886,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
         RichText(
           text: const TextSpan(children: [
             TextSpan(
-              text: 'Mi',
+              text: 'MI',
               style: TextStyle(
                   color: _brandDark,
                   fontSize: 21,
@@ -894,7 +894,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
                   letterSpacing: -0.5),
             ),
             TextSpan(
-              text: 'son',
+              text: 'SON',
               style: TextStyle(
                   color: _brandGold,
                   fontSize: 21,
@@ -989,6 +989,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
               final current = i == currentStep;
               return Expanded(
                 child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => _goToStep(i),
                   child: Container(
                     margin: EdgeInsets.only(
@@ -1627,6 +1628,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
             Text('Adresse *', style: secondaryTextStyle(size: 13)),
             const Spacer(),
             GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () {
                 HapticFeedback.selectionClick();
                 _fetchCurrentLocation();
@@ -2144,6 +2146,7 @@ class _ArtisanSignUpScreenState extends State<ArtisanSignUpScreen>
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Center(
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () {
             HapticFeedback.selectionClick();
             SignInScreen().launch(context);

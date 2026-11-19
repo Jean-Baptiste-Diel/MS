@@ -155,6 +155,7 @@ class MisonCategoryComponentState extends State<MisonCategoryComponent> {
           itemBuilder: (ctx, i) {
             final service = services[i];
             return GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () {
                 MisonBookingFormScreen(service: service).launch(context);
               },

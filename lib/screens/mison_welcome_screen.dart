@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/remote_media.dart';
 import 'dart:ui';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
@@ -80,7 +81,7 @@ class _MisonWelcomeScreenState extends State<MisonWelcomeScreen>
         fit: StackFit.expand,
         children: [
           // Background image
-          Image.asset(
+          MisonAssetImage(
             mison_welcome_bg,
             fit: BoxFit.cover,
             height: context.height(),

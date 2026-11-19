@@ -73,6 +73,7 @@ class _CustomImagePickerState extends State<CustomImagePicker> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () async {
             await showInDialog(
               context,

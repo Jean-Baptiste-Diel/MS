@@ -108,6 +108,7 @@ class _RateSheetState extends State<_RateSheet> {
                 children: List.generate(5, (i) {
                   final filled = i < _rating;
                   return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: _isLoading ? null : () => setState(() => _rating = i + 1),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),

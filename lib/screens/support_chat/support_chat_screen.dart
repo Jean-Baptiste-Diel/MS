@@ -450,7 +450,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           child: Column(
             children: [
               // Toucher le bandeau : nouvel essai de connexion.
-              if (_offline) GestureDetector(onTap: _initChat, child: const MisonOfflineBanner()),
+              if (_offline)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _initChat,
+                  child: const MisonOfflineBanner(),
+                ),
               Expanded(child: _buildBody()),
               if (!_isConnecting && _error == null && !_offline)
                 _isOrderChat && _service.isBlocked ? _buildBlockedBar() : _buildInputBar(),
@@ -707,6 +712,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                     )
                   else if (isFailed)
                     GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: () => _sendMessage(msg.content, retryLocalId: msg.localId),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,

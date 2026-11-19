@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/remote_media.dart';
 import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -99,7 +100,13 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
     }
   }
 
-  Source get _source => widget.asset != null ? AssetSource(widget.asset!) : UrlSource(widget.url);
+  /// Note de l'app : remplacée par celle du back-office si elle a été changée.
+  Source get _source {
+    final asset = widget.asset;
+    if (asset == null) return UrlSource(widget.url);
+    final file = RemoteMedia.fileFor(asset);
+    return file != null ? DeviceFileSource(file.path) : AssetSource(asset);
+  }
 
   Future<void> _toggle() async {
     try {

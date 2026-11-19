@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/remote_media.dart';
 import 'package:booking_system_flutter/utils/image_cache_key.dart';
 import 'package:booking_system_flutter/component/mison_page_loader.dart';
 import 'package:booking_system_flutter/utils/service_search.dart';
@@ -10,6 +11,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:booking_system_flutter/model/mison_service_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
+import 'package:booking_system_flutter/screens/auth/sign_in_screen.dart';
+import 'package:booking_system_flutter/screens/auth/profile_selection_screen.dart';
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:booking_system_flutter/utils/images.dart';
@@ -64,8 +67,7 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
 
   /// Services correspondant à la saisie (classement partagé avec l'onglet Service).
   void _updateSuggestions(String value) {
-    setState(() => _suggestions =
-        value.trim().isEmpty ? [] : searchServices(_services, value).take(5).toList());
+    setState(() => _suggestions = value.trim().isEmpty ? [] : searchServices(_services, value).take(5).toList());
   }
 
   void _openService(MisonService service) {
@@ -191,6 +193,23 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
     );
   }
 
+  Widget _authButton(String label, {required Color background, required Color foreground, required VoidCallback onTap}) {
+    return Material(
+      color: background,
+      elevation: 2,
+      shadowColor: Colors.black26,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Text(label, style: boldTextStyle(size: 13, color: foreground)),
+        ),
+      ),
+    );
+  }
+
   /// Carrousel de l'accueil, arrondi, avec une marge.
   Widget getSliderWidget() {
     const double sliderHeight = 190;
@@ -225,7 +244,7 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
                             );
                           },
                         )
-                      : Image.asset(_fallbackBanner, height: sliderHeight, width: context.width(), fit: BoxFit.cover),
+                      : MisonAssetImage(_fallbackBanner, height: sliderHeight, width: context.width(), fit: BoxFit.cover),
               if (_banners.length > 1)
                 Positioned(
                   bottom: 6,
@@ -244,6 +263,33 @@ class _MisonSliderDashboardComponentState extends State<MisonSliderDashboardComp
                     dotSize: 40,
                   ).scale(scale: 0.4),
                 ),
+              // Visiteur sans compte : « Se connecter » et « S'inscrire » sur le carrousel.
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: Observer(
+                  builder: (_) => appStore.isLoggedIn
+                      ? const SizedBox.shrink()
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _authButton(
+                              'Se connecter',
+                              background: Colors.white,
+                              foreground: kMisonDark,
+                              onTap: () => SignInScreen().launch(context),
+                            ),
+                            8.width,
+                            _authButton(
+                              "S'inscrire",
+                              background: kMisonGold,
+                              foreground: Colors.white,
+                              onTap: () => const ProfileSelectionScreen().launch(context),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
             ],
           ),
         ),
@@ -358,8 +404,7 @@ class MisonNotificationBell extends StatelessWidget {
                   ? Container(
                       padding: const EdgeInsets.all(4),
                       child: FittedBox(
-                        child: Text(appStore.unreadCount.toString(),
-                            style: primaryTextStyle(size: 12, color: Colors.white)),
+                        child: Text(appStore.unreadCount.toString(), style: primaryTextStyle(size: 12, color: Colors.white)),
                       ),
                       // Liseré blanc : la pastille dorée se détache de la cloche dorée.
                       decoration: BoxDecoration(

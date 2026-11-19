@@ -437,7 +437,7 @@ Future<void> clearPreferences() async {
   cachedBookingStatusDropdown = null;
   cachedHelpDeskListData = null;
 
-  if (!getBoolAsync(IS_REMEMBERED)) {
+  if (!getBoolAsync(IS_REMEMBERED, defaultValue: true)) {
     await appStore.setUserEmail('');
     await removeKey(IS_EMAIL_VERIFIED);
   }
@@ -483,7 +483,9 @@ Future<void> clearPreferences() async {
   await appStore.setToken('');
   await appStore.setRefreshToken('');
   await appStore.setLoginType('');
-  await setValue(USER_PASSWORD, '');
+  // « Souviens-toi de moi » coché : le code PIN reste prérempli à la
+  // prochaine connexion (comme l'identifiant).
+  if (!getBoolAsync(IS_REMEMBERED, defaultValue: true)) await setValue(USER_PASSWORD, '');
   await removeKey(IS_SUBSCRIBED_FOR_PUSH_NOTIFICATION);
 
   try {

@@ -7,6 +7,7 @@ import 'package:nb_utils/nb_utils.dart';
 const kAudioBeforePayment = 'sounds/avant_paiement.m4a';
 const kAudioAfterAccept = 'sounds/apres_acceptation.m4a';
 const kAudioWorkerPaymentReminder = 'sounds/rappel_paiement_ouvrier.m4a';
+const kAudioWelcomeClient = 'sounds/bienvenue_client.m4a';
 
 /// Notes vocales déjà écoutées jusqu'au bout (clé : [listenKey]) : une page
 /// rouverte pour la même étape ne réimpose pas l'écoute.

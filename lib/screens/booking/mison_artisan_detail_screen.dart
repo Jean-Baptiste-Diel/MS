@@ -139,6 +139,7 @@ class MisonArtisanDetailScreen extends StatelessWidget {
                                 6.height,
                                 // Appui : liste des avis laissés par les clients.
                                 GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
                                   onTap: () => _openReviews(context),
                                   child: Row(children: [
                                     Icon(Icons.star_rounded,

@@ -314,6 +314,7 @@ class _MiseEnRelationTabState extends State<_MiseEnRelationTab>
                 itemBuilder: (_, i) {
                   final order = orders[i];
                   return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     // Commande en cours : directement le suivi sur la carte.
                     onTap: () => MisonOrderSearchingScreen.screenFor(order)
                         .launch(context),

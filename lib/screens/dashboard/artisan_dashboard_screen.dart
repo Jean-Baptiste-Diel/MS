@@ -1360,6 +1360,8 @@ class _RecentOrderTile extends StatelessWidget {
   Color _statusColor(String? s) {
     switch (s) {
       case 'PENDING':                      return pending;
+      // À confirmer par l'ouvrier : en rouge, bien visible.
+      case 'ASSIGNED':                     return const Color(0xFFD32F2F);
       case 'ACCEPTED':                     return accept;
       case 'AWAITING_TRAVEL_PAYMENT':      return _brandGold;
       case 'IN_PROGRESS':                  return in_progress;
@@ -1442,7 +1444,11 @@ class _RecentOrderTile extends StatelessWidget {
               children: [
                 Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
                 5.width,
-                Text(_statusLabel(order.status), style: boldTextStyle(size: 12, color: color)),
+                Text(_statusLabel(order.status),
+                    style: order.status == 'ASSIGNED'
+                        // « À confirmer » : rouge et bien gras.
+                        ? boldTextStyle(size: 13, color: color, weight: FontWeight.w800)
+                        : boldTextStyle(size: 12, color: color)),
               ],
             ),
             4.width,
@@ -1686,6 +1692,7 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
       return _RecentOrderTile(order: order);
     }
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => MisonOrderDetailScreen(orderId: order.id ?? '', distanceKm: distanceKm).launch(context),
       child: _ArtisanOrderCard(
         order: order,
@@ -1924,6 +1931,8 @@ class _ArtisanOrderCard extends StatelessWidget {
   Color _statusColor(String? s) {
     switch (s) {
       case 'PENDING':                      return pending;
+      // À confirmer par l'ouvrier : en rouge, bien visible.
+      case 'ASSIGNED':                     return const Color(0xFFD32F2F);
       case 'ACCEPTED':                     return accept;
       case 'AWAITING_TRAVEL_PAYMENT':      return _brandGold;
       case 'IN_PROGRESS':                  return in_progress;

@@ -40,6 +40,11 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
   bool _busy = false;
 
   MisonOrder get order => widget.order;
+
+  /// Ouvrier, pas encore sur place, aucun prix proposé : il passe par les
+  /// boutons du bas de la page.
+  bool get _artisanUsesBottomButtons =>
+      widget.isArtisan && !order.hasArrived && order.priceProposal == null;
   String get _me => widget.isArtisan ? 'artisan' : 'client';
   bool get _proposedByMe => order.priceProposal != null && order.priceProposedBy == _me;
   bool get _proposedByOther => order.priceProposal != null && order.priceProposedBy.isNotEmpty && !_proposedByMe;
@@ -122,6 +127,8 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
   @override
   Widget build(BuildContext context) {
     if (order.isPriceAgreed) return _buildAgreed();
+    // Sans texte ni bouton, la carte serait vide : les boutons du bas suffisent.
+    if (_artisanUsesBottomButtons) return const SizedBox.shrink();
 
     return Container(
       width: double.infinity,
@@ -138,20 +145,21 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
           Row(children: [
             const Icon(Icons.handshake_outlined, color: kMisonGold, size: 22),
             10.width,
-            Expanded(child: Text('Prix de la prestation', style: boldTextStyle(size: 16, color: kMisonDark))),
-          ]),
-          // Ouvrier : explication ; client : juste le prix (pas de texte).
-          if (widget.isArtisan) ...[
-            8.height,
-            Text(
-              'Mettez-vous d\'accord avec le client sur le prix (par message ou par appel), '
-              'avant de partir ou une fois sur place. Il doit le valider avant le début de la prestation.',
-              style: secondaryTextStyle(size: 13),
+            // Client : « Prix proposé » tant qu'il n'a pas validé, puis
+            // « Prix de la prestation » une fois le prix validé.
+            Expanded(
+              child: Text(
+                !widget.isArtisan && _proposedByOther ? 'Prix proposé' : 'Prix de la prestation',
+                style: boldTextStyle(size: 16, color: kMisonDark),
+              ),
             ),
-          ],
-          14.height,
+          ]),
+          // Ouvrier avant d'être sur place : les boutons du bas de la page
+          // (« Appeler », « Discuter », « Prix convenu ») remplacent ce bouton.
+          if (!_artisanUsesBottomButtons) 14.height,
           if (_proposedByOther) ..._otherProposal()
           else if (_proposedByMe) ..._myProposal()
+          else if (_artisanUsesBottomButtons) const SizedBox.shrink()
           else if (widget.isArtisan && !order.hasDiscussed) ...[
             // Un prix se propose après avoir discuté avec le client.
             Opacity(
@@ -192,7 +200,8 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
         _priceLine('$_otherName propose', price)
       else
         // Client : juste le prix proposé, sans les frais de service ni texte.
-        _clientPriceCard('Prix proposé', price),
+        // (le titre de la carte dit déjà « Prix proposé »).
+        _clientPriceCard('', price),
       14.height,
       // Client : il valide ou refuse dans la page « Prix proposé » qui s'ouvre
       // d'elle-même (plus de boutons ici). Ouvrier : accepter / refuser.
@@ -270,7 +279,7 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
   /// Client : montant à payer dans l'app, en gros, pour qu'il ne paie pas
   /// l'ouvrier en espèces.
   /// Client : juste le prix convenu, sans les frais de service ni texte.
-  Widget _buildClientToPay(int price) => _clientPriceCard('Prix convenu', price);
+  Widget _buildClientToPay(int price) => _clientPriceCard('Prix de la prestation', price);
 
   Widget _clientPriceCard(String label, int price) {
     return Container(
@@ -284,8 +293,10 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label.toUpperCase(), style: boldTextStyle(size: 13, color: kMisonGold, letterSpacing: 0.3)),
-          4.height,
+          if (label.isNotEmpty) ...[
+            Text(label.toUpperCase(), style: boldTextStyle(size: 13, color: kMisonGold, letterSpacing: 0.3)),
+            4.height,
+          ],
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,

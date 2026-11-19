@@ -261,6 +261,7 @@ class _IncomingCallButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,

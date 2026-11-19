@@ -190,7 +190,7 @@ class _HeaderBackground extends StatelessWidget {
   Widget _brand() => RichText(
         text: TextSpan(children: [
           TextSpan(
-            text: 'Mi',
+            text: 'MI',
             style: TextStyle(
                 color: _kBrandDark,
                 fontSize: 21,
@@ -198,7 +198,7 @@ class _HeaderBackground extends StatelessWidget {
                 letterSpacing: -0.5),
           ),
           TextSpan(
-            text: 'son',
+            text: 'SON',
             style: TextStyle(
                 color: _kBrandGold,
                 fontSize: 21,

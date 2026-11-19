@@ -104,6 +104,7 @@ flutter:
     - assets/logo/
     - assets/sounds/
     - assets/fonts/invoice/
+    - shorebird.yaml
 
 
   fonts:

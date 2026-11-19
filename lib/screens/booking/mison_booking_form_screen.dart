@@ -230,6 +230,12 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
+            ActionChip(
+              avatar: const Icon(Icons.map_outlined, size: 18, color: kMisonGold),
+              label: const Text('Choisir sur la carte'),
+              onPressed: _pickOnMap,
+            ),
+            8.width,
             for (final place in _favorites) ...[
               ChoiceChip(
                 avatar: Icon(favoritePlaceIcon(place.label), size: 18, color: kMisonGold),
@@ -791,7 +797,8 @@ class _MisonBookingFormScreenState extends State<MisonBookingFormScreen> {
             ),
           ),
         ),
-        if (_favorites.isNotEmpty) _buildFavoriteChips(),
+        // « Choisir sur la carte » toujours visible, puis les lieux favoris.
+        _buildFavoriteChips(),
         if (_locateStep != null)
           Padding(
             padding: const EdgeInsets.only(top: 8, left: 2, right: 2),

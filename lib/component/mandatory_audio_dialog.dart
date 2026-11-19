@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:booking_system_flutter/component/mison_audio_sheet.dart';
+import 'package:booking_system_flutter/main.dart' show appStore;
+import 'package:booking_system_flutter/utils/constant.dart' show USER_TYPE_PROVIDER;
 import 'package:nb_utils/nb_utils.dart';
 
 export 'package:booking_system_flutter/component/mison_audio_sheet.dart' show kAudioAfterAccept;
@@ -31,4 +33,24 @@ Future<void> showAfterAcceptAudio() async {
   } finally {
     _mandatoryAudioOpen = false;
   }
+}
+
+/// Client (connecté ou simple visiteur) : message de bienvenue de MISON, à la
+/// première ouverture de l'accueil (une seule fois sur ce téléphone).
+Future<void> showClientWelcomeAudio() async {
+  if (appStore.isLoggedIn && appStore.userType == USER_TYPE_PROVIDER) return;
+  const key = 'WELCOME_AUDIO_PLAYED';
+  if (getBoolAsync(key)) return;
+  final context = navigatorKey.currentContext;
+  if (context == null) return;
+  await setValue(key, true);
+  await showMisonAudioSheet(
+    context,
+    asset: kAudioWelcomeClient,
+    icon: Icons.waving_hand_rounded,
+    caption: 'Bienvenue',
+    title: 'Bienvenue sur MISON',
+    subtitle: 'Écoutez ce petit message pour bien commencer.',
+    continueLabel: 'Commencer',
+  );
 }

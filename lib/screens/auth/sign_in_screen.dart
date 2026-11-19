@@ -79,7 +79,8 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   void init() {
-    isRemember = getBoolAsync(IS_REMEMBERED);
+    // Coché par défaut (comme affiché à la première connexion).
+    isRemember = getBoolAsync(IS_REMEMBERED, defaultValue: true);
     if (isRemember) {
       emailCont.text = getStringAsync(USER_EMAIL);
       passwordCont.text = getStringAsync(USER_PASSWORD);
@@ -174,7 +175,9 @@ class _SignInScreenState extends State<SignInScreen> {
       await saveUserData(loginResponse.userData!,
           refreshToken: loginResponse.refreshToken);
 
-      await setValue(USER_PASSWORD, passwordCont.text);
+      // Pas coché : le PIN n'est pas gardé pour la prochaine connexion
+      // (changement de PIN : vérifié par le serveur).
+      await setValue(USER_PASSWORD, isRemember ? passwordCont.text : '');
       await setValue(IS_REMEMBERED, isRemember);
       await appStore.setLoginType(LOGIN_TYPE_USER);
 
@@ -650,6 +653,7 @@ class _SignInScreenState extends State<SignInScreen> {
   /// Indicatif devant le numéro : un appui ouvre / ferme la liste des pays.
   Widget _dialCodeButton(bool isOpen, VoidCallback toggle) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () {
         hideKeyboard(context);
         toggle();
@@ -1114,8 +1118,9 @@ class _SignInScreenState extends State<SignInScreen> {
               textStyle: secondaryTextStyle(size: 15, color: const Color(0xFF3A3A3A)),
               size: 18,
               onTap: (value) async {
-                await setValue(IS_REMEMBERED, isRemember);
+                // Enregistre le NOUVEL état (avant : l'ancien était enregistré).
                 isRemember = !isRemember;
+                await setValue(IS_REMEMBERED, isRemember);
                 setState(() {});
               },
             ),

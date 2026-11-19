@@ -145,7 +145,7 @@ class _PriceValidationSheetState extends State<_PriceValidationSheet> {
                   14.width,
                   Expanded(
                     child: Text(
-                      "Si vous validez, vous paierez ce prix avec ${FeatureFlags.paymentMethods}, dans l'application "
+                      "Si vous validez, vous paierez ce prix + ${order.serviceFee} francs avec ${FeatureFlags.paymentMethods}, dans l'application "
                       'MISON, à la fin de la prestation. Ne payez jamais le prestataire en espèces.',
                       style: primaryTextStyle(size: 15, color: kMisonDark.withValues(alpha: 0.85)),
                     ),
