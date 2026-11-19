@@ -12,9 +12,14 @@ import 'package:nb_utils/nb_utils.dart';
 class VoiceNotePlayer extends StatefulWidget {
   final String url;
 
-  /// Son intégré à l'app (chemin sous assets/, ex. 'sounds/avant_paiement.m4a')
-  /// à la place d'une note téléchargée.
+  /// Note de MISON (ex. kAudioBeforePayment) : servie par le serveur
+  /// (« Sons et images de l'app » du back-office), pas incluse dans l'app.
   final String? asset;
+
+  /// Appelé une fois si la note ne peut pas être lue (pas encore sur le
+  /// serveur, pas de réseau, erreur de lecture) ou n'a pas démarré au bout de
+  /// quelques secondes : une page qui impose l'écoute ne doit jamais bloquer.
+  final VoidCallback? onUnavailable;
 
   /// Appelé quand l'audio a été écouté jusqu'au bout.
   final VoidCallback? onCompleted;
@@ -34,6 +39,7 @@ class VoiceNotePlayer extends StatefulWidget {
     this.url = '',
     this.asset,
     this.onCompleted,
+    this.onUnavailable,
     this.color = Colors.white,
     this.autoPlay = false,
     this.expand = false,
@@ -89,23 +95,51 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
     // suite, sans retélécharger la note (ReleaseMode.release par défaut).
     _player.setReleaseMode(ReleaseMode.stop).catchError((e) => log('VoiceNotePlayer release: $e'));
     _player.setAudioContext(_speakerContext).catchError((e) => log('VoiceNotePlayer context: $e'));
+    final source = _source;
+    if (source == null) {
+      // Note pas (encore) disponible sur ce téléphone.
+      _error = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _unavailable());
+      return;
+    }
     // Charge la source sans jouer, pour afficher la durée tout de suite.
-    _player.setSource(_source).catchError((e) {
+    // La lecture attend la fin de ce chargement : lancées en même temps, les
+    // deux échouaient parfois sans rien dire (surtout sur iPhone).
+    _prepared = _player.setSource(source).catchError((e) {
       log('VoiceNotePlayer setSource: $e');
     });
     if (widget.autoPlay) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _state != PlayerState.playing) _toggle();
       });
+      // Toujours pas lancée après quelques secondes : on ne bloque personne.
+      _startTimeout = Timer(const Duration(seconds: 10), () {
+        if (mounted && _state != PlayerState.playing && _state != PlayerState.completed && _position == Duration.zero) {
+          _unavailable();
+        }
+      });
     }
   }
 
-  /// Note de l'app : remplacée par celle du back-office si elle a été changée.
-  Source get _source {
+  Timer? _startTimeout;
+  Future<void>? _prepared;
+  bool _reportedUnavailable = false;
+
+  void _unavailable() {
+    if (_reportedUnavailable || !mounted) return;
+    _reportedUnavailable = true;
+    widget.onUnavailable?.call();
+  }
+
+  /// Note de MISON : fichier téléchargé depuis le serveur, sinon lecture en
+  /// ligne ; null si le serveur n'en a pas (encore) donné.
+  Source? get _source {
     final asset = widget.asset;
     if (asset == null) return UrlSource(widget.url);
     final file = RemoteMedia.fileFor(asset);
-    return file != null ? DeviceFileSource(file.path) : AssetSource(asset);
+    if (file != null) return DeviceFileSource(file.path);
+    final url = RemoteMedia.urlFor(asset);
+    return url != null ? UrlSource(url) : null;
   }
 
   Future<void> _toggle() async {
@@ -125,10 +159,14 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
       // Note déjà écoutée jusqu'au bout : on repart du début.
       final atEnd = _duration > Duration.zero && _position >= _duration - const Duration(milliseconds: 300);
       if (atEnd || _state == PlayerState.completed) _position = Duration.zero;
-      await _player.play(_source, position: _position);
+      final source = _source;
+      if (source == null) throw StateError('note indisponible');
+      await _prepared?.timeout(const Duration(seconds: 8), onTimeout: () {});
+      await _player.play(source, position: _position);
     } catch (e) {
       log('VoiceNotePlayer play: $e');
       if (mounted) setState(() => _error = true);
+      _unavailable();
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -158,6 +196,7 @@ class _VoiceNotePlayerState extends State<VoiceNotePlayer> {
 
   @override
   void dispose() {
+    _startTimeout?.cancel();
     if (_playing == this) _playing = null;
     for (final s in _subs) {
       s.cancel();

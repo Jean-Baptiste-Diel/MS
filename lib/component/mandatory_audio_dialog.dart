@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/remote_media.dart';
 import 'package:flutter/material.dart';
 import 'package:booking_system_flutter/component/mison_audio_sheet.dart';
 import 'package:booking_system_flutter/main.dart' show appStore;
@@ -41,6 +42,10 @@ Future<void> showClientWelcomeAudio() async {
   if (appStore.isLoggedIn && appStore.userType == USER_TYPE_PROVIDER) return;
   const key = 'WELCOME_AUDIO_PLAYED';
   if (getBoolAsync(key)) return;
+  // Première ouverture : la note vient du serveur.
+  await RemoteMedia.ready();
+  // Pas (encore) de note : proposée à la prochaine ouverture.
+  if (!RemoteMedia.hasAudio(kAudioWelcomeClient)) return;
   final context = navigatorKey.currentContext;
   if (context == null) return;
   await setValue(key, true);

@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/utils/step_sheets.dart';
+import 'package:booking_system_flutter/utils/remote_media.dart';
 import 'package:booking_system_flutter/utils/feature_flags.dart';
 import 'package:booking_system_flutter/component/mison_rate_sheet.dart';
 import 'package:booking_system_flutter/screens/booking/mison_artisan_reviews_screen.dart';
@@ -134,6 +136,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     });
     MisonOrderDetailScreen._open.update(widget.orderId, (n) => n + 1, ifAbsent: () => 1);
     WidgetsBinding.instance.addObserver(this);
+    StepSheets.changes.addListener(_onStepSheetsChanged);
     init();
     _paymentReturnSub = MisonOrderDetailScreen._paymentReturns.stream.listen((event) {
       final (id, success) = event;
@@ -174,6 +177,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
       MisonOrderDetailScreen._open[widget.orderId] = n;
     }
     WidgetsBinding.instance.removeObserver(this);
+    StepSheets.changes.removeListener(_onStepSheetsChanged);
     super.dispose();
   }
 
@@ -191,6 +195,29 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   }
 
   void init() => future = getMisonOrderDetail(widget.orderId);
+
+  /// Une page d'étape s'est fermée : bouton de secours et réouverture à jour.
+  void _onStepSheetsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Ferme les pages d'étape dont l'étape est passée (commande payée, prix
+  /// validé, prestation terminée, ouvrier parti), même ouvertes par un autre
+  /// écran de la même commande.
+  void _closeStaleSheets(MisonOrder order) {
+    final id = order.id;
+    if (id == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!order.isAwaitingRealizationPayment) StepSheets.close(StepSheets.id('pay', id));
+      if (!(order.needsPriceAgreement && order.priceProposal != null && order.priceProposedBy == 'artisan')) {
+        StepSheets.close(StepSheets.id('price', id));
+      }
+      if (!order.isInProgress) StepSheets.close(StepSheets.id('finish', id));
+      if (!(order.isBeforeStart && order.isPriceAgreed && !order.isEnRoute && !order.hasArrived)) {
+        StepSheets.close(StepSheets.id('go', id));
+      }
+    });
+  }
 
   // Changements de commande gérés par l'écoute OrderEvents de initState.
   @override
@@ -515,7 +542,9 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   /// [locked] : prestation en cours, la page reste affichée (ni croix, ni
   /// « Plus tard », ni retour) jusqu'à ce qu'il termine.
   Future<void> _finishPrestation(MisonOrder order, {bool locked = false}) async {
-    if (_finishOpen) return;
+    final sid = StepSheets.id('finish', order.id);
+    // Une seule page, même si la commande est ouverte deux fois.
+    if (_finishOpen || !StepSheets.claim(sid)) return;
     _finishOpen = true;
     try {
       final agreed = order.isPriceAgreed;
@@ -535,6 +564,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         mustListen: true,
         listenKey: 'finish-${order.id}',
         locked: locked,
+        stepId: sid,
       );
       if (!go || !mounted) return;
       if (agreed) {
@@ -550,6 +580,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
       if (mounted) await _reloadSilently();
     } finally {
       _finishOpen = false;
+      StepSheets.release(sid);
     }
   }
 
@@ -559,6 +590,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   void _maybeOpenFinish(MisonOrder order) {
     if (appStore.userType != USER_TYPE_PROVIDER || _finishOpen) return;
     if (!order.isInProgress || order.artisan == null) return;
+    if (StepSheets.isOpen(StepSheets.id('finish', order.id))) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _finishOpen) return;
       await _finishPrestation(order, locked: true);
@@ -652,14 +684,22 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     if (appStore.userType != USER_TYPE_PROVIDER || _goSheetOpen) return;
     if (!order.isBeforeStart || order.needsArtisanConfirmation || order.hasArrived) return;
     if (!order.isPriceAgreed || order.isEnRoute) return;
+    final sid = StepSheets.id('go', order.id);
+    if (StepSheets.isOpen(sid)) return;
     _goSheetOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Une seule page, même si la commande est ouverte deux fois.
+      if (!StepSheets.claim(sid)) {
+        _goSheetOpen = false;
+        return;
+      }
       // Attend la fin de la note obligatoire d'après l'acceptation.
       while (mounted && isAfterAcceptAudioOpen) {
         await Future.delayed(const Duration(milliseconds: 500));
       }
       if (!mounted) {
         _goSheetOpen = false;
+        StepSheets.release(sid);
         return;
       }
       final name = order.client?.fullName ?? '';
@@ -677,13 +717,21 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         footnote: 'Le client voit votre trajet en direct',
         warning: "Le client paiera ce prix dans l'application MISON à la fin de la prestation.",
         locked: true,
+        stepId: sid,
       );
+      // Fermée d'office (déjà parti, ouvert ailleurs) : rien à faire.
+      if (StepSheets.consumeForceClosed(sid)) {
+        _goSheetOpen = false;
+        StepSheets.release(sid);
+        return;
+      }
       if (go && mounted) {
         // La page reste « ouverte » jusqu'au statut à jour (en route) : sinon
         // elle se rouvrait sur l'ancien statut et l'ouvrier devait réappuyer.
         await _departTo(order);
         if (mounted) await _reloadSilently();
         _goSheetOpen = false;
+        StepSheets.release(sid);
         return;
       }
       // « Voir la carte » : la carte du trajet, puis retour sur la page.
@@ -699,6 +747,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         ));
       }
       _goSheetOpen = false;
+      StepSheets.release(sid);
       if (mounted) await _reloadSilently();
     });
   }
@@ -711,15 +760,20 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   void _maybeOpenPriceValidation(MisonOrder order) {
     if (_priceSheetOpen || appStore.userType == USER_TYPE_PROVIDER) return;
     if (!(order.needsPriceAgreement && order.priceProposal != null && order.priceProposedBy == 'artisan')) return;
+    final sid = StepSheets.id('price', order.id);
+    if (StepSheets.isOpen(sid)) return;
     _priceSheetOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) {
+      // Une seule page, même si la commande est ouverte deux fois.
+      if (!mounted || !StepSheets.claim(sid)) {
         _priceSheetOpen = false;
         return;
       }
       final answered = await showPriceValidationSheet(context, order);
+      StepSheets.consumeForceClosed(sid);
       if (answered && mounted) await _reloadSilently();
       _priceSheetOpen = false;
+      StepSheets.release(sid);
     });
   }
 
@@ -732,6 +786,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   void _maybeOpenPayment(MisonOrder order) {
     if (_paySheetOpen || _paymentVerifying) return;
     if (appStore.userType == USER_TYPE_PROVIDER || !order.isAwaitingRealizationPayment) return;
+    if (StepSheets.isOpen(StepSheets.id('pay', order.id))) return;
     _paySheetOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _paymentVerifying) {
@@ -746,6 +801,12 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     if (_paymentVerifying) {
       _paySheetOpen = false;
       TopToast.show(message: 'Paiement en cours de vérification, patientez quelques secondes.');
+      return;
+    }
+    // Une seule page de paiement, même si la commande est ouverte deux fois.
+    final sid = StepSheets.id('pay', order.id);
+    if (!StepSheets.claim(sid)) {
+      _paySheetOpen = false;
       return;
     }
     _paySheetOpen = true;
@@ -763,7 +824,9 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
       isDismissible: !locked,
       enableDrag: !locked,
       backgroundColor: Colors.transparent,
-      builder: (_) => _PaymentBottomSheet(
+      builder: (_) => StepSheetScope(
+        stepId: sid,
+        child: _PaymentBottomSheet(
         orderId: order.id ?? '',
         locked: locked,
         title: title,
@@ -829,7 +892,12 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
           }
         },
       ),
-    ).whenComplete(() => _paySheetOpen = false);
+      ),
+    ).whenComplete(() {
+      _paySheetOpen = false;
+      StepSheets.consumeForceClosed(sid);
+      StepSheets.release(sid);
+    });
   }
 
   Future<void> _startCall(MisonOrder order) async {
@@ -924,6 +992,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
               if (order != null) _maybeOpenPriceValidation(order);
               if (order != null) _maybeOpenGoToClient(order);
               if (order != null) _maybeOpenFinish(order);
+              if (order != null) _closeStaleSheets(order);
               if (completed != _completed) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted) setState(() => _completed = completed);
@@ -1151,9 +1220,13 @@ class _OrderDetailBody extends StatelessWidget {
     // - Ouvrier, prix validé, pas encore parti : page « Aller chez le client ».
     // - Client, prestation à payer : page de paiement (sauf pendant la
     //   vérification d'un paiement : « Vérification du paiement… » reste affiché).
-    final finishBySheet = showSetFeeButton;
-    final goBySheet = showGoButton && order.isPriceAgreed && !order.isEnRoute;
-    final payBySheet = _showPayButton && order.isAwaitingRealizationPayment && !paymentVerifying;
+    // Seulement pendant que la page est affichée : sinon le bouton revient
+    // (jamais bloqué sans page ni bouton).
+    final finishBySheet = showSetFeeButton && StepSheets.isOpen(StepSheets.id('finish', order.id));
+    final goBySheet = showGoButton && order.isPriceAgreed && !order.isEnRoute &&
+        StepSheets.isOpen(StepSheets.id('go', order.id));
+    final payBySheet = _showPayButton && order.isAwaitingRealizationPayment && !paymentVerifying &&
+        StepSheets.isOpen(StepSheets.id('pay', order.id));
     final showPrimaryAction = showAcceptButton ||
         (showGoButton && !goBySheet) ||
         showStartButton ||
@@ -2486,6 +2559,11 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
                         if (!mounted) return;
                         setState(() => _listenedOrders.add(widget.orderId));
                       },
+                      // Note illisible : le client peut quand même payer.
+                      onUnavailable: () {
+                        if (!mounted) return;
+                        setState(() => _listenedOrders.add(widget.orderId));
+                      },
                     ),
                   ),
                   if (!_audioDone) ...[
@@ -3354,6 +3432,7 @@ class _PaymentAudioMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!RemoteMedia.hasAudio(asset)) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),

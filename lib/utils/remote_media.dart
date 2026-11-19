@@ -7,8 +7,13 @@ import 'package:http/http.dart' as http;
 import 'package:nb_utils/nb_utils.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Sons et images de l'app remplaçables depuis le back-office (« Sons et
-/// images de l'app »), sans nouvelle version.
+/// Sons et images de l'app gérés depuis le back-office (« Sons et images de
+/// l'app »), sans nouvelle version.
+///
+/// Notes vocales : uniquement sur le serveur (plus incluses dans l'app). Tant
+/// qu'une note n'est pas téléchargée, elle se lit en ligne ; sans note, les
+/// pages qui imposent l'écoute ne bloquent pas.
+/// Images : celle du back-office si elle a été remplacée, sinon celle de l'app.
 ///
 /// Au démarrage, l'app demande au serveur la liste des fichiers remplacés,
 /// télécharge ceux qui ont changé et les garde sur le téléphone : ils servent
@@ -16,6 +21,7 @@ import 'package:path_provider/path_provider.dart';
 /// remis à l'origine) utilise le fichier de l'app.
 class RemoteMedia {
   static const _prefsKey = 'APP_MEDIA_FILES';
+  static const _urlsKey = 'APP_MEDIA_URLS';
 
   /// Fichier de l'app → élément du back-office.
   static const assetKeys = <String, String>{
@@ -29,6 +35,9 @@ class RemoteMedia {
 
   /// Élément → chemin du fichier téléchargé.
   static Map<String, String> _files = {};
+
+  /// Élément → adresse sur le serveur (lecture en ligne avant téléchargement).
+  static Map<String, String> _urls = {};
   static bool _loaded = false;
   static Future<void>? _syncing;
 
@@ -38,8 +47,11 @@ class RemoteMedia {
     try {
       final raw = getStringAsync(_prefsKey);
       if (raw.isNotEmpty) _files = Map<String, String>.from(jsonDecode(raw) as Map);
+      final urls = getStringAsync(_urlsKey);
+      if (urls.isNotEmpty) _urls = Map<String, String>.from(jsonDecode(urls) as Map);
     } catch (_) {
       _files = {};
+      _urls = {};
     }
   }
 
@@ -51,6 +63,24 @@ class RemoteMedia {
     if (path == null) return null;
     final file = File(path);
     return file.existsSync() ? file : null;
+  }
+
+  /// Adresse sur le serveur de [asset] (pas encore téléchargé).
+  static String? urlFor(String asset) {
+    _load();
+    final key = assetKeys[asset];
+    return key == null ? null : _urls[key];
+  }
+
+  /// Une note vocale est disponible (téléchargée ou lisible en ligne).
+  static bool hasAudio(String asset) => fileFor(asset) != null || urlFor(asset) != null;
+
+  /// Attend la mise à jour en cours (ou en lance une), au plus [timeout].
+  static Future<void> ready({Duration timeout = const Duration(seconds: 8)}) async {
+    _load();
+    try {
+      await sync().timeout(timeout);
+    } catch (_) {}
   }
 
   /// Met à jour les fichiers depuis le serveur. Ne lève jamais ; un seul
@@ -68,10 +98,14 @@ class RemoteMedia {
       if (!dir.existsSync()) dir.createSync(recursive: true);
 
       final next = <String, String>{};
+      final urls = <String, String>{};
       for (final item in items.whereType<Map>()) {
         final key = item['key']?.toString() ?? '';
         final url = item['url']?.toString() ?? '';
         if (!assetKeys.containsValue(key) || url.isEmpty) continue;
+        urls[key] = url;
+        // Lisible en ligne tout de suite, pendant le téléchargement.
+        _urls[key] = url;
         final ext = _extension(url);
         final path = '${dir.path}/$key-${item['version']}$ext';
         if (!File(path).existsSync()) {
@@ -95,7 +129,9 @@ class RemoteMedia {
         }
       }
       _files = next;
+      _urls = urls;
       await setValue(_prefsKey, jsonEncode(next));
+      await setValue(_urlsKey, jsonEncode(urls));
     } catch (e) {
       log('[RemoteMedia] $e');
     }

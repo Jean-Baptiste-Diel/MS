@@ -1,9 +1,12 @@
+import 'package:booking_system_flutter/utils/step_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold, kMisonDark, kMisonFieldBg;
 import 'package:booking_system_flutter/screens/support_chat/voice_note_player.dart';
+import 'package:booking_system_flutter/utils/remote_media.dart';
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-/// Messages audio de MISON (fichiers dans assets/sounds/).
+/// Notes vocales de MISON : identifiants des fichiers servis par le serveur
+/// (« Sons et images de l'app » du back-office), plus inclus dans l'app.
 const kAudioBeforePayment = 'sounds/avant_paiement.m4a';
 const kAudioAfterAccept = 'sounds/apres_acceptation.m4a';
 const kAudioWorkerPaymentReminder = 'sounds/rappel_paiement_ouvrier.m4a';
@@ -34,7 +37,11 @@ Future<bool> showMisonAudioSheet(
   String? laterLabel,
   String? listenKey,
   bool locked = false,
+  String? stepId,
 }) async {
+  // Note pas disponible (pas encore sur le serveur, pas de réseau) : page
+  // sans lecteur, et rien à écouter pour continuer.
+  if (asset != null && !RemoteMedia.hasAudio(asset)) asset = null;
   final key = listenKey ?? asset;
   final mustWait = mustListen && asset != null && !(key != null && _listenedKeys.contains(key));
   // [locked] : ne se ferme que par le bouton principal (ni croix, ni retour).
@@ -46,7 +53,9 @@ Future<bool> showMisonAudioSheet(
     isDismissible: !noClose,
     enableDrag: !noClose,
     backgroundColor: Colors.transparent,
-    builder: (_) => _MisonAudioSheet(
+    builder: (_) => StepSheetScope(
+      stepId: stepId,
+      child: _MisonAudioSheet(
       asset: asset,
       title: title,
       subtitle: subtitle,
@@ -59,6 +68,7 @@ Future<bool> showMisonAudioSheet(
       laterLabel: laterLabel,
       listenKey: key,
       locked: locked,
+    ),
     ),
   );
   return ok == true;
@@ -165,6 +175,10 @@ class _MisonAudioSheetState extends State<_MisonAudioSheet> {
                           expand: true,
                           onCompleted: () {
                             if (widget.listenKey != null) _listenedKeys.add(widget.listenKey!);
+                            if (mounted) setState(() => _listened = true);
+                          },
+                          // Note illisible : le bouton se débloque quand même.
+                          onUnavailable: () {
                             if (mounted) setState(() => _listened = true);
                           },
                         ),

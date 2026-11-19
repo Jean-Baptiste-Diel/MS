@@ -203,9 +203,13 @@ workflows:
           find . -name "Podfile" -execdir pod install \;
       - name: Shorebird patch ios
         script: |
-          # Correctif d'abord en « staging » : à tester sur un iPhone, puis à
-          # publier depuis la console Shorebird (Promote).
-          shorebird patch ios --release-version=latest --track=staging -- \
+          # Correctif publié sur « stable » : reçu par toutes les installations
+          # de la dernière version Shorebird (TestFlight compris).
+          # --allow-asset-diffs : les notes vocales ont été retirées de l'app
+          # (servies par le serveur) ; les anciens fichiers restent inutilisés.
+          # Une fois la version sur l'App Store : passer à --track=staging,
+          # tester, puis « Promote » dans la console Shorebird.
+          shorebird patch ios --release-version=latest --track=stable --allow-asset-diffs -- \
             --export-options-plist=/Users/builder/export_options.plist
     publishing:
       email:

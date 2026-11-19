@@ -1,3 +1,4 @@
+import 'package:booking_system_flutter/utils/step_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold, kMisonDark;
 import 'package:booking_system_flutter/model/mison_order_model.dart';
 import 'package:booking_system_flutter/network/rest_apis.dart';
@@ -21,7 +22,10 @@ Future<bool> showPriceValidationSheet(BuildContext context, MisonOrder order) as
     isDismissible: false,
     enableDrag: false,
     backgroundColor: Colors.transparent,
-    builder: (_) => _PriceValidationSheet(order: order),
+    builder: (_) => StepSheetScope(
+      stepId: StepSheets.id('price', order.id),
+      child: _PriceValidationSheet(order: order),
+    ),
   );
   return answered == true;
 }
