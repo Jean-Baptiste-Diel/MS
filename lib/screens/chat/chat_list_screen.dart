@@ -47,7 +47,7 @@ class _ChatListScreenState extends State<ChatListScreen> with AutoRefreshMixin {
   Future<void> onAutoRefresh() async {
     final res = await _fetch();
     ChatUnreadStore.refresh();
-    if (mounted) setState(() => _future = Future.value(res));
+    if (mounted) setState(() { _future = Future.value(res); });
   }
 
   void _load() {

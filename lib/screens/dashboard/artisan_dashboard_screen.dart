@@ -298,7 +298,7 @@ class _ArtisanHomeFragmentState extends State<ArtisanHomeFragment> with AutoRefr
   @override
   Future<void> onAutoRefresh() async {
     final res = await getMisonOrders();
-    if (mounted) setState(() => _future = Future.value(res));
+    if (mounted) setState(() { _future = Future.value(res); });
   }
 
   @override
@@ -1495,7 +1495,7 @@ class _ArtisanOrdersFragmentState extends State<ArtisanOrdersFragment>
   @override
   Future<void> onAutoRefresh() async {
     final res = await getMisonOrders();
-    if (mounted) setState(() => _allFuture = Future.value(res));
+    if (mounted) setState(() { _allFuture = Future.value(res); });
   }
 
   Future<void> _fetchPosition() async {

@@ -100,7 +100,7 @@ class _MisonArtisanReviewsScreenState extends State<MisonArtisanReviewsScreen> {
                   Text('Impossible de charger les avis', style: secondaryTextStyle(size: 15)),
                   12.height,
                   TextButton(
-                    onPressed: () => setState(() => _future = getArtisanReviews(widget.artisanId)),
+                    onPressed: () => setState(() { _future = getArtisanReviews(widget.artisanId); }),
                     child: const Text('Réessayer', style: TextStyle(color: kMisonGold)),
                   ),
                 ]),

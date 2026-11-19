@@ -246,14 +246,14 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   @override
   Future<void> onAutoRefresh() async {
     final res = await getMisonOrderDetail(widget.orderId);
-    if (mounted) setState(() => future = Future.value(res));
+    if (mounted) setState(() { future = Future.value(res); });
   }
 
   Future<void> _reloadSilently() async {
     try {
       final res = await getMisonOrderDetail(widget.orderId);
       if (!mounted) return;
-      setState(() => future = Future.value(res));
+      setState(() { future = Future.value(res); });
       if (res.data != null && !res.data!.isAwaitingAnyPayment) _stopPaymentPolling();
     } catch (e) {
       log('[OrderDetail] $e');
@@ -274,7 +274,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
       try {
         final res = await getMisonOrderDetail(widget.orderId);
         if (!mounted || _paymentPollTimer == null) return;
-        setState(() => future = Future.value(res));
+        setState(() { future = Future.value(res); });
         if (res.data != null && !res.data!.isAwaitingAnyPayment) {
           _stopPaymentPolling();
           if (res.data!.isCompleted) {
