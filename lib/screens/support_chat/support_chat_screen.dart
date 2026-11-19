@@ -1358,10 +1358,43 @@ class _ChatInputState extends State<ChatInput> {
     });
   }
 
+  /// « Galerie » : une photo OU une vidéo, au choix dans la même galerie.
+  Future<void> _pickFromGallery() async {
+    if (!_videoEnabled) return _pickImage(ImageSource.gallery);
+    final picked = await _picker.pickMedia(
+      imageQuality: kChatPhotoQuality,
+      maxWidth: kChatPhotoMaxSide,
+      maxHeight: kChatPhotoMaxSide,
+    );
+    if (picked == null || !mounted) return;
+    if (_isVideoFile(picked)) {
+      await _useVideo(File(picked.path));
+    } else {
+      setState(() {
+        _selectedImage = File(picked.path);
+        _selectedVideo = null;
+      });
+    }
+  }
+
+  static const _videoExtensions = {'.mp4', '.mov', '.m4v', '.3gp', '.webm', '.mkv', '.avi'};
+
+  bool _isVideoFile(XFile file) {
+    final mime = file.mimeType ?? '';
+    if (mime.startsWith('video/')) return true;
+    if (mime.startsWith('image/')) return false;
+    final path = file.path.toLowerCase();
+    final dot = path.lastIndexOf('.');
+    return dot >= 0 && _videoExtensions.contains(path.substring(dot));
+  }
+
   Future<void> _pickVideo(ImageSource source) async {
     final picked = await _picker.pickVideo(source: source, maxDuration: _maxVideoDuration);
     if (picked == null || !mounted) return;
-    final file = File(picked.path);
+    await _useVideo(File(picked.path));
+  }
+
+  Future<void> _useVideo(File file) async {
     if (await file.length() > _maxVideoBytes) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1388,10 +1421,11 @@ class _ChatInputState extends State<ChatInput> {
             children: [
               ListTile(
                 leading: Icon(Icons.photo_library_outlined, color: kMisonGold),
+                // Photo ou vidéo, dans la même galerie.
                 title: const Text('Galerie'),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  _pickImage(ImageSource.gallery);
+                  _pickFromGallery();
                 },
               ),
               ListTile(
@@ -1404,16 +1438,8 @@ class _ChatInputState extends State<ChatInput> {
               ),
               if (_videoEnabled) ...[
               ListTile(
-                leading: Icon(Icons.video_library_outlined, color: kMisonGold),
-                title: const Text('Vidéo de la galerie'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickVideo(ImageSource.gallery);
-                },
-              ),
-              ListTile(
                 leading: Icon(Icons.videocam_outlined, color: kMisonGold),
-                title: const Text('Filmer une vidéo (1 min max)'),
+                title: const Text('Filmer une vidéo'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _pickVideo(ImageSource.camera);

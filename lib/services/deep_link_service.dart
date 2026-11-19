@@ -81,7 +81,7 @@ class DeepLinkService {
     }
     // https://mison.app/payment/success?order_id=xxx
     if ((uri.scheme == 'https' || uri.scheme == 'http') &&
-        uri.host == 'mison.app' &&
+        (uri.host == 'mison.app' || uri.host == 'api.mison.app' || uri.host == 'dev-api.mison.app') &&
         uri.pathSegments.contains('payment')) {
       log('[DeepLink] Payment https matched — segments=${uri.pathSegments} params=${uri.queryParameters}');
       final success = uri.pathSegments.last == 'success';

@@ -116,6 +116,9 @@ workflows:
       app_store_connect: test jean1
     environment:
       <<: *ios_env
+      # Même Xcode pour la version et ses correctifs : sinon Shorebird voit du
+      # code natif « différent » et refuse le correctif.
+      xcode: 26.6
       groups:
         - firebase_config
         - code_signing
@@ -176,6 +179,9 @@ workflows:
       app_store_connect: test jean1
     environment:
       <<: *ios_env
+      # Même Xcode pour la version et ses correctifs : sinon Shorebird voit du
+      # code natif « différent » et refuse le correctif.
+      xcode: 26.6
       groups:
         - firebase_config
         - code_signing
@@ -206,10 +212,14 @@ workflows:
           # Correctif publié sur « stable » : reçu par toutes les installations
           # de la dernière version Shorebird (TestFlight compris).
           # --allow-asset-diffs : les notes vocales ont été retirées de l'app
+          # --allow-native-diffs : écarts de compilation des bibliothèques
+          # Swift (CryptoSwift…) sans changement natif réel. Ne JAMAIS l'utiliser
+          # si pubspec.yaml, pubspec.lock, Podfile.lock ou ios/ ont changé
+          # depuis la version : il faut alors une nouvelle release.
           # (servies par le serveur) ; les anciens fichiers restent inutilisés.
           # Une fois la version sur l'App Store : passer à --track=staging,
           # tester, puis « Promote » dans la console Shorebird.
-          shorebird patch ios --release-version=latest --track=stable --allow-asset-diffs -- \
+          shorebird patch ios --release-version=latest --track=stable --allow-asset-diffs --allow-native-diffs -- \
             --export-options-plist=/Users/builder/export_options.plist
     publishing:
       email:

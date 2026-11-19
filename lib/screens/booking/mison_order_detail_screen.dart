@@ -1803,7 +1803,7 @@ class _PriceStepButtons extends StatelessWidget {
                 opacity: discussed ? 1 : 0.45,
                 child: _PriceStepButton(
                   icon: Icons.handshake_outlined,
-                  label: 'Prix convenu\navec le client',
+                  label: 'Entrer le prix\nconvenu avec\nle client',
                   onTap: discussed
                       ? onAgreedPrice
                       : () => TopToast.show(
@@ -1858,7 +1858,7 @@ class _PriceStepButton extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Text(label, maxLines: 2, style: primaryTextStyle(size: 14, color: fg, height: 1.2)),
+                    child: Text(label, maxLines: 3, style: primaryTextStyle(size: 14, color: fg, height: 1.15)),
                   ),
                 ),
               ],
