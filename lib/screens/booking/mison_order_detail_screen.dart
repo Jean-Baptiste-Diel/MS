@@ -206,6 +206,25 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
 
   void init() => future = getMisonOrderDetail(widget.orderId);
 
+  /// Commande plus accessible (confiée à un autre ouvrier par MISON, ou d'un
+  /// autre compte) : les pages d'étape se ferment et la page se débloque, pour
+  /// ne pas rester coincé sur « Terminer la prestation » ou le paiement.
+  Widget _orderGone(Widget child) {
+    final id = widget.orderId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final step in const ['finish', 'go', 'pay', 'price']) {
+        StepSheets.close(StepSheets.id(step, id));
+      }
+      if (mounted && (_locked || _completed)) {
+        setState(() {
+          _locked = false;
+          _completed = false;
+        });
+      }
+    });
+    return child;
+  }
+
   /// Une page d'étape s'est fermée (ici ou sur un autre écran de la même
   /// commande) : la commande est rechargée, pour ne jamais rester sur un
   /// statut dépassé (ex. « Prix proposé » alors qu'il vient d'être validé).
@@ -990,14 +1009,14 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
             errorBuilder: (error) => isNotFoundError(error)
                 // Commande d'un autre compte, ou prise par un autre artisan :
                 // réessayer ne servirait à rien, on propose de revenir.
-                ? AppEmptyState(
+                ? _orderGone(AppEmptyState(
                     type: AppEmptyStateType.empty,
                     title: kOrderUnavailableMessage,
                     subtitle: 'Elle a peut-être été prise par un autre ouvrier, annulée, '
                         'ou appartient à un autre compte.',
                     retryLabel: 'Retour',
                     onRetry: () => Navigator.of(context).maybePop(),
-                  )
+                  ))
                 : AppEmptyState(
                     type: AppEmptyStateType.error,
                     title: error,
