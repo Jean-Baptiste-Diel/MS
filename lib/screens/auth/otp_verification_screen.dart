@@ -112,7 +112,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       // Client : connecté directement, on arrive sur l'accueil.
       if (response.userData != null && (response.accessToken ?? '').isNotEmpty) {
         await api.saveUserData(response.userData!, refreshToken: response.refreshToken);
-        if ((widget.password ?? '').isNotEmpty) await setValue(USER_PASSWORD, widget.password);
+        if ((widget.password ?? '').isNotEmpty) await setValue(USER_PASSWORD, widget.password, print: false);
         await appStore.setLoginType(LOGIN_TYPE_USER);
         authService.verifyFirebaseUser();
         appStore.setLoading(false);

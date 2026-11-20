@@ -24,6 +24,14 @@ const kCallCancelled = 'cancelled';
 const kCallMissed = 'missed';
 /// L'appelé a décroché et rejoint l'appel : l'appelant passe en « appel en cours ».
 const kCallAccepted = 'accepted';
+/// L'appelé est déjà en ligne (autre appel) : l'appel ne sonne pas chez lui.
+const kCallBusy = 'busy';
+
+/// Marqueur « en appel » gardé sur le téléphone (lu aussi app en arrière-plan,
+/// où l'appel en cours n'est pas visible) : {order_id, at}.
+const kInCallKey = 'mison_in_call';
+/// Au-delà, le marqueur est ignoré (appel mal terminé, app tuée).
+const kInCallValidity = Duration(hours: 2);
 
 // ── Identifiant de l'appel dans l'écran d'appel du téléphone (CallKit) ──────
 // Un identifiant UNIQUE par appel (recommandation Apple). Avant, c'était
@@ -150,6 +158,9 @@ Future<void> markCallMissed(String orderId) => _setStatus(orderId, kCallMissed);
 
 /// L'appelé a décroché et il est dans l'appel.
 Future<void> markCallAccepted(String orderId) => _setStatus(orderId, kCallAccepted);
+
+/// L'appelé est déjà en ligne : l'appelant entend « occupé ».
+Future<void> markCallBusy(String orderId) => _setStatus(orderId, kCallBusy);
 
 /// L'appelant raccroche avant que l'appelé ait répondu.
 Future<void> markCallCancelled(String orderId) => _setStatus(orderId, kCallCancelled);

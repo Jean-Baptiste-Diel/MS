@@ -15,8 +15,14 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 final String _WS_BASE = '${DOMAIN_URL.replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://')}/ws/chat';
 const String _CONVERSATIONS_ENDPOINT = '${BASE_URL}chat/conversations';
 
-enum MessageStatus { sent, pending, failed }
+/// refused : message non envoyé à cause de son contenu (numéro de téléphone),
+/// affiché comme un message supprimé sur WhatsApp.
+enum MessageStatus { sent, pending, failed, refused }
 enum MessageType { text, image, audio, video, call }
+
+
+/// Message refusé parce qu'il contient un numéro de téléphone.
+const kPhoneNumberRefused = 'Message non envoyé : les numéros de téléphone ne passent pas ici.';
 
 class SupportChatMessage {
   final String id;
@@ -181,6 +187,9 @@ class SupportChatService {
 
   /// Émet le message d'erreur envoyé par le serveur quand un message n'a pas pu être traité
   final _errorController = StreamController<String>.broadcast();
+  /// Message refusé pour son contenu (numéro de téléphone) : réessayer ne
+  /// servirait à rien, il faut le modifier.
+  final _refusedController = StreamController<String>.broadcast();
 
   Stream<List<SupportChatMessage>> get historyStream => _historyController.stream;
   Stream<SupportChatMessage> get newMessageStream => _newMessageController.stream;
@@ -198,6 +207,7 @@ class SupportChatService {
   }
   Stream<bool> get connectionStream => _connectionController.stream;
   Stream<String> get errorStream => _errorController.stream;
+  Stream<String> get refusedStream => _refusedController.stream;
 
   /// false : conversation en lecture seule (prestation terminée, aucune
   /// nouvelle commande en cours entre le client et le prestataire).
@@ -363,6 +373,10 @@ class SupportChatService {
           canSend = false;
           blockedMe = blockedMe || !blockedByMe;
           if (!_blockedController.isClosed) _blockedController.add(null);
+        } else if (json['code'] == 'phone_number') {
+          // Texte court, quel que soit celui du serveur.
+          if (!_refusedController.isClosed) _refusedController.add(kPhoneNumberRefused);
+          return;
         }
         if (!_errorController.isClosed) _errorController.add(error);
       }
@@ -556,6 +570,7 @@ class SupportChatService {
     _newMessageController.close();
     _connectionController.close();
     _errorController.close();
+    _refusedController.close();
     _closedController.close();
     _blockedController.close();
   }

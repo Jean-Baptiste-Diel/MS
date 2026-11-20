@@ -1,6 +1,7 @@
 import 'package:booking_system_flutter/utils/step_sheets.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart' show kMisonGold, kMisonDark;
 import 'package:booking_system_flutter/model/mison_order_model.dart';
+import 'package:booking_system_flutter/component/mison_price_agreement_card.dart' show misonPriceDetail;
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/feature_flags.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
@@ -100,7 +101,10 @@ class _PriceValidationSheetState extends State<_PriceValidationSheet> {
               Text('PRIX PROPOSÉ PAR ${_artisanName.toUpperCase()}',
                   style: boldTextStyle(size: 15, color: kMisonGold, letterSpacing: 0.3)),
               6.height,
-              Text(_fcfa(price), style: primaryTextStyle(size: 36, color: kMisonDark, weight: FontWeight.w600)),
+              // Total à valider (prestation + matériel), le détail dessous.
+              Text(_fcfa(price + (order.materialsProposal ?? 0)),
+                  style: primaryTextStyle(size: 36, color: kMisonDark, weight: FontWeight.w600)),
+              misonPriceDetail(labour: price, materials: order.materialsProposal),
               22.height,
 
               // Valider

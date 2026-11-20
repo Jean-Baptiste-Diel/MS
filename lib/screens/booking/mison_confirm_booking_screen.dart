@@ -13,6 +13,7 @@ import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/component/mandatory_audio_dialog.dart' show showClientOrderAudio;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
 import 'package:nb_utils/nb_utils.dart';
@@ -66,12 +67,31 @@ class _MisonConfirmBookingScreenState
     }
   }
 
+  /// Position actuelle du client (si la localisation est déjà autorisée ;
+  /// rien n'est demandé ici). Sert à savoir s'il commande loin de l'adresse.
+  Future<Position?> _clientPosition() async {
+    try {
+      final perm = await Geolocator.checkPermission();
+      if (perm != LocationPermission.always && perm != LocationPermission.whileInUse) return null;
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 6)),
+      );
+    } catch (_) {
+      try {
+        return await Geolocator.getLastKnownPosition();
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
   Future<void> _confirm() async {
     if (_isLoading) return;
     // Note de MISON avant de valider (règles dans showClientOrderAudio).
     if (!await showClientOrderAudio(context) || !mounted) return;
     setState(() => _isLoading = true);
     try {
+      final here = await _clientPosition();
       final request = MisonCreateOrderRequest(
         service: widget.service.id ?? '',
         description: widget.description,
@@ -81,6 +101,8 @@ class _MisonConfirmBookingScreenState
         latitude: widget.latitude,
         longitude: widget.longitude,
         artisanId: widget.artisanId,
+        clientLatitude: here?.latitude,
+        clientLongitude: here?.longitude,
       );
 
       final response = await createMisonOrder(request);

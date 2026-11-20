@@ -70,6 +70,14 @@ class MisonOrder {
   // Accord sur le prix avant le déplacement : propositions du client ou du
   // prestataire, puis prix convenu (ferme, payé à la fin).
   int? priceProposal;
+  /// Matériel à acheter par l'ouvrier (facultatif) : proposé puis convenu.
+  /// Payé par le client avec la prestation, reversé en entier à l'ouvrier.
+  /// Prix du matériel retiré de l'app (2026-11-20) : ni saisi, ni affiché,
+  /// des deux côtés. Passer à true pour le remettre.
+  static const bool materialsEnabled = false;
+
+  int? materialsProposal;
+  int? materialsPrice;
   String priceProposedBy = ''; // 'client' ou 'artisan'
 
   /// Client et ouvrier ont discuté (messages des deux côtés ou appel décroché) :
@@ -82,6 +90,17 @@ class MisonOrder {
   // Interrupteur du back-office : tant qu'il est éteint, la commande suit
   // l'ancien parcours (prix fixé à la fin), comme les anciennes versions.
   bool priceAgreementRequired = false;
+  /// Client loin de l'adresse quand il a commandé (ex. en voyage) : l'ouvrier
+  /// peut partir sans prix convenu ; le prix est validé avant de commencer.
+  bool clientAway = false;
+  /// L'ouvrier est allé voir sur place avant de fixer son prix : le prix est
+  /// validé par le client avant de commencer.
+  bool priceOnSite = false;
+  /// Le client a refusé le dernier prix de l'ouvrier : il doit en proposer un autre.
+  bool priceDeclined = false;
+
+  /// Prix fixé une fois sur place (client absent ou ouvrier parti voir d'abord).
+  bool get priceAtArrival => clientAway || priceOnSite;
 
   MisonOrder({
     this.id,
@@ -155,11 +174,20 @@ class MisonOrder {
     )
       ..serverIsImmediate = json['is_immediate'] is bool ? json['is_immediate'] as bool : null
       ..priceProposal = num.tryParse(json['price_proposal']?.toString() ?? '')?.round()
+      ..materialsProposal = materialsEnabled
+          ? num.tryParse(json['materials_proposal']?.toString() ?? '')?.round()
+          : null
+      ..materialsPrice = materialsEnabled
+          ? num.tryParse(json['materials_price']?.toString() ?? '')?.round()
+          : null
       ..priceProposedBy = json['price_proposed_by']?.toString() ?? ''
       ..hasDiscussed = json['has_discussed'] != false
       ..directRequest = json['direct_request'] == true
       ..agreedPrice = num.tryParse(json['agreed_price']?.toString() ?? '')?.round()
-      ..priceAgreementRequired = json['price_agreement_required'] == true;
+      ..priceAgreementRequired = json['price_agreement_required'] == true
+      ..clientAway = json['client_away'] == true
+      ..priceOnSite = json['price_on_site'] == true
+      ..priceDeclined = json['price_declined'] == true;
   }
 
   Map<String, dynamic> toJson() {
@@ -489,6 +517,9 @@ class MisonCreateOrderRequest {
   double? latitude;
   double? longitude;
   String? artisanId; // UUID — prestataire souhaité
+  /// Position actuelle du client quand il commande (pas l'adresse).
+  double? clientLatitude;
+  double? clientLongitude;
 
   MisonCreateOrderRequest({
     required this.service,
@@ -499,6 +530,8 @@ class MisonCreateOrderRequest {
     this.latitude,
     this.longitude,
     this.artisanId,
+    this.clientLatitude,
+    this.clientLongitude,
   });
 
   Map<String, dynamic> toJson() => {
@@ -509,6 +542,8 @@ class MisonCreateOrderRequest {
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
         if (artisanId != null) 'artisan_id': artisanId,
+        if (clientLatitude != null) 'client_latitude': double.parse(clientLatitude!.toStringAsFixed(7)),
+        if (clientLongitude != null) 'client_longitude': double.parse(clientLongitude!.toStringAsFixed(7)),
       };
 }
 

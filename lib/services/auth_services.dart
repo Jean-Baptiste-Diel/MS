@@ -142,11 +142,11 @@ class AuthService {
           if (result.credential != null && result.credential!.email.validate().isNotEmpty) {
             appStore.setLoading(true);
 
-            await setValue(APPLE_EMAIL, result.credential!.email);
-            await setValue(APPLE_GIVE_NAME, result.credential!.fullName!.givenName);
-            await setValue(APPLE_FAMILY_NAME, result.credential!.fullName!.familyName);
+            await setValue(APPLE_EMAIL, result.credential!.email, print: false);
+            await setValue(APPLE_GIVE_NAME, result.credential!.fullName!.givenName, print: false);
+            await setValue(APPLE_FAMILY_NAME, result.credential!.fullName!.familyName, print: false);
           } else {
-            await setValue(APPLE_EMAIL, user.email.validate());
+            await setValue(APPLE_EMAIL, user.email.validate(), print: false);
           }
           await setValue(APPLE_UID, user.uid.validate());
 

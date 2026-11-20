@@ -485,7 +485,7 @@ Future<void> clearPreferences() async {
   await appStore.setLoginType('');
   // « Souviens-toi de moi » coché : le code PIN reste prérempli à la
   // prochaine connexion (comme l'identifiant).
-  if (!getBoolAsync(IS_REMEMBERED, defaultValue: true)) await setValue(USER_PASSWORD, '');
+  if (!getBoolAsync(IS_REMEMBERED, defaultValue: true)) await setValue(USER_PASSWORD, '', print: false);
   await removeKey(IS_SUBSCRIBED_FOR_PUSH_NOTIFICATION);
 
   try {
@@ -720,7 +720,7 @@ Future<MisonNotificationResponse> getMisonNotifications({bool offlineFallback = 
     final response = await buildHttpResponse('notifications', method: HttpMethodType.GET);
     final body = await handleResponse(response);
     final res = MisonNotificationResponse.fromJson(body);
-    setValue(_notificationsCacheKey, jsonEncode(body));
+    setValue(_notificationsCacheKey, jsonEncode(body), print: false);
     appStore.setUnreadCount(res.unreadCount);
     return res;
   } catch (e) {
@@ -912,7 +912,7 @@ Future<MisonOrderResponse> getMisonOrders({String? status, bool offlineFallback 
       // Prestataire : rappel « Commencer » tant qu'il est arrivé sans commencer
       // (liste complète seulement, pour retirer aussi les rappels périmés).
       StartReminder.syncOrders(result.data ?? []);
-      setValue(_ordersCacheKey, jsonEncode(body));
+      setValue(_ordersCacheKey, jsonEncode(body), print: false);
       _forgetClosedChats(result.data ?? []);
       // 3 commandes passées (client) ou terminées (ouvrier) : noter l'app.
       AppReviewPrompt.maybeAsk(result.data ?? []);
@@ -1219,8 +1219,10 @@ Future<void> flushPendingCallLogs() async {
 
 /// Accord sur le prix avant le déplacement : proposer (ou contre-proposer),
 /// accepter ou refuser le prix proposé par l'autre partie.
-Future<MisonActionResponse> proposeOrderPrice(String orderId, int price) =>
-    _priceAction(orderId, 'propose-price', {'price': price});
+/// [materials] : matériel à acheter (facultatif), payé par le client avec la
+/// prestation et reversé en entier à l'ouvrier.
+Future<MisonActionResponse> proposeOrderPrice(String orderId, int price, {int? materials}) =>
+    _priceAction(orderId, 'propose-price', {'price': price, if (materials != null && materials > 0) 'materials': materials});
 
 Future<MisonActionResponse> acceptOrderPrice(String orderId) => _priceAction(orderId, 'accept-price');
 
@@ -1238,8 +1240,13 @@ Future<MisonActionResponse> _priceAction(String orderId, String action, [Map<Str
 }
 
 /// POST /api/orders/{id}/depart - L'ouvrier part chez le client (mini-carte)
-Future<MisonActionResponse> artisanDepart(String orderId) async {
-  final response = await buildHttpResponse('orders/$orderId/depart', method: HttpMethodType.POST);
+/// [priceOnSite] : l'ouvrier part voir avant de fixer son prix (prix sur place).
+Future<MisonActionResponse> artisanDepart(String orderId, {bool priceOnSite = false}) async {
+  final response = await buildHttpResponse(
+    'orders/$orderId/depart',
+    method: HttpMethodType.POST,
+    request: priceOnSite ? {'price_on_site': true} : null,
+  );
   final result = MisonActionResponse.fromJson(await handleResponse(response));
     _orderChanged(orderId);
     return result;

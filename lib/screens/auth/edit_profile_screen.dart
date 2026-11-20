@@ -171,9 +171,9 @@ class EditProfileScreenState extends State<EditProfileScreen> {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
 
         // Mettre à jour les valeurs locales
-        await setValue(FIRST_NAME, fNameCont.text.trim());
-        await setValue(LAST_NAME, lNameCont.text.trim());
-        await setValue(CONTACT_NUMBER, buildMobileNumber());
+        await setValue(FIRST_NAME, fNameCont.text.trim(), print: false);
+        await setValue(LAST_NAME, lNameCont.text.trim(), print: false);
+        await setValue(CONTACT_NUMBER, buildMobileNumber(), print: false);
         if (isEntreprise) await setValue(COMPANY_NAME, companyNameCont.text.trim());
 
         appStore.setFirstName(fNameCont.text.trim());

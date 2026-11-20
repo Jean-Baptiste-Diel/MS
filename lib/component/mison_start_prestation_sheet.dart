@@ -1,4 +1,5 @@
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
+import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart' show MisonOrderDetailScreen;
 import 'package:booking_system_flutter/network/rest_apis.dart';
 import 'package:booking_system_flutter/utils/top_toast.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,19 @@ Future<bool> showMisonStartPrestationSheet(BuildContext context, {required Strin
   if (misonStartSheetOpen) return false;
   misonStartSheetOpen = true;
   try {
+    // Prix pas encore validé alors qu'il doit l'être (prix fixé sur place,
+    // client absent, accord obligatoire) : pas de « Commencer ». La commande
+    // s'ouvre à la place, sur « Entrer le prix de la prestation ».
+    try {
+      final order = (await getMisonOrderDetail(orderId)).data;
+      if (order != null && !order.isPriceAgreed && (order.priceAtArrival || order.priceAgreementRequired)) {
+        MisonOrderDetailScreen.openOnce(navigatorKey.currentState, orderId);
+        return false;
+      }
+    } catch (_) {
+      // Pas de réseau : le panneau s'ouvre ; le serveur refusera s'il manque le prix.
+    }
+    if (!context.mounted) return false;
     return await _showStartSheet(context, orderId: orderId);
   } finally {
     misonStartSheetOpen = false;

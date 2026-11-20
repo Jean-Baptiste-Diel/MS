@@ -177,7 +177,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
       // Pas coché : le PIN n'est pas gardé pour la prochaine connexion
       // (changement de PIN : vérifié par le serveur).
-      await setValue(USER_PASSWORD, isRemember ? passwordCont.text : '');
+      await setValue(USER_PASSWORD, isRemember ? passwordCont.text : '', print: false);
       await setValue(IS_REMEMBERED, isRemember);
       await appStore.setLoginType(LOGIN_TYPE_USER);
 

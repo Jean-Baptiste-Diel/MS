@@ -1,3 +1,5 @@
+import 'package:booking_system_flutter/model/mison_service_model.dart';
+import 'package:booking_system_flutter/screens/booking/mison_booking_form_screen.dart';
 import 'package:booking_system_flutter/utils/step_sheets.dart';
 import 'package:booking_system_flutter/utils/remote_media.dart';
 import 'package:booking_system_flutter/utils/feature_flags.dart';
@@ -212,7 +214,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   Widget _orderGone(Widget child) {
     final id = widget.orderId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      for (final step in const ['finish', 'go', 'pay', 'price']) {
+      for (final step in const ['finish', 'go', 'pay', 'price', 'setprice']) {
         StepSheets.close(StepSheets.id(step, id));
       }
       if (mounted && (_locked || _completed)) {
@@ -251,6 +253,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         StepSheets.close(StepSheets.id('price', id));
       }
       if (!order.isInProgress) StepSheets.close(StepSheets.id('finish', id));
+      if (_setPriceReason(order) == null) StepSheets.close(StepSheets.id('setprice', id));
       if (!(order.isBeforeStart && order.isPriceAgreed && !order.isEnRoute && !order.hasArrived)) {
         StepSheets.close(StepSheets.id('go', id));
       }
@@ -382,11 +385,11 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
 
   /// Signale le départ au serveur (mini-carte des deux côtés, client prévenu),
   /// puis ouvre la navigation. Déjà en route : rouvre simplement la navigation.
-  Future<void> _departTo(MisonOrder order) async {
+  Future<void> _departTo(MisonOrder order, {bool priceOnSite = false}) async {
     if (!order.isEnRoute) {
       appStore.setLoading(true);
       try {
-        await artisanDepart(order.id!);
+        await artisanDepart(order.id!, priceOnSite: priceOnSite);
       } catch (e) {
         TopToast.show(message: e.toString(), type: TopToastType.error);
         return;
@@ -588,7 +591,10 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         caption: locked ? 'Prestation en cours' : 'Prestation terminée',
         title: agreed ? formatFcfa(order.agreedPrice!) : 'Montant à fixer',
         subtitle: agreed
-            ? 'Prix convenu avec le client. Terminez quand le travail est fini.'
+            ? ((order.materialsPrice ?? 0) > 0
+                ? 'Prix de la prestation convenu avec le client, + matériel ${formatFcfa(order.materialsPrice!)}. '
+                    'Terminez quand le travail est fini.'
+                : 'Prix convenu avec le client. Terminez quand le travail est fini.')
             : 'Indiquez le montant quand le travail est fini.',
         continueLabel: agreed ? 'Terminer la prestation' : 'Saisir le montant',
         laterLabel: locked ? null : 'Plus tard',
@@ -704,10 +710,45 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
   }
 
 
+  /// Ouvrier, avant de fixer le prix : il va d'abord voir chez le client.
+  /// Sur place, l'écran reste sur « Entrer le prix de la prestation » ; le
+  /// client valide le prix avant que la prestation commence.
+  /// Pas de confirmation : la carte avec la position du client s'ouvre aussitôt.
+  Future<void> _goFirst(MisonOrder order) async {
+    if (!mounted) return;
+    await _departTo(order, priceOnSite: true);
+  }
+
+  /// Client : nouvelle commande du même service, adressée directement au même
+  /// prestataire (demande directe, comme depuis sa fiche).
+  void _bookAgain(MisonOrder order) {
+    final artisan = order.artisan;
+    final service = order.service;
+    if (artisan?.id == null || service?.id == null) return;
+    MisonBookingFormScreen(
+      service: MisonService(
+        id: service!.id,
+        name: service.name,
+        imageUrl: service.imageUrl,
+        isAvailable: true,
+      ),
+      artisanId: artisan!.id,
+      artisanName: artisan.fullName,
+    ).launch(context);
+  }
+
   /// Ouvrier, bouton « Prix convenu avec le client » : il saisit le prix
   /// sur lequel ils se sont mis d'accord (le client le valide ensuite).
   Future<void> _enterAgreedPrice(MisonOrder order) async {
-    final sent = await proposeAgreedPrice(context, order);
+    // Pas encore parti : petite flèche « Vérifier d'abord chez le client »
+    // en bas de la page du prix.
+    final beforeTrip = order.isBeforeStart && !order.needsArtisanConfirmation &&
+        !order.isEnRoute && !order.hasArrived && !order.isPriceAgreed;
+    final sent = await proposeAgreedPrice(
+      context,
+      order,
+      onGoFirst: beforeTrip ? () => _goFirst(order) : null,
+    );
     if (sent && mounted) await _reloadSilently();
   }
 
@@ -787,6 +828,70 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     });
   }
 
+  bool _setPriceOpen = false;
+
+  /// Ouvrier : écran bloqué sur la saisie du prix.
+  /// - 'declined' : le client a refusé le prix proposé ;
+  /// - 'onsite' : arrivé chez le client sans prix (client absent à la
+  ///   commande, ou parti voir d'abord) : prix à fixer avant de commencer.
+  /// null : rien à bloquer (prix validé, ou envoyé et en attente du client).
+  String? _setPriceReason(MisonOrder order) {
+    if (appStore.userType != USER_TYPE_PROVIDER || order.artisan == null) return null;
+    if (!order.needsPriceAgreement || order.priceProposal != null) return null;
+    if (order.priceDeclined) return 'declined';
+    if (order.hasArrived && (order.priceAtArrival || order.priceAgreementRequired)) return 'onsite';
+    return null;
+  }
+
+  void _maybeOpenSetPrice(MisonOrder order) {
+    final reason = _setPriceReason(order);
+    if (reason == null || _setPriceOpen) return;
+    final sid = StepSheets.id('setprice', order.id);
+    if (StepSheets.isOpen(sid)) return;
+    _setPriceOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !StepSheets.claim(sid)) {
+        _setPriceOpen = false;
+        return;
+      }
+      while (mounted && isAfterAcceptAudioOpen) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      final declined = reason == 'declined';
+      final go = mounted &&
+          await showMisonAudioSheet(
+            context,
+            icon: declined ? Icons.cancel_outlined : Icons.place_outlined,
+            caption: declined ? 'Prix refusé' : 'Vous êtes sur place',
+            title: declined ? 'Le client a refusé le prix proposé' : 'Entrer le prix de la prestation',
+            subtitle: declined
+                ? 'Proposez un nouveau prix.'
+                : "Mettez-vous d'accord avec le client, puis entrez le prix. "
+                    'Il doit le valider avant que vous commenciez.',
+            continueLabel: declined ? 'Proposer un nouveau prix' : 'Entrer le prix de la prestation',
+            // Prix refusé : il peut d'abord en reparler avec le client.
+            laterLabel: declined ? 'Appeler le client' : null,
+            locked: true,
+            stepId: sid,
+          );
+      if (StepSheets.consumeForceClosed(sid) || !mounted) {
+        _setPriceOpen = false;
+        StepSheets.release(sid);
+        return;
+      }
+      if (go) {
+        await _enterAgreedPrice(order);
+      } else {
+        await _startCall(order);
+      }
+      // Statut à jour avant de libérer : la page revient tant qu'aucun
+      // nouveau prix n'est envoyé.
+      if (mounted) await _reloadSilently();
+      _setPriceOpen = false;
+      StepSheets.release(sid);
+    });
+  }
+
   /// Page « valider le prix » à l'écran (évite de l'ouvrir deux fois).
   bool _priceSheetOpen = false;
 
@@ -849,7 +954,9 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
     final total = order.clientTotal;
     final price = order.prestationPrice;
     final desc = price != null
-        ? 'Prestation ${formatFcfa(price)} + frais de service ${formatFcfa(order.serviceFee)}.'
+        ? 'Prestation ${formatFcfa(price)}'
+            '${(order.materialsPrice ?? 0) > 0 ? ' + matériel ${formatFcfa(order.materialsPrice!)}' : ''}'
+            ' + frais de service ${formatFcfa(order.serviceFee)}.'
         : "Ces frais correspondent à la prestation réalisée par l'ouvrier.";
     final feeLabel = total != null ? formatFcfa(total) : 'Montant non défini';
 
@@ -1029,6 +1136,7 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
               if (order != null) _maybeOpenPayment(order);
               if (order != null) _maybeOpenPriceValidation(order);
               if (order != null) _maybeOpenGoToClient(order);
+              if (order != null) _maybeOpenSetPrice(order);
               if (order != null) _maybeOpenFinish(order);
               if (order != null) _closeStaleSheets(order);
               if (completed != _completed) {
@@ -1141,8 +1249,10 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
                 )),
                 onNavigate: () => _openNavigation(order),
                 onDepart: () => _departTo(order),
+                onGoFirst: () => _goFirst(order),
                 onArrive: () => _markArrived(order),
                 onAgreedPrice: () => _enterAgreedPrice(order),
+                onBookAgain: () => _bookAgain(order),
               );
             },
           ),
@@ -1183,8 +1293,12 @@ class _OrderDetailBody extends StatelessWidget {
   final VoidCallback onTrack;
   final VoidCallback onNavigate;
   final VoidCallback onDepart;
+  /// Ouvrier, avant de partir : aller voir chez le client avant de fixer le prix.
+  final VoidCallback onGoFirst;
   /// Ouvrier, prix pas encore convenu : saisie du prix convenu.
   final VoidCallback onAgreedPrice;
+  /// Client, commande terminée : nouvelle commande au même prestataire.
+  final VoidCallback onBookAgain;
   final VoidCallback onArrive;
 
   const _OrderDetailBody({
@@ -1212,6 +1326,8 @@ class _OrderDetailBody extends StatelessWidget {
     required this.onDepart,
     required this.onArrive,
     required this.onAgreedPrice,
+    required this.onGoFirst,
+    required this.onBookAgain,
   });
 
   bool get _isArtisan => appStore.userType == USER_TYPE_PROVIDER;
@@ -1276,7 +1392,10 @@ class _OrderDetailBody extends StatelessWidget {
     // Ouvrier, avant de partir, prix pas encore convenu : appeler, discuter,
     // puis « Prix convenu avec le client » (3 boutons à la place du bouton
     // principal). Prix déjà envoyé : en attente de la validation du client.
-    final priceStep = showGoButton && !order.isPriceAgreed;
+    // Client absent à la commande : départ sans prix (bouton « Aller chez le
+    // client » directement) ; sur place, le prix avant « Commencer ».
+    final priceStep = (showGoButton && !order.isPriceAgreed && !order.priceAtArrival) ||
+        (showStartButton && (order.priceAtArrival || order.priceAgreementRequired) && !order.isPriceAgreed);
     final priceWaitingClient = order.priceProposal != null && order.priceProposedBy == 'artisan';
     final showPriceButtons = priceStep && !priceWaitingClient && order.canChat;
 
@@ -1304,7 +1423,7 @@ class _OrderDetailBody extends StatelessWidget {
     } else if (showGoButton) {
       // « Accord sur le prix obligatoire » (back-office) : grisé tant que le
       // client n'a pas validé le prix.
-      final waitPrice = order.priceAgreementRequired && !order.isPriceAgreed;
+      final waitPrice = order.priceAgreementRequired && !order.isPriceAgreed && !order.priceAtArrival;
       // Déjà en route : on rouvre l'itinéraire (pas un 2e « Aller chez le client »).
       primaryActionLabel = order.isEnRoute ? "Voir l'itinéraire" : 'Aller chez le client';
       primaryActionIcon = order.isEnRoute ? Icons.navigation_rounded : Icons.directions_car_rounded;
@@ -1421,6 +1540,44 @@ class _OrderDetailBody extends StatelessWidget {
                       statusLabel: order.isPendingDirectRequest ? 'En attente de réponse' : statusLabel(order.status),
                       serviceName: order.service?.name ?? '',
                     ),
+                  // Commande terminée : refaire appel au même prestataire
+                  // (demande directe), en haut de la page.
+                  if (order.isCompleted && order.artisan?.id != null && order.service?.id != null) ...[
+                    12.height,
+                    // Carte blanche bordée : « Réserver à nouveau » en or,
+                    // « Même service · Même prestataire » dessous.
+                    Material(
+                      color: context.cardColor,
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        onTap: onBookAgain,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.refresh_rounded, color: kMisonGold, size: 24),
+                                  6.width,
+                                  Text('Réserver à nouveau', style: boldTextStyle(size: 18, color: kMisonGold)),
+                                ],
+                              ),
+                              4.height,
+                              Text('Même service · Même prestataire',
+                                  style: secondaryTextStyle(size: 14, color: kMisonDark.withValues(alpha: 0.65))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   20.height,
                 ],
 
@@ -1667,7 +1824,9 @@ class _OrderDetailBody extends StatelessWidget {
                     onCall: onCall,
                     onChat: onChat,
                     onAgreedPrice: onAgreedPrice,
-                    onDepart: order.priceAgreementRequired ? null : onDepart,
+                    // « Aller d'abord chez le client » : seulement avant le départ
+                    // (prix fixé sur place, validé avant de commencer).
+                    onDepart: null,
                   )
                 else
                 Row(
@@ -1778,7 +1937,7 @@ class _PriceStepButtons extends StatelessWidget {
   final VoidCallback onCall;
   final VoidCallback onChat;
   final VoidCallback onAgreedPrice;
-  /// Accord sur le prix pas obligatoire : il peut partir sans prix convenu.
+  /// Aller d'abord chez le client (vérifier avant de fixer le prix).
   final VoidCallback? onDepart;
 
   const _PriceStepButtons({
@@ -1835,12 +1994,34 @@ class _PriceStepButtons extends StatelessWidget {
             ),
           ],
         ),
-        if (onDepart != null)
-          TextButton(
-            onPressed: onDepart,
-            child: Text('Partir sans prix convenu',
-                style: secondaryTextStyle(size: 14, color: kMisonDark.withValues(alpha: 0.75))),
+        // Flèche tout en bas : aller vérifier chez le client avant de fixer
+        // le prix (le prix sera fixé sur place).
+        if (onDepart != null) ...[
+          6.height,
+          InkWell(
+            onTap: onDepart,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text("Vérifier d'abord chez le client",
+                        style: boldTextStyle(size: 14, color: kMisonDark.withValues(alpha: 0.8))),
+                  ),
+                  8.width,
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: const BoxDecoration(color: kMisonGold, shape: BoxShape.circle),
+                    child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                  ),
+                ],
+              ),
+            ),
           ),
+        ],
       ],
     );
   }
@@ -2309,6 +2490,11 @@ class _ArtisanSummaryCard extends StatelessWidget {
     final client = order.client?.fullName ?? '';
     return _InfoCard(children: [
       _InfoRow(icon: Icons.payments_rounded, label: 'Prix de la prestation', value: _fcfa(order.prestationPrice)),
+      // Matériel (facultatif) : payé par le client, reversé en entier à l'ouvrier.
+      if ((order.materialsPrice ?? 0) > 0) ...[
+        _Divider(),
+        _InfoRow(icon: Icons.construction_rounded, label: 'Prix du matériel', value: _fcfa(order.materialsPrice)),
+      ],
       // Client : il paie la prestation + les frais de service Mison.
       if (forClient) ...[
         _Divider(),
@@ -2535,8 +2721,10 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
     final isOrange = _selected == 'orange';
     // Modes de paiement indisponibles tant que la note vocale n'est pas finie.
     final canPay   = (isWave || isOrange) && _audioDone;
-    final showWave = FeatureFlags.paymentMethodList.contains('Wave');
-    final showOrange = FeatureFlags.orangeMoney;
+    // Wave et Orange Money toujours affichés ; un mode non activé dans le
+    // back-office est grisé avec « Bientôt » et ne se choisit pas.
+    final waveOn = FeatureFlags.paymentMethodList.contains('Wave');
+    final orangeOn = FeatureFlags.paymentMethodList.contains('Orange Money');
     final btnColor = isWave ? _wave : isOrange ? _orange : kMisonGold;
     final btnLabel = isOrange
         ? 'Payer avec Orange Money'
@@ -2624,9 +2812,10 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
                   20.height,
                   ],
 
-                  // Moyen de paiement (si plusieurs) : pastilles
-                  if (showWave && showOrange) ...[
+                  // Moyen de paiement : pastilles (toujours les deux)
+                  ...[
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: _MethodPill(
@@ -2635,6 +2824,7 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
                             color: _wave,
                             selected: isWave,
                             enabled: _audioDone,
+                            soon: !waveOn,
                             onTap: () => setState(() => _selected = 'wave'),
                           ),
                         ),
@@ -2646,6 +2836,7 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
                             color: _orange,
                             selected: isOrange,
                             enabled: _audioDone,
+                            soon: !orangeOn,
                             onTap: () => setState(() => _selected = 'orange'),
                           ),
                         ),
@@ -2713,6 +2904,8 @@ class _MethodPill extends StatelessWidget {
   final Color color;
   final bool selected;
   final bool enabled;
+  /// Mode pas encore ouvert : grisé, « Bientôt » dessous, ne se choisit pas.
+  final bool soon;
   final VoidCallback onTap;
 
   const _MethodPill({
@@ -2721,16 +2914,45 @@ class _MethodPill extends StatelessWidget {
     required this.color,
     required this.selected,
     this.enabled = true,
+    this.soon = false,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (soon) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Opacity(
+            opacity: 0.4,
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.matrix(<double>[
+                0.2126, 0.7152, 0.0722, 0, 0,
+                0.2126, 0.7152, 0.0722, 0, 0,
+                0.2126, 0.7152, 0.0722, 0, 0,
+                0, 0, 0, 1, 0,
+              ]),
+              child: _pill(context),
+            ),
+          ),
+          4.height,
+          Text('Bientôt', style: secondaryTextStyle(size: 12, weight: FontWeight.w600)),
+        ],
+      );
+    }
     return Opacity(
       opacity: enabled ? 1 : 0.4,
       child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
+      child: _pill(context),
+    ),
+    );
+  }
+
+  Widget _pill(BuildContext context) {
+    return AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
@@ -2752,9 +2974,7 @@ class _MethodPill extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    ),
-    );
+      );
   }
 }
 

@@ -198,8 +198,13 @@ class _CancelOrderSheetState extends State<_CancelOrderSheet> {
       log('cancelMisonOrder error: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
+      // Raison donnée par le serveur (ex. « Cette commande ne peut plus être
+      // annulée ») ; message général seulement si elle est vide (réseau).
+      final reason = e.toString().replaceFirst('Exception: ', '').trim();
       TopToast.show(
-        message: 'Impossible d\'annuler cette commande pour le moment. Réessayez plus tard.',
+        message: reason.isNotEmpty && !reason.contains('SocketException')
+            ? reason
+            : 'Impossible d\'annuler cette commande pour le moment. Réessayez plus tard.',
         type: TopToastType.error,
       );
     }

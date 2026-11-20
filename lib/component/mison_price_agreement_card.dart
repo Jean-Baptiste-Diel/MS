@@ -18,6 +18,27 @@ String _fcfa(num value) {
 /// Accord sur le prix entre le client et le prestataire, avant le déplacement.
 /// Le prestataire annonce son prix ; le client l'accepte ou le refuse (pas de
 /// contre-proposition). Le prix accepté est ferme et payé à la fin.
+
+/// Détail du prix pour le client : prestation, matériel (s'il y en a).
+Widget misonPriceDetail({required int labour, int? materials, Color? color}) {
+  if ((materials ?? 0) <= 0) return const SizedBox.shrink();
+  final style = secondaryTextStyle(size: 14, color: color ?? kMisonDark.withValues(alpha: 0.75));
+  Widget line(String label, int amount) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(children: [
+          Expanded(child: Text(label, style: style)),
+          Text(_fcfa(amount), style: style),
+        ]),
+      );
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      line('Prix de la prestation', labour),
+      line('Prix du matériel', materials!),
+    ],
+  );
+}
+
 class MisonPriceAgreementCard extends StatefulWidget {
   final MisonOrder order;
   final bool isArtisan;
@@ -44,7 +65,7 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
   /// Ouvrier, pas encore sur place, aucun prix proposé : il passe par les
   /// boutons du bas de la page.
   bool get _artisanUsesBottomButtons =>
-      widget.isArtisan && !order.hasArrived && order.priceProposal == null;
+      widget.isArtisan && order.priceProposal == null && (!order.hasArrived || order.priceAtArrival || order.priceAgreementRequired);
   String get _me => widget.isArtisan ? 'artisan' : 'client';
   bool get _proposedByMe => order.priceProposal != null && order.priceProposedBy == _me;
   bool get _proposedByOther => order.priceProposal != null && order.priceProposedBy.isNotEmpty && !_proposedByMe;
@@ -91,11 +112,11 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
   }
 
   Future<void> _propose({bool counter = false}) async {
-    final price = await _askPrice(context, order: order, counter: counter);
-    if (price == null) return;
+    final input = await _askPrice(context, order: order, counter: counter);
+    if (input == null) return;
     await _run(
-      () => proposeOrderPrice(order.id!, price),
-      'Proposition de ${_fcfa(price)} envoyée à ${_otherName.split(' ').first}.',
+      () => proposeOrderPrice(order.id!, input.price, materials: input.materials),
+      'Proposition de ${_fcfa(input.price + (input.materials ?? 0))} envoyée à ${_otherName.split(' ').first}.',
     );
   }
 
@@ -205,8 +226,9 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: Text(_fcfa(price), style: boldTextStyle(size: 30, color: kMisonDark)),
+          child: Text(_fcfa(price + (order.materialsProposal ?? 0)), style: boldTextStyle(size: 30, color: kMisonDark)),
         ),
+        misonPriceDetail(labour: price, materials: order.materialsProposal),
       14.height,
       // Client : il valide ou refuse dans la page « Prix proposé » qui s'ouvre
       // d'elle-même (plus de boutons ici). Ouvrier : accepter / refuser.
@@ -225,14 +247,9 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
 
   List<Widget> _myProposal() {
     return [
+      // Juste « Vous avez proposé » et le prix (plus de « Modifier ma
+      // proposition » ni de ligne d'attente).
       _priceLine('Vous avez proposé', order.priceProposal!),
-      6.height,
-      _waitingLine('En attente de la réponse de ${_otherName.split(' ').first}'),
-      // Seul le prestataire propose un prix.
-      if (widget.isArtisan) ...[
-        14.height,
-        _button('Modifier ma proposition', Icons.edit_rounded, () => _propose()),
-      ],
     ];
   }
 
@@ -264,7 +281,11 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
         12.width,
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Prix convenu : ${_fcfa(price)}', style: boldTextStyle(size: 16, color: kMisonDark)),
+            Text(
+              'Prix convenu : ${_fcfa(price)}'
+              '${(order.materialsPrice ?? 0) > 0 ? ' + matériel ${_fcfa(order.materialsPrice!)}' : ''}',
+              style: boldTextStyle(size: 16, color: kMisonDark),
+            ),
             4.height,
             Text(
               widget.isArtisan
@@ -284,9 +305,12 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
   /// Client : montant à payer dans l'app, en gros, pour qu'il ne paie pas
   /// l'ouvrier en espèces.
   /// Client : juste le prix convenu, sans les frais de service ni texte.
-  Widget _buildClientToPay(int price) => _clientPriceCard('Prix de la prestation', price);
+  Widget _buildClientToPay(int price) =>
+      _clientPriceCard('Prix de la prestation', price, materials: order.materialsPrice);
 
-  Widget _clientPriceCard(String label, int price) {
+  /// Prix pour le client : total (prestation + matériel) en grand, et le
+  /// détail dessous quand il y a du matériel.
+  Widget _clientPriceCard(String label, int price, {int? materials}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -305,8 +329,9 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(_fcfa(price), style: boldTextStyle(size: 30, color: kMisonDark)),
+            child: Text(_fcfa(price + (materials ?? 0)), style: boldTextStyle(size: 30, color: kMisonDark)),
           ),
+          misonPriceDetail(labour: price, materials: materials),
         ],
       ),
     );
@@ -358,26 +383,36 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
   }
 }
 
-/// Saisie du prix proposé. Retourne le montant (FCFA) ou null si annulé.
-Future<int?> _askPrice(BuildContext context, {required MisonOrder order, bool counter = false}) {
+/// Prix proposé : main-d'œuvre et matériel à acheter (facultatif).
+typedef _PriceInput = ({int price, int? materials});
+
+/// Saisie du prix proposé : main-d'œuvre, puis matériel à acheter
+/// (facultatif). Retourne les montants (FCFA) ou null si annulé.
+/// [onGoFirst] : petite flèche discrète en bas, pour aller voir chez le
+/// client avant de fixer le prix (la page se ferme, puis l'action est lancée).
+Future<_PriceInput?> _askPrice(BuildContext context,
+    {required MisonOrder order, bool counter = false, VoidCallback? onGoFirst}) {
   final ctrl = TextEditingController(text: order.priceProposal?.toString() ?? '');
-  return showModalBottomSheet<int>(
+  final materialsCtrl = TextEditingController(text: order.materialsProposal?.toString() ?? '');
+  return showModalBottomSheet<_PriceInput>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (sheetContext) {
+      int? amount(TextEditingController c) => int.tryParse(c.text.replaceAll(RegExp(r'\D'), ''));
       void submit() {
-        final value = int.tryParse(ctrl.text.replaceAll(RegExp(r'\D'), ''));
+        final value = amount(ctrl);
         if (value == null || value <= 0) {
-          TopToast.show(message: 'Veuillez saisir un montant valide');
+          TopToast.show(message: 'Veuillez saisir le prix de la main-d\u2019œuvre');
           return;
         }
-        Navigator.pop(sheetContext, value);
+        final materials = MisonOrder.materialsEnabled ? amount(materialsCtrl) : null;
+        Navigator.pop(sheetContext, (price: value, materials: (materials ?? 0) > 0 ? materials : null));
       }
 
       // Même présentation que la page de paiement (fiche Google Play) :
       // logo, petit libellé en couleur, prix en grand, bouton, mention, avertissement.
-      return Padding(
+      return StatefulBuilder(builder: (sheetContext, setSheetState) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
         child: Container(
           decoration: BoxDecoration(
@@ -409,17 +444,17 @@ Future<int?> _askPrice(BuildContext context, {required MisonOrder order, bool co
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(counter ? 'VOTRE CONTRE-PROPOSITION' : 'PRIX CONVENU AVEC LE CLIENT',
+                      Text(counter ? 'VOTRE CONTRE-PROPOSITION' : 'PRIX DE LA MAIN-D\u2019ŒUVRE',
                           style: boldTextStyle(size: 15, color: kMisonGold, letterSpacing: 0.3)),
                       6.height,
-                      // Le prix, saisi en grand
+                      // Main-d'œuvre, saisie en grand
                       TextField(
                         controller: ctrl,
                         autofocus: true,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => submit(),
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) => setSheetState(() {}),
                         style: primaryTextStyle(size: 36, color: kMisonDark, weight: FontWeight.w600),
                         decoration: InputDecoration(
                           hintText: '0',
@@ -437,6 +472,45 @@ Future<int?> _askPrice(BuildContext context, {required MisonOrder order, bool co
                           ),
                         ),
                       ),
+                      // Matériel à acheter : facultatif, reversé en entier à
+                      // l'ouvrier (retiré pour le moment).
+                      if (MisonOrder.materialsEnabled) ...[
+                      18.height,
+                      Text('PRIX DU MATÉRIEL À ACHETER (FACULTATIF)',
+                          style: boldTextStyle(size: 13, color: kMisonGold, letterSpacing: 0.3)),
+                      4.height,
+                      TextField(
+                        controller: materialsCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        textInputAction: TextInputAction.done,
+                        onChanged: (_) => setSheetState(() {}),
+                        onSubmitted: (_) => submit(),
+                        style: primaryTextStyle(size: 24, color: kMisonDark, weight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          hintText: '0',
+                          hintStyle: primaryTextStyle(size: 24, color: Colors.grey.shade400, weight: FontWeight.w600),
+                          suffixText: 'FCFA',
+                          suffixStyle: boldTextStyle(size: 16, color: kMisonDark.withValues(alpha: 0.6)),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                          border: InputBorder.none,
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
+                          ),
+                          focusedBorder: const UnderlineInputBorder(
+                            borderSide: BorderSide(color: kMisonGold, width: 1.5),
+                          ),
+                        ),
+                      ),
+                      if ((amount(materialsCtrl) ?? 0) > 0 && (amount(ctrl) ?? 0) > 0) ...[
+                        10.height,
+                        Text(
+                          'Total pour le client : ${_fcfa((amount(ctrl) ?? 0) + (amount(materialsCtrl) ?? 0))}',
+                          style: boldTextStyle(size: 15, color: kMisonDark),
+                        ),
+                      ],
+                      ],
                       22.height,
                       SizedBox(
                         width: double.infinity,
@@ -459,12 +533,34 @@ Future<int?> _askPrice(BuildContext context, {required MisonOrder order, bool co
                           14.width,
                           Expanded(
                             child: Text(
-                              'Le client doit valider ce prix dans l\u2019application. Une fois validé, il ne pourra plus changer.',
+                              'Le client doit valider ce prix dans l\u2019application. Une fois validé, il ne pourra plus changer.'
+                              '${MisonOrder.materialsEnabled ? ' Le matériel vous est reversé en entier.' : ''}',
                               style: primaryTextStyle(size: 15, color: kMisonDark.withValues(alpha: 0.85)),
                             ),
                           ),
                         ],
                       ),
+                      // Flèche discrète : vérifier sur place avant de fixer le prix.
+                      if (onGoFirst != null) ...[
+                        10.height,
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              onGoFirst();
+                            },
+                            // Juste une petite flèche grise, sans texte.
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Icon(Icons.arrow_forward_rounded, size: 18,
+                                  color: kMisonDark.withValues(alpha: 0.3),
+                                  semanticLabel: "Aller d'abord chez le client"),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -472,7 +568,7 @@ Future<int?> _askPrice(BuildContext context, {required MisonOrder order, bool co
             ),
           ),
         ),
-      );
+      ));
     },
   );
 }
@@ -606,12 +702,15 @@ class MisonPayInAppCard extends StatelessWidget {
 /// Ouvrier : saisit le prix convenu avec le client et l'envoie pour validation.
 /// Utilisé hors de la carte du prix (page « Prix de la prestation » avant le
 /// départ). Renvoie true si le prix a été envoyé.
-Future<bool> proposeAgreedPrice(BuildContext context, MisonOrder order) async {
-  final price = await _askPrice(context, order: order);
-  if (price == null) return false;
+Future<bool> proposeAgreedPrice(BuildContext context, MisonOrder order, {VoidCallback? onGoFirst}) async {
+  final input = await _askPrice(context, order: order, onGoFirst: onGoFirst);
+  if (input == null) return false;
   try {
-    await proposeOrderPrice(order.id!, price);
-    TopToast.show(message: 'Prix de ${_fcfa(price)} envoyé au client pour validation.', type: TopToastType.success);
+    await proposeOrderPrice(order.id!, input.price, materials: input.materials);
+    TopToast.show(
+      message: 'Prix de ${_fcfa(input.price + (input.materials ?? 0))} envoyé au client pour validation.',
+      type: TopToastType.success,
+    );
     return true;
   } catch (e) {
     TopToast.show(message: e.toString(), type: TopToastType.error);

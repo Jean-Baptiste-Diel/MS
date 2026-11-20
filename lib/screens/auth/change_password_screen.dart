@@ -65,7 +65,7 @@ class ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
       try {
         final res = await changeUserPassword(request);
-        await setValue(USER_PASSWORD, newPasswordCont.text);
+        await setValue(USER_PASSWORD, newPasswordCont.text, print: false);
         appStore.setLoading(false);
         TopToast.show(message: res.message.validate());
         finish(context);

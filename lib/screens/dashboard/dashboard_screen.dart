@@ -44,8 +44,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     openColdStartAcceptedCall(); // appel décroché app fermée (iPhone et Android)
     // Prix proposé par l'ouvrier ou prestation à payer : la commande s'ouvre.
     Future.delayed(const Duration(seconds: 1), ClientOrderLock.start);
-    // Note d'ouverture du back-office (client ou ouvrier), s'il y en a une.
-    Future.delayed(const Duration(seconds: 2), showOpeningAudio);
+    // À l'ouverture : la note d'ouverture du back-office (client ou ouvrier),
+    // s'il y en a une (les autorisations sont demandées avant, au lancement).
+    Future.delayed(const Duration(milliseconds: 1500), showOpeningAudio);
     if (widget.redirectToBooking.validate(value: false)) {
       currentIndex = 1;
     }

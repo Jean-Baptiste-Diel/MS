@@ -28,6 +28,13 @@ class MisonCallSession extends ChangeNotifier {
   /// Appel en cours dans l'app (un seul à la fois).
   static final ValueNotifier<MisonCallSession?> current = ValueNotifier(null);
 
+  /// Ce téléphone est déjà en ligne sur un AUTRE appel que [orderId] : un
+  /// nouvel appel entrant doit être refusé comme « occupé ».
+  static bool busyWith(String orderId) {
+    final active = current.value;
+    return active != null && !active.ended && active.orderId != orderId;
+  }
+
   /// Canal natif de la sortie audio (écouteur / haut-parleur / Bluetooth).
   /// iOS : CallKit garde la session audio (Agora n'y touche pas), c'est donc
   /// l'app qui bascule la sortie. Android : Agora gère le haut-parleur, le
@@ -227,6 +234,7 @@ class MisonCallSession extends ChangeNotifier {
         // Micro publié dès l'entrée dans l'appel (sauf s'il a été coupé).
         await _engine?.muteLocalAudioStream(isMuted);
         _saveOngoing();
+        _setInCallMarker(true);
         notifyListeners();
         // Appelé : il est dans l'appel parce qu'il a décroché → l'appelant
         // peut passer en « appel en cours ».
@@ -451,7 +459,10 @@ class MisonCallSession extends ChangeNotifier {
         if (status == kCallCancelled) _end(message: "$otherPartyName a raccroché");
         return;
       }
-      if (status == kCallRejected) {
+      if (status == kCallBusy) {
+        // L'appelé est déjà en ligne : appel manqué pour lui (notification).
+        _end(message: '$otherPartyName est déjà en ligne, réessayez plus tard', noAnswer: true);
+      } else if (status == kCallRejected) {
         _end(message: "$otherPartyName a refusé l'appel", rejected: true);
       } else if (status == kCallMissed) {
         _end(message: "$otherPartyName n'a pas répondu", noAnswer: true);
@@ -532,6 +543,7 @@ class MisonCallSession extends ChangeNotifier {
       );
     }
     _clearOngoing();
+    _setInCallMarker(false);
     if (silent) {
       _callStatusSub?.cancel();
       await _stopRingback();
@@ -582,6 +594,21 @@ class MisonCallSession extends ChangeNotifier {
     SharedPreferences.getInstance()
         .then((p) => p.setString(_kOngoingCall, data))
         .catchError((_) => false);
+  }
+
+  /// Marqueur « en appel » (appelant comme appelé), lu par le téléphone quand
+  /// un autre appel arrive app en arrière-plan.
+  void _setInCallMarker(bool inCall) {
+    SharedPreferences.getInstance().then((p) async {
+      if (inCall) {
+        await p.setString(kInCallKey, jsonEncode({'order_id': orderId, 'at': DateTime.now().millisecondsSinceEpoch}));
+        return;
+      }
+      final raw = p.getString(kInCallKey);
+      if (raw == null) return;
+      final saved = jsonDecode(raw) as Map<String, dynamic>;
+      if (saved['order_id'] == orderId) await p.remove(kInCallKey);
+    }).catchError((_) {});
   }
 
   void _clearOngoing() {

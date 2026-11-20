@@ -63,6 +63,9 @@ class SupportChatScreen extends StatefulWidget {
 }
 
 class _SupportChatScreenState extends State<SupportChatScreen> {
+  StreamSubscription<String>? _refusedSub;
+  final ValueNotifier<String?> _restoreText = ValueNotifier(null);
+
   final SupportChatService _service = SupportChatService();
   final ScrollController _scrollController = ScrollController();
 
@@ -91,7 +94,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   void _saveCache() {
     final sent = _messages.where((m) => m.status == MessageStatus.sent && m.id.isNotEmpty).toList();
     final last = sent.length > 200 ? sent.sublist(sent.length - 200) : sent;
-    setValue(_cacheKey, jsonEncode(last.map((m) => m.toCacheJson()).toList()));
+    setValue(_cacheKey, jsonEncode(last.map((m) => m.toCacheJson()).toList()), print: false);
   }
 
   List<SupportChatMessage> _cachedMessages() {
@@ -133,7 +136,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       _error = null;
       _offline = false;
       // Garder les messages failed existants pour permettre le retry
-      _messages.removeWhere((m) => m.status != MessageStatus.failed);
+      _messages.removeWhere((m) => m.status != MessageStatus.failed && m.status != MessageStatus.refused);
     });
 
     try {
@@ -154,7 +157,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       _historySub = _service.historyStream.listen((history) {
         setState(() {
           // Supprimer les messages serveur existants, garder les failed locaux
-          _messages.removeWhere((m) => m.status != MessageStatus.failed);
+          _messages.removeWhere((m) => m.status != MessageStatus.failed && m.status != MessageStatus.refused);
           _messages.insertAll(0, history);
           // Trier par date
           _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
@@ -207,6 +210,24 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         if (mounted) setState(() {});
       });
 
+      // Numéro de téléphone refusé : pas d'« Échec · Réessayer » (réessayer
+      // ne changerait rien). La bulle disparaît, le texte revient dans la
+      // saisie pour être corrigé, et la raison s'affiche.
+      _refusedSub?.cancel();
+      _refusedSub = _service.refusedStream.listen((reason) {
+        if (!mounted) return;
+        final pending = _messages.where(
+          (m) => m.isMe && m.status == MessageStatus.pending && !m.isImage,
+        );
+        if (pending.isNotEmpty) {
+          final msg = pending.first;
+          _pendingTimers.remove(msg.localId)?.cancel();
+          // Comme un message supprimé sur WhatsApp : la bulle reste, grisée.
+          setState(() => msg.status = MessageStatus.refused);
+          _restoreText.value = msg.content;
+        }
+      });
+
       _errorSub?.cancel();
       _errorSub = _service.errorStream.listen((error) {
         if (!mounted) return;
@@ -239,7 +260,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         setState(() {
           _offline = true;
           _messages
-            ..removeWhere((m) => m.status != MessageStatus.failed)
+            ..removeWhere((m) => m.status != MessageStatus.failed && m.status != MessageStatus.refused)
             ..insertAll(0, cached)
             ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
         });
@@ -368,6 +389,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     _deletedSub?.cancel();
     _connectionSub?.cancel();
     _errorSub?.cancel();
+    _refusedSub?.cancel();
+    _restoreText.dispose();
     _closedSub?.cancel();
     _blockedSub?.cancel();
     _orderEventsSub?.cancel();
@@ -632,6 +655,44 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     );
   }
 
+  /// Message refusé (numéro de téléphone) : comme « Ce message a été
+  /// supprimé » sur WhatsApp, en gris et en italique.
+  Widget _buildRefusedBubble(SupportChatMessage msg) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: context.width() * 0.72),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(4),
+          ),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.block_rounded, size: 16, color: Colors.grey.shade600),
+            6.width,
+            Flexible(
+              child: Text(
+                kPhoneNumberRefused,
+                style: secondaryTextStyle(size: 13, color: Colors.grey.shade700, fontStyle: FontStyle.italic),
+              ),
+            ),
+            8.width,
+            Text(DateFormat('HH:mm').format(msg.createdAt), style: secondaryTextStyle(size: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(SupportChatMessage msg) {
     if (msg.isCall) return _buildCallEvent(msg);
     final isMe = msg.isMe;
@@ -639,6 +700,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     const Color bubbleOther = Color(0xFF1A1A1A);
     final isFailed = msg.status == MessageStatus.failed;
     final isPending = msg.status == MessageStatus.pending;
+    if (msg.status == MessageStatus.refused) return _buildRefusedBubble(msg);
     final hasActions = msg.id.isNotEmpty && !isPending && !isFailed;
     final canReport = _isOrderChat && !isMe && msg.id.isNotEmpty;
 
@@ -1161,6 +1223,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       onUploadAudio: _service.uploadAudio,
       onUploadVideo: _service.uploadVideo,
       onSend: _handleSend,
+      restoreText: _restoreText,
       enabled: _wsConnected,
     );
   }
@@ -1173,6 +1236,9 @@ class ChatInput extends StatefulWidget {
   final Future<String?> Function(File file) onUploadAudio;
   final Future<String> Function(File file) onUploadVideo;
   final void Function(String content, String messageType) onSend;
+
+  /// Texte à remettre dans la saisie (message refusé, à corriger).
+  final ValueNotifier<String?>? restoreText;
   final bool enabled;
 
   const ChatInput({
@@ -1181,6 +1247,7 @@ class ChatInput extends StatefulWidget {
     required this.onUploadAudio,
     required this.onUploadVideo,
     required this.onSend,
+    this.restoreText,
     this.enabled = true,
   }) : super(key: key);
 
@@ -1189,6 +1256,17 @@ class ChatInput extends StatefulWidget {
 }
 
 class _ChatInputState extends State<ChatInput> {
+  /// Message refusé : son texte revient dans la saisie (si elle est vide).
+  void _onRestoreText() {
+    final text = widget.restoreText?.value;
+    if (text == null || text.isEmpty) return;
+    if (_textController.text.trim().isEmpty) {
+      _textController.text = text;
+      _textController.selection = TextSelection.collapsed(offset: text.length);
+    }
+    widget.restoreText?.value = null;
+  }
+
   final _textController = TextEditingController();
   final _focusNode = FocusNode();
   final _picker = ImagePicker();
@@ -1235,6 +1313,7 @@ class _ChatInputState extends State<ChatInput> {
   @override
   void initState() {
     super.initState();
+    widget.restoreText?.addListener(_onRestoreText);
     _textController.addListener(() {
       final hasText = _textController.text.trim().isNotEmpty;
       if (hasText != _hasText) setState(() => _hasText = hasText);
@@ -1501,6 +1580,7 @@ class _ChatInputState extends State<ChatInput> {
 
   @override
   void dispose() {
+    widget.restoreText?.removeListener(_onRestoreText);
     _recordTimer?.cancel();
     _blinkTimer?.cancel();
     _recorder.dispose();

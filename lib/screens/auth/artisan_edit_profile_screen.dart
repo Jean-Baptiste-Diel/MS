@@ -162,9 +162,9 @@ class _ArtisanEditProfileScreenState extends State<ArtisanEditProfileScreen> {
       appStore.setLoading(false);
 
       if (body != null) {
-        await setValue(FIRST_NAME, fNameCont.text.trim());
-        await setValue(LAST_NAME, lNameCont.text.trim());
-        await setValue(CONTACT_NUMBER, _fullPhone);
+        await setValue(FIRST_NAME, fNameCont.text.trim(), print: false);
+        await setValue(LAST_NAME, lNameCont.text.trim(), print: false);
+        await setValue(CONTACT_NUMBER, _fullPhone, print: false);
         appStore.setFirstName(fNameCont.text.trim());
         appStore.setLastName(lNameCont.text.trim());
         appStore.setContactNumber(_fullPhone);

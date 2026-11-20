@@ -39,10 +39,8 @@ const _kIosSound = 'mison_notification.wav';
 /// push_service.TYPE_SOUNDS). Fichier : Android res/raw/<nom>.wav, iOS
 /// Runner/<nom>.wav ; canal Android « mison_<nom> » (un canal = un son).
 /// Les autres types gardent le son MISON.
-const Map<String, String> _kTypeSounds = {
-  'NEW_ORDER_AVAILABLE': 'nouvelle_commande',
-  'ORDER_ASSIGNED': 'nouvelle_commande',
-};
+/// Son « nouvelle commande » de l'ouvrier retiré : son MISON pour tout.
+const Map<String, String> _kTypeSounds = {};
 const Map<String, String> _kSoundChannelNames = {
   'nouvelle_commande': 'Nouvelles commandes',
 };
@@ -290,6 +288,11 @@ void _handleForegroundMessage(RemoteMessage message) {
 
   if (message.data['type'] == 'INCOMING_CALL') {
     final orderId = message.data['order_id']?.toString() ?? '';
+    // Déjà en ligne sur un autre appel : « occupé », rien ne s'affiche.
+    if (MisonCallSession.busyWith(orderId)) {
+      markCallBusy(orderId);
+      return;
+    }
     if (!MisonCallScreen.isOutgoing(orderId)) {
       MisonCallSession.dropStaleFor(orderId); // reste d'un appel précédent
       _openIncomingCall(message.data);

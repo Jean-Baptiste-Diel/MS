@@ -193,13 +193,13 @@ abstract class _AppStore with Store {
   @action
   Future<void> setToken(String val) async {
     token = val;
-    await setValue(TOKEN, val);
+    await setValue(TOKEN, val, print: false);
   }
 
   @action
   Future<void> setRefreshToken(String val) async {
     refreshToken = val;
-    await setValue(REFRESH_TOKEN, val);
+    await setValue(REFRESH_TOKEN, val, print: false);
   }
 
   @action
@@ -235,19 +235,19 @@ abstract class _AppStore with Store {
   @action
   Future<void> setUserEmail(String val) async {
     userEmail = val;
-    await setValue(USER_EMAIL, val);
+    await setValue(USER_EMAIL, val, print: false);
   }
 
   @action
   Future<void> setFirstName(String val) async {
     userFirstName = val;
-    await setValue(FIRST_NAME, val);
+    await setValue(FIRST_NAME, val, print: false);
   }
 
   @action
   Future<void> setLastName(String val) async {
     userLastName = val;
-    await setValue(LAST_NAME, val);
+    await setValue(LAST_NAME, val, print: false);
   }
   @action
   Future<void> setReferralCode(String val) async {
@@ -258,13 +258,13 @@ abstract class _AppStore with Store {
   @action
   Future<void> setContactNumber(String val) async {
     userContactNumber = val;
-    await setValue(CONTACT_NUMBER, val);
+    await setValue(CONTACT_NUMBER, val, print: false);
   }
 
   @action
   Future<void> setUserName(String val) async {
     userName = val;
-    await setValue(USERNAME, val);
+    await setValue(USERNAME, val, print: false);
   }
 
   @action

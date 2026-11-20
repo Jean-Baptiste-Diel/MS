@@ -102,6 +102,16 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       final at = p.getInt(kOutgoingCallAtKey) ?? 0;
       final recent = DateTime.now().millisecondsSinceEpoch - at < kOutgoingCallValidity.inMilliseconds;
       if (p.getString('outgoing_call_order_id') == orderId && recent) return;
+      // Déjà en ligne sur un autre appel (app en arrière-plan) : « occupé ».
+      final inCall = p.getString(kInCallKey);
+      if (inCall != null) {
+        final saved = jsonDecode(inCall) as Map<String, dynamic>;
+        final since = DateTime.now().millisecondsSinceEpoch - ((saved['at'] as num?)?.toInt() ?? 0);
+        if (saved['order_id'] != orderId && since < kInCallValidity.inMilliseconds) {
+          await markCallBusy(orderId);
+          return;
+        }
+      }
     } catch (_) {}
 
     await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
@@ -456,6 +466,12 @@ void _listenCallKitEvents() {
 
     switch (event.event) {
       case Event.actionCallIncoming:
+        // Déjà en ligne sur un autre appel : refusé comme « occupé ».
+        if (MisonCallSession.busyWith(orderId)) {
+          markCallBusy(orderId);
+          endCallKitForOrder(orderId);
+          return;
+        }
         // L'écran d'appel du téléphone sonne (iPhone : notification VoIP) :
         // si l'appelant raccroche, la sonnerie doit s'arrêter aussitôt.
         if (!MisonCallScreen.isOutgoing(orderId)) MisonCallSession.dropStaleFor(orderId);

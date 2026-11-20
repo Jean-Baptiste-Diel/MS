@@ -2,6 +2,7 @@ import 'package:booking_system_flutter/main.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
 import 'package:booking_system_flutter/screens/maintenance_mode_screen.dart';
 import 'package:booking_system_flutter/screens/mison_welcome_screen.dart';
+import 'package:booking_system_flutter/screens/permissions/mison_permissions_screen.dart' show showPermissionsIfNeeded;
 import 'package:booking_system_flutter/utils/configs.dart';
 import 'package:booking_system_flutter/utils/constant.dart';
 import 'package:flutter/material.dart';
@@ -56,10 +57,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   Future<void> _fetchAndStorePosition() async {
     try {
-      LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
+      // Pas de demande ici : la page « Autorisations » (juste après le logo)
+      // explique d'abord pourquoi MISON en a besoin.
+      final perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 6)),
@@ -87,6 +87,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     appStore.setLoading(false);
     // Laisser l'animation du logo se terminer avant de changer d'écran
     await _introDone;
+    if (!mounted) return;
+    // Autorisations demandées dès l'ouverture de l'app (connecté ou non),
+    // avant toute autre page.
+    await showPermissionsIfNeeded();
+    _fetchAndStorePosition();
     if (!mounted) return;
     if (!getBoolAsync(IS_APP_CONFIGURATION_SYNCED_AT_LEAST_ONCE)) {
       appNotSynced = true;

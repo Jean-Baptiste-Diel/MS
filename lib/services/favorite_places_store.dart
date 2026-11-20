@@ -50,7 +50,7 @@ class FavoritePlacesStore {
   }
 
   static Future<void> _save(List<FavoritePlace> places) =>
-      setValue(_key, jsonEncode(places.map((p) => p.toJson()).toList()));
+      setValue(_key, jsonEncode(places.map((p) => p.toJson()).toList()), print: false);
 
   static FavoritePlace? find(double lat, double lon) =>
       load().where((p) => p.isSamePlace(lat, lon)).firstOrNull;
