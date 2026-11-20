@@ -787,9 +787,8 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
         subtitle: name.isNotEmpty
             ? '${name.split(' ').first} a validé le prix. Vous pouvez y aller.'
             : 'Le client a validé le prix. Vous pouvez y aller.',
+        // Un seul bouton : « Aller chez le client » (plus de « Voir la carte »).
         continueLabel: 'Aller chez le client',
-        // Tant qu'il n'est pas sur place, il peut consulter la carte.
-        laterLabel: 'Voir la carte',
         footnote: 'Le client voit votre trajet en direct',
         warning: "Le client paiera ce prix dans l'application MISON à la fin de la prestation.",
         locked: true,
