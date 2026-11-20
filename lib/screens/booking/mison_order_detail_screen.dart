@@ -1602,15 +1602,8 @@ class _OrderDetailBody extends StatelessWidget {
                     onTrack: onNavigate,
                     forArtisan: true,
                   ),
-                  // Si le GPS ne détecte pas l'arrivée
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: onArrive,
-                      icon: const Icon(Icons.where_to_vote_rounded, size: 18, color: kMisonGold),
-                      label: Text('Je suis arrivé', style: boldTextStyle(size: 13, color: kMisonGold)),
-                    ),
-                  ),
+                  // Plus de bouton « Je suis arrivé » : l'arrivée est
+                  // détectée par le GPS (à l'adresse du client).
                   8.height,
                 ] else if (_artisanSummary) ...[
                   // Frais fixés : plus de carte ni d'appel/chat, un récapitulatif
@@ -1950,7 +1943,7 @@ class _PriceStepButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final discussed = order.hasDiscussed;
+    final discussed = order.hasDiscussed || order.hasArrived; // sur place : plus besoin
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

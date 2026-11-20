@@ -181,7 +181,7 @@ class _MisonPriceAgreementCardState extends State<MisonPriceAgreementCard> {
           if (_proposedByOther) ..._otherProposal()
           else if (_proposedByMe) ..._myProposal()
           else if (_artisanUsesBottomButtons) const SizedBox.shrink()
-          else if (widget.isArtisan && !order.hasDiscussed) ...[
+          else if (widget.isArtisan && !order.hasDiscussed && !order.hasArrived) ...[
             // Un prix se propose après avoir discuté avec le client.
             Opacity(
               opacity: 0.45,
