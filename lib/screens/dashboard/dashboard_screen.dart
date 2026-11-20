@@ -1,5 +1,5 @@
 import 'package:booking_system_flutter/utils/client_order_lock.dart';
-import 'package:booking_system_flutter/component/mandatory_audio_dialog.dart' show showClientWelcomeAudio;
+import 'package:booking_system_flutter/component/mandatory_audio_dialog.dart' show showOpeningAudio;
 import 'package:booking_system_flutter/component/unread_badge.dart';
 import 'package:booking_system_flutter/services/chat_unread_store.dart';
 import 'package:booking_system_flutter/component/mison_app_bar.dart';
@@ -44,8 +44,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     openColdStartAcceptedCall(); // appel décroché app fermée (iPhone et Android)
     // Prix proposé par l'ouvrier ou prestation à payer : la commande s'ouvre.
     Future.delayed(const Duration(seconds: 1), ClientOrderLock.start);
-    // Client, première ouverture : message audio de bienvenue.
-    Future.delayed(const Duration(milliseconds: 1500), showClientWelcomeAudio);
+    // Note d'ouverture du back-office (client ou ouvrier), s'il y en a une.
+    Future.delayed(const Duration(seconds: 2), showOpeningAudio);
     if (widget.redirectToBooking.validate(value: false)) {
       currentIndex = 1;
     }

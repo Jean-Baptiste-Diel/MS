@@ -11,6 +11,7 @@ import 'package:booking_system_flutter/screens/booking/mison_booking_success_scr
 import 'package:booking_system_flutter/screens/booking/mison_order_searching_screen.dart';
 import 'package:booking_system_flutter/screens/booking/mison_order_detail_screen.dart';
 import 'package:booking_system_flutter/screens/dashboard/dashboard_screen.dart';
+import 'package:booking_system_flutter/component/mandatory_audio_dialog.dart' show showClientOrderAudio;
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
@@ -66,6 +67,9 @@ class _MisonConfirmBookingScreenState
   }
 
   Future<void> _confirm() async {
+    if (_isLoading) return;
+    // Note de MISON avant de valider (règles dans showClientOrderAudio).
+    if (!await showClientOrderAudio(context) || !mounted) return;
     setState(() => _isLoading = true);
     try {
       final request = MisonCreateOrderRequest(

@@ -29,6 +29,8 @@ class RemoteMedia {
     'sounds/apres_acceptation.m4a': 'audio_apres_acceptation',
     'sounds/avant_paiement.m4a': 'audio_avant_paiement',
     'sounds/rappel_paiement_ouvrier.m4a': 'audio_rappel_paiement_ouvrier',
+    'sounds/ouverture_client.m4a': 'audio_ouverture_client',
+    'sounds/ouverture_ouvrier.m4a': 'audio_ouverture_ouvrier',
     'assets/images/mison_welcome_bg.jpg': 'image_bienvenue_fond',
     'assets/images/home_banner_mison.jpg': 'image_accueil_defaut',
   };

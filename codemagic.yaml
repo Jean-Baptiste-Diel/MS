@@ -53,13 +53,7 @@ workflows:
     integrations:
       app_store_connect: test jean1
     environment: *ios_env
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: jean-baptiste
-          include: true
-          source: true
+    # Pas de lancement automatique au push : « Start new build » à la main.
     scripts:
       - *restore_firebase
       - name: Set up keychain

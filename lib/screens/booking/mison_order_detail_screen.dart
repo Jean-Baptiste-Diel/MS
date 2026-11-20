@@ -573,7 +573,9 @@ class _MisonOrderDetailScreenState extends State<MisonOrderDetailScreen> with Wi
             : 'Indiquez le montant quand le travail est fini.',
         continueLabel: agreed ? 'Terminer la prestation' : 'Saisir le montant',
         laterLabel: locked ? null : 'Plus tard',
-        footnote: 'Rappel : écoutez comment se passe le paiement.',
+        footnote: RemoteMedia.hasAudio(kAudioWorkerPaymentReminder)
+            ? 'Rappel : écoutez comment se passe le paiement.'
+            : null,
         warning: "Le client paie dans l'application MISON avec ${FeatureFlags.paymentMethods}.",
         mustListen: true,
         listenKey: 'finish-${order.id}',
@@ -2499,7 +2501,14 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
   /// Commandes dont la note vocale a été écoutée jusqu'au bout : la page qui
   /// se rouvre (paiement abandonné) ne la réimpose pas.
   static final Set<String> _listenedOrders = {};
-  bool get _audioDone => _listenedOrders.contains(widget.orderId);
+  bool get _audioDone => _noNote || _listenedOrders.contains(widget.orderId);
+
+  /// La note n'a pas pu être lue.
+  bool _unavailableNote = false;
+
+  /// Pas de note sur le serveur, ou note illisible : la page s'affiche sans
+  /// lecteur ni « Écoutez… », et le paiement est possible tout de suite.
+  bool get _noNote => _unavailableNote || !RemoteMedia.hasAudio(kAudioBeforePayment);
 
   @override
   Widget build(BuildContext context) {
@@ -2560,7 +2569,9 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
                       style: primaryTextStyle(size: 36, color: kMisonDark, weight: FontWeight.w600)),
                   16.height,
 
-                  // Note vocale de MISON à écouter avant de payer (démarre seule)
+                  // Note vocale de MISON à écouter avant de payer (démarre seule).
+                  // Pas de note (ou illisible) : ni lecteur ni consigne.
+                  if (!_noNote) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
@@ -2579,7 +2590,10 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
                       // Note illisible : le client peut quand même payer.
                       onUnavailable: () {
                         if (!mounted) return;
-                        setState(() => _listenedOrders.add(widget.orderId));
+                        setState(() {
+                          _listenedOrders.add(widget.orderId);
+                          _unavailableNote = true;
+                        });
                       },
                     ),
                   ),
@@ -2589,6 +2603,7 @@ class _PaymentBottomSheetState extends State<_PaymentBottomSheet> {
                         style: secondaryTextStyle(size: 13)),
                   ],
                   20.height,
+                  ],
 
                   // Moyen de paiement (si plusieurs) : pastilles
                   if (showWave && showOrange) ...[

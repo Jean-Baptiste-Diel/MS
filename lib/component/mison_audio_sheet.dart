@@ -11,6 +11,9 @@ const kAudioBeforePayment = 'sounds/avant_paiement.m4a';
 const kAudioAfterAccept = 'sounds/apres_acceptation.m4a';
 const kAudioWorkerPaymentReminder = 'sounds/rappel_paiement_ouvrier.m4a';
 const kAudioWelcomeClient = 'sounds/bienvenue_client.m4a';
+// Facultatives : jouées à l'ouverture de l'app s'il y en a une sur le serveur.
+const kAudioOpenClient = 'sounds/ouverture_client.m4a';
+const kAudioOpenArtisan = 'sounds/ouverture_ouvrier.m4a';
 
 /// Notes vocales déjà écoutées jusqu'au bout (clé : [listenKey]) : une page
 /// rouverte pour la même étape ne réimpose pas l'écoute.
@@ -110,6 +113,9 @@ class _MisonAudioSheet extends StatefulWidget {
 class _MisonAudioSheetState extends State<_MisonAudioSheet> {
   bool _listened = false;
 
+  /// Note illisible (réseau, fichier) : ni lecteur ni consigne d'écoute.
+  bool _noNote = false;
+
   bool get _canContinue => !widget.mustListen || _listened;
 
   @override
@@ -161,7 +167,7 @@ class _MisonAudioSheetState extends State<_MisonAudioSheet> {
                     16.height,
 
                     // Note vocale (démarre seule)
-                    if (widget.asset != null) ...[
+                    if (widget.asset != null && !_noNote) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
@@ -179,7 +185,12 @@ class _MisonAudioSheetState extends State<_MisonAudioSheet> {
                           },
                           // Note illisible : le bouton se débloque quand même.
                           onUnavailable: () {
-                            if (mounted) setState(() => _listened = true);
+                            if (mounted) {
+                              setState(() {
+                                _listened = true;
+                                _noNote = true;
+                              });
+                            }
                           },
                         ),
                       ),
